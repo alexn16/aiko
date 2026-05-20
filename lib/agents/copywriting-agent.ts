@@ -8,7 +8,7 @@ export async function generateOutreachMessage(params: {
   channel: 'email' | 'linkedin' | 'whatsapp' | 'form'
   modelConfig: LLMConfig
   agentId: string
-  qualityModelConfig?: LLMConfig
+  qualityModelConfig: LLMConfig
 }) {
   const { leadId, projectId, channel, modelConfig, agentId, qualityModelConfig } = params
 
@@ -55,7 +55,14 @@ Write one outreach message. Be specific. Be human. One clear call to action.`
     }
   ], { jsonMode: true })
 
-  const { subject, body } = JSON.parse(result)
+  let subject = '', body = ''
+  try {
+    const parsed = JSON.parse(result)
+    subject = parsed.subject ?? ''
+    body = parsed.body ?? result
+  } catch {
+    body = result
+  }
 
   const approvalResult = await db.query(
     `INSERT INTO approvals (project_id, lead_id, agent_name, channel, subject, body)
@@ -64,10 +71,8 @@ Write one outreach message. Be specific. Be human. One clear call to action.`
   )
   const approvalId = approvalResult.rows[0].id
 
-  // Quality check — runs automatically after every message generation
-  if (qualityModelConfig) {
-    await runQualityAgent({ approvalId, modelConfig: qualityModelConfig })
-  }
+  // Quality check — always runs, cannot be skipped per spec
+  await runQualityAgent({ approvalId, modelConfig: qualityModelConfig })
 
   await db.query(
     'UPDATE agents SET status=$1, latest_output=$2, updated_at=NOW() WHERE id=$3',

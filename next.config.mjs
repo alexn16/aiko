@@ -3,6 +3,10 @@ const nextConfig = {
   // p-queue v8+ and p-limit v5+ are pure ESM — must be transpiled
   transpilePackages: ['p-queue', 'p-limit', 'eventemitter3', 'yocto-queue'],
 
+  experimental: {
+    instrumentationHook: true,
+  },
+
   async rewrites() {
     return [
       {

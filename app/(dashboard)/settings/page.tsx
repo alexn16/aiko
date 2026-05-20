@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 
+interface SmtpConfig { host: string; port: string; secure: boolean; user: string; pass: string; from: string }
+
 const AGENT_SLOTS = [
   { slot: 'browserAgent',         label: 'Browser Agent', purpose: 'Web navigation actions', cost: 'medium', privacy: 'mixed' },
   { slot: 'researchAgent',        label: 'Research Agent', purpose: 'Web research and summaries', cost: 'low', privacy: 'local-friendly' },
@@ -23,8 +25,10 @@ interface ModelRow { base_url: string; api_key: string; model: string }
 export default function SettingsPage() {
   const [configs, setConfigs] = useState<Record<string, ModelRow>>({})
   const [saved, setSaved] = useState(false)
+  const [smtpSaved, setSmtpSaved] = useState(false)
   const [project, setProject] = useState({ name: '', description: '', target_market: '', value_prop: '' })
   const [projectId, setProjectId] = useState('')
+  const [smtp, setSmtp] = useState<SmtpConfig>({ host: '', port: '587', secure: false, user: '', pass: '', from: '' })
 
   useEffect(() => {
     fetch('/api/model-configs').then(r => r.json()).then(d => setConfigs(d.configs ?? {}))
@@ -32,6 +36,9 @@ export default function SettingsPage() {
       const p = d.projects?.[0]
       if (p) { setProject(p); setProjectId(p.id) }
     })
+    fetch('/api/settings/smtp').then(r => r.json()).then(d => {
+      if (d.smtp) setSmtp({ ...d.smtp, port: String(d.smtp.port) })
+    }).catch(() => {})
   }, [])
 
   function updateConfig(slot: string, field: keyof ModelRow, value: string) {
@@ -46,6 +53,16 @@ export default function SettingsPage() {
     })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function saveSmtp() {
+    await fetch('/api/settings/smtp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(smtp),
+    })
+    setSmtpSaved(true)
+    setTimeout(() => setSmtpSaved(false), 2000)
   }
 
   async function saveProject() {
@@ -94,6 +111,47 @@ export default function SettingsPage() {
           ))}
         </div>
         <Button variant="primary" style={{ marginTop: 16 }} onClick={saveProject}>Save project</Button>
+      </Card>
+
+      {/* SMTP config */}
+      <Card style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Email / SMTP</div>
+        <div style={{ fontSize: 9, color: '#444', marginBottom: 16 }}>
+          Required for the email outreach channel. Works with Gmail (App Password), Mailgun SMTP, Postmark, and any standard SMTP relay.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {([
+            { field: 'host' as const,  label: 'SMTP host',           placeholder: 'smtp.gmail.com',   type: 'text' },
+            { field: 'port' as const,  label: 'Port',                 placeholder: '587',              type: 'text' },
+            { field: 'user' as const,  label: 'Username / email',     placeholder: 'you@example.com',  type: 'text' },
+            { field: 'pass' as const,  label: 'Password / App token', placeholder: '••••••••',         type: 'password' },
+            { field: 'from' as const,  label: 'From address',         placeholder: 'AÏKO <you@example.com>', type: 'text' },
+          ]).map(({ field, label, placeholder, type }) => (
+            <div key={field}>
+              <label style={{ fontSize: 9, color: '#444', letterSpacing: '0.1em', display: 'block', marginBottom: 4 }}>{label.toUpperCase()}</label>
+              <input
+                value={smtp[field] as string}
+                onChange={e => setSmtp(s => ({ ...s, [field]: e.target.value }))}
+                placeholder={placeholder}
+                type={type}
+                style={inputStyle}
+              />
+            </div>
+          ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 16 }}>
+            <input
+              id="smtp-secure"
+              type="checkbox"
+              checked={smtp.secure}
+              onChange={e => setSmtp(s => ({ ...s, secure: e.target.checked }))}
+            />
+            <label htmlFor="smtp-secure" style={{ fontSize: 10, color: '#888' }}>TLS / port 465</label>
+          </div>
+        </div>
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Button variant="primary" onClick={saveSmtp}>Save SMTP</Button>
+          {smtpSaved && <span style={{ fontSize: 10, color: '#7eb88a' }}>Saved ✓</span>}
+        </div>
       </Card>
 
       {/* Model configs */}

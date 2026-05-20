@@ -65,7 +65,7 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
         channel: (intent.channel ?? 'email') as 'email' | 'linkedin' | 'whatsapp' | 'form',
         modelConfig: cfg('copywritingAgent'),
         agentId,
-        qualityModelConfig: cfg('qualityAgent'),
+        qualityModelConfig: cfg('qualityAgent'),  // cfg() always returns a fallback
       })
 
     case 'strategy':
