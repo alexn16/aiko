@@ -23,7 +23,12 @@ Return JSON: { "strategic_update": "one paragraph", "priority_actions": ["action
     }
   ], { jsonMode: true, maxTokens: 400 })
 
-  const strategic = JSON.parse(recommendations)
+  let strategic: Record<string, unknown>
+  try {
+    strategic = JSON.parse(recommendations)
+  } catch {
+    strategic = { raw: recommendations }
+  }
 
   // Merge into existing strategy
   const projectResult = await db.query('SELECT strategy FROM projects WHERE id=$1', [projectId])

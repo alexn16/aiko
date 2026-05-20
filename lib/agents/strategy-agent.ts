@@ -37,11 +37,21 @@ Value proposition: ${project.value_prop}`
     }
   ], { jsonMode: true, maxTokens: 800 })
 
-  const strategy = JSON.parse(result)
+  let strategy: Record<string, unknown>
+  try {
+    strategy = JSON.parse(result)
+  } catch {
+    strategy = { raw: result }
+  }
+
+  // Merge with existing strategy (preserve ceo_update and prior fields)
+  const existing = await db.query('SELECT strategy FROM projects WHERE id=$1', [projectId])
+  const prior = existing.rows[0]?.strategy ?? {}
+  const merged = { ...prior, ...strategy, updated_at: new Date().toISOString() }
 
   await db.query(
     'UPDATE projects SET strategy=$1 WHERE id=$2',
-    [JSON.stringify(strategy), projectId]
+    [JSON.stringify(merged), projectId]
   )
 
   await db.query(

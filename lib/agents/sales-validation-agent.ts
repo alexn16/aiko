@@ -6,32 +6,39 @@ export async function runSalesValidationAgent(params: {
   projectId: string
   replyText: string
   modelConfig: LLMConfig
-}): Promise<{ score: number; status: string }> {
+}): Promise<{ score: number; status: string; reasoning: string }> {
   const { leadId, projectId, replyText, modelConfig } = params
 
-  const result = await callLLM(modelConfig, [
+  const raw = await callLLM(modelConfig, [
     {
       role: 'system',
       content: `You are a B2B sales qualification agent. Score the intent of the reply 1-10.
-1-3=cold (disinterest, unsubscribe, wrong person), 4-6=warm (curious, wants more info), 7-10=hot (ready to meet, interested in pricing).
-Return JSON: { "score": number, "reasoning": "one sentence" }`
+1-3 = cold (disinterest, unsubscribe request, wrong person, out of office).
+4-6 = warm (curious, wants more info, forward to colleague).
+7-10 = hot (wants to meet, interested in pricing, asks for demo).
+Return JSON: { "score": number, "reasoning": "one sentence explaining the score" }`
     },
-    { role: 'user', content: `Reply text:\n${replyText}` }
-  ], { jsonMode: true, maxTokens: 150 })
+    { role: 'user', content: `Reply:\n${replyText.slice(0, 2000)}` }
+  ], { jsonMode: true, maxTokens: 200 })
 
-  const { score } = JSON.parse(result)
+  let score = 3
+  let reasoning = 'Could not parse reply'
+  try {
+    const parsed = JSON.parse(raw)
+    score = Math.max(1, Math.min(10, Number(parsed.score) || 3))
+    reasoning = String(parsed.reasoning ?? '')
+  } catch {
+    // keep defaults
+  }
 
-  let status = 'new'
-  if (score <= 3) status = 'rejected'
-  else if (score <= 6) status = 'replied'
-  else status = 'qualified'
+  const status = score <= 3 ? 'rejected' : score <= 6 ? 'replied' : 'qualified'
 
   await db.query('UPDATE leads SET status=$1 WHERE id=$2', [status, leadId])
 
   await db.query(
     'INSERT INTO agent_logs (project_id, action, details) VALUES ($1,$2,$3)',
-    [projectId, 'thought', { sales_score: score, lead_id: leadId, new_status: status }]
-  )
+    [projectId, 'thought', { sales_score: score, reasoning, lead_id: leadId, new_status: status }]
+  ).catch(() => {})
 
-  return { score, status }
+  return { score, status, reasoning }
 }

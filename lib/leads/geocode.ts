@@ -19,7 +19,7 @@ export async function geocodeCity(
 export async function geocodeLeadIfNeeded(
   leadId: string,
   city: string,
-  country: string
+  country?: string
 ): Promise<void> {
   const coords = await geocodeCity(city, country)
   if (!coords) return

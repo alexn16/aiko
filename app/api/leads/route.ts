@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   const result = await db.query(
     `INSERT INTO leads (project_id, company_name, contact_name, email, phone, website, city, country, source)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [projectId, company_name, contact_name, email, phone, website, city, country ?? 'ES', source ?? 'manual']
+    [projectId, company_name, contact_name, email, phone, website, city, country ?? '', source ?? 'manual']
   )
 
   return NextResponse.json({ lead: result.rows[0] })
