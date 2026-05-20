@@ -1,5 +1,15 @@
 import OpenAI from 'openai'
 
+const clientCache = new Map<string, OpenAI>()
+
+function getClient(baseURL: string, apiKey: string): OpenAI {
+  const key = `${baseURL}::${apiKey}`
+  if (!clientCache.has(key)) {
+    clientCache.set(key, new OpenAI({ baseURL, apiKey: apiKey || 'not-required' }))
+  }
+  return clientCache.get(key)!
+}
+
 export interface LLMConfig {
   baseURL: string
   apiKey: string
@@ -33,10 +43,7 @@ export async function callLLM(
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   options: { maxTokens?: number; jsonMode?: boolean } = {}
 ): Promise<string> {
-  const client = new OpenAI({
-    baseURL: config.baseURL,
-    apiKey: config.apiKey || 'not-required',
-  })
+  const client = getClient(config.baseURL, config.apiKey)
 
   const response = await client.chat.completions.create({
     model: config.model,

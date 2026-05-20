@@ -37,7 +37,13 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
     { role: 'user', content: instruction }
   ], { jsonMode: true, maxTokens: 100 })
 
-  const intent = JSON.parse(intentResponse)
+  let intent: { agent?: string; leadId?: string | null; channel?: string | null; platform?: string | null }
+  try {
+    intent = JSON.parse(intentResponse)
+  } catch {
+    intent = { agent: 'browser' }
+  }
+  if (!intent.agent) intent.agent = 'browser'
 
   const agentName = intent.agent as string
 
@@ -56,7 +62,7 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
       return generateOutreachMessage({
         leadId: intent.leadId,
         projectId,
-        channel: intent.channel ?? 'email',
+        channel: (intent.channel ?? 'email') as 'email' | 'linkedin' | 'whatsapp' | 'form',
         modelConfig: cfg('copywritingAgent'),
         agentId,
         qualityModelConfig: cfg('qualityAgent'),

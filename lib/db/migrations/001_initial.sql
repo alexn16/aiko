@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS leads (
   phone         TEXT,
   website       TEXT,
   city          TEXT,
-  country       TEXT DEFAULT 'ES',
+  country       TEXT DEFAULT '',
   lat           NUMERIC(10,7),
   lng           NUMERIC(10,7),
   source        TEXT,

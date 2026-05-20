@@ -29,7 +29,7 @@ Return JSON: { "passed": true/false, "reason": "brief explanation" }`
 
   const newStatus = passed ? 'quality_passed' : 'quality_rejected'
   await db.query(
-    'UPDATE approvals SET status=$1 WHERE id=$2',
+    "UPDATE approvals SET status=$1 WHERE id=$2 AND status='pending'",
     [newStatus, approvalId]
   )
 

@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
     async start(controller) {
       const encode = (data: object) => `data: ${JSON.stringify(data)}\n\n`
 
+      let closed = false
+
       const interval = setInterval(async () => {
+        if (closed) return
         try {
           const [agents, logs, leads] = await Promise.all([
             db.query('SELECT * FROM agents WHERE project_id=$1 ORDER BY name', [projectId]),
@@ -25,20 +28,22 @@ export async function GET(request: NextRequest) {
             ),
           ])
 
+          if (closed) return
           controller.enqueue(
             new TextEncoder().encode(
               encode({ type: 'state', agents: agents.rows, logs: logs.rows, leads: leads.rows })
             )
           )
-        } catch {
-          clearInterval(interval)
-          controller.close()
+        } catch (err) {
+          // transient DB error — keep stream alive, client will get next tick
+          console.error('[stream] poll error:', err)
         }
       }, 1500)
 
       request.signal.addEventListener('abort', () => {
+        closed = true
         clearInterval(interval)
-        controller.close()
+        try { controller.close() } catch { /* already closed */ }
       })
     }
   })

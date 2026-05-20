@@ -24,6 +24,11 @@ export async function POST(request: NextRequest) {
       body: approval.body,
       approvalId,
     })
+  } else {
+    return NextResponse.json(
+      { error: `Channel '${approval.channel}' is not yet supported for automated sending. Approve and send manually.` },
+      { status: 422 }
+    )
   }
 
   await db.query(

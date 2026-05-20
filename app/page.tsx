@@ -40,21 +40,6 @@ export default function Home() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null)
 
   useEffect(() => {
-    if (projectId) return
-    fetch('/api/projects')
-      .then((r) => r.json())
-      .then((d) => {
-        const project = d.projects?.[0]
-        if (!project) return
-        setProjectId(project.id)
-        setProjectName(project.name)
-      })
-      .catch(() => {})
-  }, [projectId])
-
-
-
-  useEffect(() => {
     if (!projectId) return
     const source = new EventSource(`/api/agents/stream?projectId=${projectId}`)
 
@@ -81,15 +66,21 @@ export default function Home() {
   const livePulse = useMemo(() => (activeAgents > 0 ? 'Active' : 'Standby'), [activeAgents])
 
   useEffect(() => {
-    if (!projectId) return
     fetch('/api/projects')
       .then((r) => r.json())
       .then((d) => {
-        const project = d.projects?.find((p: { id: string; name: string }) => p.id === projectId) ?? d.projects?.[0]
-        if (project?.name) setProjectName(project.name)
+        const project = projectId
+          ? (d.projects?.find((p: { id: string; name: string }) => p.id === projectId) ?? d.projects?.[0])
+          : d.projects?.[0]
+        if (!project) return
+        if (!projectId) setProjectId(project.id)
+        setProjectName(project.name)
       })
       .catch(() => {})
+  }, [])
 
+  useEffect(() => {
+    if (!projectId) return
     fetch(`/api/stats?projectId=${projectId}`)
       .then((r) => r.json())
       .then((d) => setStats(d))
