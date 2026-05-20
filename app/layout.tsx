@@ -8,7 +8,8 @@ export const metadata: Metadata = {
 }
 
 const NAV_ITEMS = [
-  { href: '/',           label: 'Dashboard' },
+  { href: '/',           label: 'Home' },
+  { href: '/dashboard',  label: 'Dashboard' },
   { href: '/office',     label: 'Live Office' },
   { href: '/leads',      label: 'Leads' },
   { href: '/map',        label: 'Map' },

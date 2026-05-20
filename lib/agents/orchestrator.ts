@@ -59,7 +59,7 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
         channel: intent.channel ?? 'email',
         modelConfig: cfg('copywritingAgent'),
         agentId,
-        qualityModelConfig: cfg('copywritingAgent'),
+        qualityModelConfig: cfg('qualityAgent'),
       })
 
     case 'strategy':
@@ -69,13 +69,13 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
       return runReportingAgent({ projectId, agentId, modelConfig: cfg('reportingAgent') })
 
     case 'ceo':
-      return runCeoAgent({ projectId, agentId, modelConfig: cfg('researchAgent') })
+      return runCeoAgent({ projectId, agentId, modelConfig: cfg('ceoAgent') })
 
     case 'pm':
-      return runProjectManagerAgent({ projectId, agentId, modelConfig: cfg('researchAgent') })
+      return runProjectManagerAgent({ projectId, agentId, modelConfig: cfg('projectManagerAgent') })
 
     case 'social':
-      return runSocialMediaAgent({ projectId, agentId, platform: intent.platform ?? 'linkedin', modelConfig: cfg('researchAgent') })
+      return runSocialMediaAgent({ projectId, agentId, platform: intent.platform ?? 'linkedin', modelConfig: cfg('socialMediaAgent') })
 
     case 'browser':
     default:

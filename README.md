@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AÏKO — AI Marketing Operating System
 
-## Getting Started
+AÏKO is a self-hosted, agent-based operating system for marketing execution.
+It coordinates specialized AI agents for lead research, enrichment, copy generation,
+outreach monitoring, qualification, reporting, and strategy — with a mandatory human approval gate before external sends.
 
-First, run the development server:
+## What AÏKO is
+
+- **Marketing-only**: built for outreach, validation, growth, and campaign operations.
+- **Agent-based**: multiple focused agents coordinated by an orchestrator.
+- **Always-running workflow**: live status and activity stream across the dashboard.
+- **Human-supervised**: outbound actions route through the Approval Center.
+- **Model-flexible**: OpenAI-compatible provider routing per agent.
+- **Self-hostable**: Next.js + PostgreSQL + Playwright via Docker Compose.
+
+## Product surfaces
+
+- `/` — AÏKO overview and quick entry points
+- `/dashboard` — operational overview (metrics, active agents, activity)
+- `/office` — Live Office (run agents, monitor activity, browser stream, read-only model source: Configured/Fallback) and reporting relationships
+- `/leads` — lead table, scraping, enrichment
+- `/approval` — approval queue (the sending gate)
+- `/campaigns` — campaign tracking
+- `/reports` — generated performance summaries
+- `/settings` — model + SMTP configuration
+- `/map` and `/functions` — in-app system documentation
+
+## Core architecture
+
+- **Frontend**: Next.js App Router (`app/`)
+- **API layer**: route handlers under `app/api/`
+- **Agent layer**: `lib/agents/` + `lib/agents/orchestrator.ts`
+- **Model router**: `lib/models/provider.ts` with per-agent configs from DB
+- **Realtime updates**: SSE from `/api/agents/stream`
+- **Persistence**: PostgreSQL tables for projects, agents, leads, approvals, logs
+- **Browser automation**: Playwright-driven browser agent
+
+## Key safety invariant
+
+AÏKO does **not** send outreach directly from generation.
+Messages are generated into approvals and only sent after explicit approval through the send route.
+
+## Local development
+
+### Prerequisites
+
+- Node.js 20+
+- PostgreSQL
+
+### Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validation commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Available scripts from `package.json`:
 
-## Learn More
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run lint`
 
-To learn more about Next.js, take a look at the following resources:
+## Self-hosting
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Use Docker Compose to run the full stack (app + database):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+docker compose up -d
+```
 
-## Deploy on Vercel
+## Documentation references
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `AIKO_MAP.md` — structural map of the system
+- `AIKO_FUNCTIONS.md` — capability and behavior reference
