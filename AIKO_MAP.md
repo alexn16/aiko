@@ -89,7 +89,7 @@ app/layout.tsx
   DEPENDS ON: components/ui/*, NextAuth session provider
   DEPENDED ON BY: every page
 
-app/(dashboard)/page.tsx                            SCREEN: Dashboard
+app/(dashboard)/dashboard/page.tsx                  SCREEN: Dashboard
   WHAT: Overview screen. Shows 4 metric cards, active agent grid, next-action card, activity feed.
   DEPENDS ON: components/agents/AgentGrid, components/agents/ActivityFeed, /api/agents/stream (SSE)
   DEPENDED ON BY: nothing (leaf page)

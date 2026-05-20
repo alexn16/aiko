@@ -4,18 +4,18 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 
 const AGENT_SLOTS = [
-  { slot: 'browserAgent',        label: 'Browser Agent' },
-  { slot: 'researchAgent',       label: 'Research Agent' },
-  { slot: 'copywritingAgent',    label: 'Copywriting Agent' },
-  { slot: 'leadGenAgent',        label: 'Lead Gen Agent' },
-  { slot: 'outreachAgent',       label: 'Outreach Agent' },
-  { slot: 'strategyAgent',       label: 'Strategy Agent' },
-  { slot: 'reportingAgent',      label: 'Reporting Agent' },
-  { slot: 'qualityAgent',        label: 'Quality Agent' },
-  { slot: 'salesValidationAgent',label: 'Sales Validation Agent' },
-  { slot: 'ceoAgent',            label: 'CEO Agent' },
-  { slot: 'projectManagerAgent', label: 'Project Manager Agent' },
-  { slot: 'socialMediaAgent',    label: 'Social Media Agent' },
+  { slot: 'browserAgent',         label: 'Browser Agent', purpose: 'Web navigation actions', cost: 'medium', privacy: 'mixed' },
+  { slot: 'researchAgent',        label: 'Research Agent', purpose: 'Web research and summaries', cost: 'low', privacy: 'local-friendly' },
+  { slot: 'copywritingAgent',     label: 'Copywriting Agent', purpose: 'Outbound draft writing', cost: 'high', privacy: 'cloud/common' },
+  { slot: 'leadGenAgent',         label: 'Lead Gen Agent', purpose: 'Lead enrichment', cost: 'low', privacy: 'local-friendly' },
+  { slot: 'outreachAgent',        label: 'Outreach Agent', purpose: 'Inbox/reply monitoring', cost: 'medium', privacy: 'mixed' },
+  { slot: 'strategyAgent',        label: 'Strategy Agent', purpose: 'ICP and strategy planning', cost: 'high', privacy: 'cloud/common' },
+  { slot: 'reportingAgent',       label: 'Reporting Agent', purpose: 'Summaries and recommendations', cost: 'medium', privacy: 'mixed' },
+  { slot: 'qualityAgent',         label: 'Quality Agent', purpose: 'Tone/safety review', cost: 'medium', privacy: 'mixed' },
+  { slot: 'salesValidationAgent', label: 'Sales Validation Agent', purpose: 'Reply qualification', cost: 'medium', privacy: 'mixed' },
+  { slot: 'ceoAgent',             label: 'CEO Agent', purpose: 'Top-level reasoning', cost: 'high', privacy: 'cloud/common' },
+  { slot: 'projectManagerAgent',  label: 'Project Manager Agent', purpose: 'Ops coordination', cost: 'medium', privacy: 'mixed' },
+  { slot: 'socialMediaAgent',     label: 'Social Media Agent', purpose: 'Social drafts', cost: 'medium', privacy: 'mixed' },
 ]
 
 interface ModelRow { base_url: string; api_key: string; model: string }
@@ -100,22 +100,28 @@ export default function SettingsPage() {
       <Card>
         <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 16 }}>Model configuration</div>
         <div style={{ fontSize: 9, color: '#444', marginBottom: 16 }}>
-          Configure one model per agent slot. Use any OpenAI-compatible endpoint (Ollama, OpenAI, Mistral, etc.)
+          Configure one model per agent slot. Works with OpenAI-compatible endpoints (OpenAI, Ollama, LM Studio, Groq, Mistral, and similar).
         </div>
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid #1a1a1a' }}>
-                {['Agent', 'Base URL', 'API Key', 'Model'].map(h => (
+                {['Agent', 'Purpose', 'Profile', 'Base URL', 'API Key', 'Model'].map(h => (
                   <th key={h} style={{ padding: '6px 8px', color: '#444', fontSize: 9, textAlign: 'left', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {AGENT_SLOTS.map(({ slot, label }) => (
+              {AGENT_SLOTS.map(({ slot, label, purpose, cost, privacy }) => (
                 <tr key={slot} style={{ borderBottom: '1px solid #111' }}>
                   <td style={{ padding: '8px', fontSize: 10, color: '#c8b89a', whiteSpace: 'nowrap' }}>{label}</td>
+                  <td style={{ padding: '8px', fontSize: 9, color: '#888', minWidth: 170 }}>
+                    {purpose}
+                  </td>
+                  <td style={{ padding: '8px', fontSize: 9, color: '#666', minWidth: 120 }}>
+                    {cost} · {privacy}
+                  </td>
                   <td style={{ padding: '4px 8px', minWidth: 200 }}>
                     <input
                       value={configs[slot]?.base_url ?? ''}
@@ -145,6 +151,10 @@ export default function SettingsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div style={{ marginTop: 10, fontSize: 9, color: '#555' }}>
+          Tip: use <code>http://localhost:11434/v1</code> with model names like <code>llama3</code> for local Ollama slots.
         </div>
 
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
