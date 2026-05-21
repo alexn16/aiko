@@ -12,13 +12,15 @@ export default function ApprovalPage() {
   }, [])
 
   return (
-    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif' }}>
-      <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', marginBottom: 8 }}>
-        Approval Center
-      </h2>
-      <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>
-        Review and approve outreach messages before they are sent. Nothing leaves without your approval.
-      </p>
+    <div style={{ padding: '40px 32px', maxWidth: 800 }} className="page-enter">
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+          Approval Center
+        </h1>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+          Every outreach message sits here until you approve it. Nothing leaves without your sign-off.
+        </p>
+      </div>
       {projectId && <ApprovalQueue projectId={projectId} />}
     </div>
   )

@@ -4,70 +4,55 @@ import { Approval } from '@/lib/db/schema'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 
-interface ApprovalItemProps {
+interface Props {
   approval: Approval & { company_name?: string; email?: string; quality_reason?: string }
   onAction: () => void
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  pending:          { label: 'Pending quality check', color: '#6b7280', bg: '#f9fafb',  border: '#e5e7eb' },
-  quality_passed:   { label: 'Quality passed ✓',      color: '#16a34a', bg: '#f0fdf4',  border: '#bbf7d0' },
-  quality_rejected: { label: 'Quality rejected',       color: '#dc2626', bg: '#fef2f2',  border: '#fecaca' },
-  approved:         { label: 'Approved',               color: '#2563eb', bg: '#eff6ff',  border: '#bfdbfe' },
+const QUALITY_INFO: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  pending:          { label: 'Awaiting quality check', color: '#94a3b8', bg: '#f8fafc',  border: '#e2e8f0' },
+  quality_passed:   { label: 'Quality passed',         color: '#10b981', bg: '#ecfdf5',  border: '#a7f3d0' },
+  quality_rejected: { label: 'Quality rejected',        color: '#ef4444', bg: '#fef2f2',  border: '#fecaca' },
+  approved:         { label: 'Approved',                color: '#6366f1', bg: '#eef2ff',  border: '#c7d2fe' },
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: 4,
-  padding: '6px 10px',
-  color: '#374151',
-  fontFamily: 'Inter, sans-serif',
-  fontSize: 13,
-  marginBottom: 8,
-  boxSizing: 'border-box',
+const INPUT: React.CSSProperties = {
+  width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0',
+  borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a',
+  boxSizing: 'border-box', fontFamily: 'Inter, sans-serif',
 }
 
-export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
+export function ApprovalItem({ approval, onAction }: Props) {
   const [body, setBody] = useState(approval.body)
   const [subject, setSubject] = useState(approval.subject ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
-  const qualityInfo = STATUS_LABELS[approval.status]
+  const qi = QUALITY_INFO[approval.status]
   const isRejected = approval.status === 'quality_rejected'
 
   async function approveAndSend() {
-    setLoading(true)
-    setError(null)
-    setNote(null)
+    setLoading(true); setError(null); setNote(null)
     const res = await fetch('/api/outreach/approve-and-send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approvalId: approval.id, subject, body }),
     })
-    const data = await res.json()
+    const d = await res.json()
     setLoading(false)
-    if (!res.ok || data.error) {
-      setError(data.error ?? 'Unknown error')
-    } else {
-      if (data.note) setNote(data.note)
-      setTimeout(onAction, 1200)
-    }
+    if (!res.ok || d.error) { setError(d.error ?? 'Unknown error') }
+    else { if (d.note) setNote(d.note); setTimeout(onAction, 1000) }
   }
 
   async function overrideAndApprove() {
     setLoading(true)
-    setError(null)
     await fetch('/api/approvals/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approvalId: approval.id, subject, body, status: 'quality_passed' }),
     })
-    setLoading(false)
-    onAction()
+    setLoading(false); onAction()
   }
 
   async function reject() {
@@ -77,8 +62,7 @@ export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approvalId: approval.id, status: 'rejected' }),
     })
-    setLoading(false)
-    onAction()
+    setLoading(false); onAction()
   }
 
   async function saveEdits() {
@@ -90,90 +74,85 @@ export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
   }
 
   return (
-    <div style={{ background: '#ffffff', border: `1px solid ${isRejected ? '#fecaca' : '#e5e7eb'}`, borderRadius: 6, padding: 16, fontFamily: 'Inter, sans-serif' }}>
+    <div style={{
+      background: '#ffffff',
+      borderRadius: 10,
+      border: `1px solid ${isRejected ? '#fecaca' : '#f1f5f9'}`,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      overflow: 'hidden',
+    }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+      <div style={{ padding: '14px 18px', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: 14, color: '#111827', fontWeight: 500, marginBottom: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>
             {approval.company_name ?? 'Unknown company'}
           </div>
           {approval.email && (
-            <div style={{ fontSize: 13, color: '#2563eb' }}>{approval.email}</div>
+            <div style={{ fontSize: 12, color: '#3b82f6' }}>{approval.email}</div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <Badge label={approval.channel} />
-        </div>
+        <Badge label={approval.channel} />
       </div>
 
-      {/* Quality status banner */}
-      {qualityInfo && (
+      {/* Quality banner */}
+      {qi && (
         <div style={{
-          marginBottom: 10,
-          padding: '6px 10px',
-          borderRadius: 4,
-          background: qualityInfo.bg,
-          border: `1px solid ${qualityInfo.border}`,
-          fontSize: 12,
-          color: qualityInfo.color,
+          padding: '8px 18px',
+          background: qi.bg, borderBottom: `1px solid ${qi.border}`,
+          fontSize: 12, color: qi.color, fontWeight: 500,
+          display: 'flex', alignItems: 'center', gap: 6,
         }}>
-          {qualityInfo.label}
+          {qi.label}
           {approval.quality_reason && (
-            <span style={{ color: '#9ca3af', marginLeft: 8 }}>— {approval.quality_reason}</span>
+            <span style={{ color: '#94a3b8', fontWeight: 400 }}>— {approval.quality_reason}</span>
           )}
         </div>
-      )}
-
-      {/* Subject */}
-      {approval.channel === 'email' && (
-        <input
-          value={subject}
-          onChange={e => setSubject(e.target.value)}
-          onBlur={saveEdits}
-          placeholder="Subject"
-          style={inputStyle}
-        />
       )}
 
       {/* Body */}
-      <textarea
-        value={body}
-        onChange={e => setBody(e.target.value)}
-        onBlur={saveEdits}
-        rows={6}
-        style={{ ...inputStyle, lineHeight: 1.6, resize: 'vertical', marginBottom: 12 }}
-      />
-
-      {/* Error / Note */}
-      {error && (
-        <div style={{ marginBottom: 10, padding: '7px 10px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, fontSize: 13, color: '#dc2626' }}>
-          {error}
-        </div>
-      )}
-      {note && (
-        <div style={{ marginBottom: 10, padding: '7px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, fontSize: 13, color: '#16a34a' }}>
-          {note}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {!isRejected && (
-          <Button variant="primary" size="sm" onClick={approveAndSend} disabled={loading}>
-            {loading ? 'Sending…' : 'Approve & Send'}
-          </Button>
+      <div style={{ padding: '14px 18px' }}>
+        {approval.channel === 'email' && (
+          <input
+            value={subject}
+            onChange={e => setSubject(e.target.value)}
+            onBlur={saveEdits}
+            placeholder="Subject line"
+            style={{ ...INPUT, marginBottom: 8 }}
+          />
         )}
-        {isRejected && (
-          <Button variant="ghost" size="sm" onClick={overrideAndApprove} disabled={loading}>
-            Override & approve anyway
-          </Button>
+        <textarea
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          onBlur={saveEdits}
+          rows={7}
+          style={{ ...INPUT, lineHeight: 1.65, resize: 'vertical', marginBottom: error || note ? 10 : 14 }}
+        />
+
+        {error && (
+          <div style={{ marginBottom: 12, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, color: '#ef4444' }}>
+            {error}
+          </div>
         )}
-        <Button variant="ghost" size="sm" onClick={saveEdits}>
-          Save edits
-        </Button>
-        <Button variant="danger" size="sm" onClick={reject} disabled={loading}>
-          Reject
-        </Button>
+        {note && (
+          <div style={{ marginBottom: 12, padding: '8px 12px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 6, fontSize: 12, color: '#10b981' }}>
+            {note}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {!isRejected && (
+            <Button variant="primary" size="sm" onClick={approveAndSend} disabled={loading}>
+              {loading ? 'Sending…' : 'Approve & Send'}
+            </Button>
+          )}
+          {isRejected && (
+            <Button variant="ghost" size="sm" onClick={overrideAndApprove} disabled={loading}>
+              Override & approve anyway
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={saveEdits}>Save edits</Button>
+          <Button variant="danger" size="sm" onClick={reject} disabled={loading}>Reject</Button>
+        </div>
       </div>
     </div>
   )

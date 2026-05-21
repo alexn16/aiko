@@ -17,22 +17,21 @@ export default function MapPage() {
   }, [])
 
   return (
-    <div style={{ padding: 24, height: 'calc(100vh - 48px)', display: 'flex', flexDirection: 'column' }}>
-      <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', marginBottom: 16 }}>
-        Live Lead Map
-      </h2>
-
-      {/* Leaflet CSS */}
+    <div style={{ padding: '40px 32px 0', height: '100vh', display: 'flex', flexDirection: 'column' }} className="page-enter">
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+          Lead Map
+        </h1>
+        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+          Geographic distribution of your pipeline.
+        </p>
+      </div>
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-      <div style={{ flex: 1 }}>
-        {projectId ? (
-          <LeadMap projectId={projectId} />
-        ) : (
-          <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9ca3af', padding: 24 }}>
-            No project configured. Create a project in Settings first.
-          </div>
-        )}
+      <div style={{ flex: 1, borderRadius: 10, overflow: 'hidden', border: '1px solid #e2e8f0', marginBottom: 32 }}>
+        {projectId
+          ? <LeadMap projectId={projectId} />
+          : <div style={{ padding: 40, fontSize: 13, color: '#94a3b8' }}>No project configured. Add one in Settings.</div>
+        }
       </div>
     </div>
   )

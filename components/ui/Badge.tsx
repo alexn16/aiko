@@ -1,50 +1,62 @@
 'use client'
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  idle:             { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
-  active:           { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  browsing:         { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  writing:          { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
-  waiting:          { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
-  error:            { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
-  paused:           { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
-  new:              { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' },
-  contacted:        { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
-  replied:          { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
-  qualified:        { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  rejected:         { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
-  pending:          { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
-  approved:         { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  sent:             { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  quality_passed:   { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  quality_rejected: { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
-  running:          { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  complete:         { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  evaluating:       { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
-  awaiting_approval:{ bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
+const STYLES: Record<string, { color: string; bg: string }> = {
+  idle:              { color: '#94a3b8', bg: '#f8fafc' },
+  active:            { color: '#10b981', bg: '#ecfdf5' },
+  browsing:          { color: '#10b981', bg: '#ecfdf5' },
+  writing:           { color: '#f59e0b', bg: '#fffbeb' },
+  waiting:           { color: '#3b82f6', bg: '#eff6ff' },
+  error:             { color: '#ef4444', bg: '#fef2f2' },
+  paused:            { color: '#94a3b8', bg: '#f8fafc' },
+  new:               { color: '#94a3b8', bg: '#f8fafc' },
+  contacted:         { color: '#3b82f6', bg: '#eff6ff' },
+  replied:           { color: '#f59e0b', bg: '#fffbeb' },
+  qualified:         { color: '#10b981', bg: '#ecfdf5' },
+  rejected:          { color: '#ef4444', bg: '#fef2f2' },
+  pending:           { color: '#f59e0b', bg: '#fffbeb' },
+  approved:          { color: '#10b981', bg: '#ecfdf5' },
+  sent:              { color: '#10b981', bg: '#ecfdf5' },
+  quality_passed:    { color: '#10b981', bg: '#ecfdf5' },
+  quality_rejected:  { color: '#ef4444', bg: '#fef2f2' },
+  running:           { color: '#10b981', bg: '#ecfdf5' },
+  complete:          { color: '#10b981', bg: '#ecfdf5' },
+  evaluating:        { color: '#3b82f6', bg: '#eff6ff' },
+  awaiting_approval: { color: '#f59e0b', bg: '#fffbeb' },
+  simple:            { color: '#10b981', bg: '#ecfdf5' },
+  medium:            { color: '#f59e0b', bg: '#fffbeb' },
+  complex:           { color: '#ef4444', bg: '#fef2f2' },
+  email:             { color: '#3b82f6', bg: '#eff6ff' },
+  linkedin:          { color: '#6366f1', bg: '#eef2ff' },
+  whatsapp:          { color: '#10b981', bg: '#ecfdf5' },
+  social:            { color: '#f59e0b', bg: '#fffbeb' },
+  multi:             { color: '#64748b', bg: '#f1f5f9' },
+  CEO:               { color: '#6366f1', bg: '#eef2ff' },
+  user:              { color: '#64748b', bg: '#f1f5f9' },
+  ceo:               { color: '#6366f1', bg: '#eef2ff' },
 }
 
-const DEFAULT = { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+const DEFAULT = { color: '#64748b', bg: '#f1f5f9' }
 
-interface BadgeProps { label: string; color?: string }
-
-export function Badge({ label }: BadgeProps) {
-  const c = STATUS_COLORS[label] ?? DEFAULT
+export function Badge({ label }: { label: string }) {
+  const s = STYLES[label] ?? DEFAULT
   return (
     <span style={{
-      display: 'inline-block',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 4,
       fontSize: 11,
-      padding: '2px 8px',
-      borderRadius: 4,
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      fontFamily: 'DM Mono, monospace',
-      background: c.bg,
-      color: c.text,
-      border: `1px solid ${c.border}`,
+      fontWeight: 500,
+      padding: '2px 7px',
+      borderRadius: 5,
+      background: s.bg,
+      color: s.color,
       whiteSpace: 'nowrap',
-      fontWeight: 400,
+      letterSpacing: '0.01em',
     }}>
+      <span style={{
+        width: 5, height: 5, borderRadius: '50%', background: s.color,
+        display: 'inline-block', flexShrink: 0,
+      }} />
       {label}
     </span>
   )

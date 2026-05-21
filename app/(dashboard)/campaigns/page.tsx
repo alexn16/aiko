@@ -7,10 +7,10 @@ import { Card } from '@/components/ui/Card'
 
 const CHANNELS = ['email', 'linkedin', 'whatsapp', 'social', 'multi']
 
-const inputStyle: React.CSSProperties = {
-  background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
-  padding: '6px 10px', color: '#374151', fontFamily: 'Inter, sans-serif',
-  fontSize: 13, width: '100%', boxSizing: 'border-box',
+const INPUT: React.CSSProperties = {
+  width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
+  borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a',
+  boxSizing: 'border-box',
 }
 
 export default function CampaignsPage() {
@@ -26,13 +26,11 @@ export default function CampaignsPage() {
       const pid = d.projects?.[0]?.id
       if (!pid) return
       setProjectId(pid)
-      fetch(`/api/campaigns?projectId=${pid}`).then(r => r.json()).then(d => {
-        setCampaigns(d.campaigns ?? [])
-      })
+      fetch(`/api/campaigns?projectId=${pid}`).then(r => r.json()).then(d => setCampaigns(d.campaigns ?? []))
     }).catch(() => {})
   }, [])
 
-  async function createCampaign() {
+  async function create() {
     if (!name.trim() || !projectId) return
     setSaving(true)
     const res = await fetch('/api/campaigns', {
@@ -41,68 +39,65 @@ export default function CampaignsPage() {
       body: JSON.stringify({ projectId, name: name.trim(), channel }),
     })
     const d = await res.json()
-    if (d.campaign) {
-      setCampaigns(prev => [d.campaign, ...prev])
-      setName('')
-      setChannel('email')
-      setShowForm(false)
-    }
+    if (d.campaign) { setCampaigns(p => [d.campaign, ...p]); setName(''); setChannel('email'); setShowForm(false) }
     setSaving(false)
   }
 
   return (
-    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif', maxWidth: 800 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', margin: 0 }}>
-          Campaigns
-        </h2>
+    <div style={{ padding: '40px 32px', maxWidth: 800 }} className="page-enter">
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+            Campaigns
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+            Track outreach performance by campaign.
+          </p>
+        </div>
         <Button variant="primary" onClick={() => setShowForm(v => !v)}>
           {showForm ? 'Cancel' : '+ New campaign'}
         </Button>
       </div>
 
+      {/* Create form */}
       {showForm && (
-        <Card style={{ marginBottom: 24 }}>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 16 }}>
-            New campaign
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+        <Card style={{ marginBottom: 20 }} padding={18}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 14 }}>New campaign</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
             <div>
-              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Campaign name</label>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && createCampaign()}
-                placeholder="Q3 outbound — SaaS founders"
-                style={inputStyle}
-                autoFocus
-              />
+              <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 4 }}>Campaign name</label>
+              <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && create()}
+                placeholder="Q3 outbound — SaaS founders" style={INPUT} autoFocus />
             </div>
             <div>
-              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Channel</label>
-              <select value={channel} onChange={e => setChannel(e.target.value)} style={inputStyle}>
+              <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 4 }}>Channel</label>
+              <select value={channel} onChange={e => setChannel(e.target.value)} style={INPUT}>
                 {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>
-          <Button variant="primary" onClick={createCampaign} disabled={saving || !name.trim()}>
+          <Button variant="primary" onClick={create} disabled={saving || !name.trim()}>
             {saving ? 'Creating…' : 'Create campaign'}
           </Button>
         </Card>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Campaign list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {campaigns.map(c => (
-          <Card key={c.id}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <Card key={c.id} padding={18}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
               <div>
-                <div style={{ fontSize: 14, color: '#111827', fontWeight: 500, marginBottom: 6 }}>{c.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 6 }}>
+                  {c.name}
+                </div>
                 <Badge label={c.channel ?? 'multi'} />
               </div>
               <Badge label={c.status} />
             </div>
 
-            <div style={{ display: 'flex', gap: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
               {[
                 { label: 'Sent',      value: c.stats.sent },
                 { label: 'Opened',    value: c.stats.opened },
@@ -110,8 +105,8 @@ export default function CampaignsPage() {
                 { label: 'Qualified', value: c.stats.qualified },
               ].map(s => (
                 <div key={s.label}>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{s.label}</div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 16, color: '#111827', fontWeight: 300 }}>{s.value}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginBottom: 3 }}>{s.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>{s.value}</div>
                 </div>
               ))}
             </div>
@@ -119,8 +114,16 @@ export default function CampaignsPage() {
         ))}
 
         {campaigns.length === 0 && !showForm && (
-          <div style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0' }}>
-            No campaigns yet. Create one to start tracking outreach performance.
+          <div style={{
+            padding: '48px 24px', textAlign: 'center',
+            background: '#ffffff', borderRadius: 10,
+            border: '1px solid #f1f5f9',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>No campaigns yet</div>
+            <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 16px' }}>
+              Create your first campaign to start tracking outreach performance.
+            </p>
+            <Button variant="primary" onClick={() => setShowForm(true)}>+ New campaign</Button>
           </div>
         )}
       </div>

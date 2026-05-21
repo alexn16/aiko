@@ -6,12 +6,12 @@ import { ScrapeModal } from '@/components/leads/ScrapeModal'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 
-const BLANK_LEAD = { company_name: '', contact_name: '', email: '', phone: '', website: '', city: '', country: '' }
+const BLANK = { company_name: '', contact_name: '', email: '', phone: '', website: '', city: '', country: '' }
 
-const inputStyle: React.CSSProperties = {
-  background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
-  padding: '6px 10px', color: '#374151', fontFamily: 'Inter, sans-serif',
-  fontSize: 13, width: '100%', boxSizing: 'border-box',
+const INPUT: React.CSSProperties = {
+  width: '100%', background: '#ffffff', border: '1px solid #e2e8f0',
+  borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#0f172a',
+  boxSizing: 'border-box',
 }
 
 export default function LeadsPage() {
@@ -20,16 +20,16 @@ export default function LeadsPage() {
   const [projectId, setProjectId] = useState('')
   const [showScrape, setShowScrape] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
-  const [newLead, setNewLead] = useState(BLANK_LEAD)
+  const [newLead, setNewLead] = useState(BLANK)
   const [saving, setSaving] = useState(false)
 
   async function load(pid: string) {
-    const [leadsRes, agentsRes] = await Promise.all([
+    const [l, a] = await Promise.all([
       fetch(`/api/leads?projectId=${pid}`).then(r => r.json()),
       fetch(`/api/agents?projectId=${pid}`).then(r => r.json()),
     ])
-    setLeads(leadsRes.leads ?? [])
-    setAgents(agentsRes.agents ?? [])
+    setLeads(l.leads ?? [])
+    setAgents(a.agents ?? [])
   }
 
   useEffect(() => {
@@ -49,51 +49,55 @@ export default function LeadsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...newLead, projectId, source: 'manual' }),
     })
-    setNewLead(BLANK_LEAD)
+    setNewLead(BLANK)
     setShowAdd(false)
     setSaving(false)
     load(projectId)
   }
 
   return (
-    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', margin: 0 }}>
-          Leads
-          <span style={{ fontSize: 13, color: '#9ca3af', fontFamily: 'DM Mono, monospace', marginLeft: 12 }}>
-            {leads.length} total
-          </span>
-        </h2>
+    <div style={{ padding: '40px 32px' }} className="page-enter">
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+            Leads
+          </h1>
+          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
+            {leads.length > 0 ? `${leads.length} leads in pipeline` : 'Build your prospect pipeline'}
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button variant="ghost" onClick={() => { setShowAdd(v => !v); setShowScrape(false) }}>
             {showAdd ? 'Cancel' : '+ Add manually'}
           </Button>
           <Button variant="primary" onClick={() => { setShowScrape(true); setShowAdd(false) }}>
-            + Start scraping
+            + Scrape leads
           </Button>
         </div>
       </div>
 
+      {/* Add form */}
       {showAdd && (
-        <Card style={{ marginBottom: 20 }}>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 14 }}>Add lead manually</div>
+        <Card style={{ marginBottom: 20 }} padding={18}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 14 }}>New lead</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
             {([
-              { field: 'company_name', label: 'Company name *', placeholder: 'Acme Corp' },
-              { field: 'contact_name', label: 'Contact name',   placeholder: 'Jane Smith' },
-              { field: 'email',        label: 'Email',          placeholder: 'jane@acme.com' },
-              { field: 'phone',        label: 'Phone',          placeholder: '+1 555 000 0000' },
-              { field: 'website',      label: 'Website',        placeholder: 'https://acme.com' },
-              { field: 'city',         label: 'City',           placeholder: 'Barcelona' },
-              { field: 'country',      label: 'Country',        placeholder: 'Spain' },
+              { field: 'company_name', label: 'Company *', placeholder: 'Acme Corp' },
+              { field: 'contact_name', label: 'Contact',   placeholder: 'Jane Smith' },
+              { field: 'email',        label: 'Email',     placeholder: 'jane@acme.com' },
+              { field: 'phone',        label: 'Phone',     placeholder: '+1 555 000 0000' },
+              { field: 'website',      label: 'Website',   placeholder: 'acme.com' },
+              { field: 'city',         label: 'City',      placeholder: 'Barcelona' },
+              { field: 'country',      label: 'Country',   placeholder: 'Spain' },
             ] as const).map(({ field, label, placeholder }) => (
               <div key={field}>
-                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>{label}</label>
+                <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 4 }}>{label}</label>
                 <input
                   value={newLead[field]}
                   onChange={e => setNewLead(p => ({ ...p, [field]: e.target.value }))}
                   placeholder={placeholder}
-                  style={inputStyle}
+                  style={INPUT}
                   onKeyDown={e => e.key === 'Enter' && addLead()}
                 />
               </div>

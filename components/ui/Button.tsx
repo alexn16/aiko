@@ -2,35 +2,51 @@
 import { ButtonHTMLAttributes } from 'react'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'ghost' | 'danger'
-  size?: 'sm' | 'md'
+  variant?: 'primary' | 'ghost' | 'danger' | 'accent'
+  size?: 'sm' | 'md' | 'lg'
 }
 
-export function Button({ variant = 'ghost', size = 'md', style, disabled, children, ...rest }: ButtonProps) {
+const VARIANTS: Record<string, React.CSSProperties> = {
+  primary: { background: '#0f172a', color: '#ffffff', borderColor: '#0f172a' },
+  ghost:   { background: 'transparent', color: '#374151', borderColor: '#e2e8f0' },
+  danger:  { background: 'transparent', color: '#ef4444', borderColor: '#fecaca' },
+  accent:  { background: '#6366f1', color: '#ffffff', borderColor: '#6366f1' },
+}
+
+const SIZES: Record<string, React.CSSProperties> = {
+  sm: { fontSize: 12, padding: '4px 10px', borderRadius: 6 },
+  md: { fontSize: 13, padding: '7px 14px', borderRadius: 8 },
+  lg: { fontSize: 14, padding: '10px 20px', borderRadius: 8 },
+}
+
+export function Button({
+  variant = 'ghost',
+  size = 'md',
+  style,
+  disabled,
+  children,
+  ...rest
+}: ButtonProps) {
   const base: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 6,
     fontFamily: 'Inter, sans-serif',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: size === 'sm' ? 12 : 13,
-    fontWeight: 400,
-    padding: size === 'sm' ? '4px 10px' : '7px 14px',
-    transition: 'background 0.1s, opacity 0.1s',
-    opacity: disabled ? 0.45 : 1,
+    fontWeight: 500,
     border: '1px solid transparent',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.45 : 1,
     whiteSpace: 'nowrap',
-  }
-
-  const variants: Record<string, React.CSSProperties> = {
-    primary: { background: '#111827', color: '#ffffff', borderColor: '#111827' },
-    ghost:   { background: 'transparent', color: '#374151', borderColor: '#e5e7eb' },
-    danger:  { background: 'transparent', color: '#dc2626', borderColor: '#fecaca' },
+    transition: 'opacity 0.1s, background 0.1s',
+    letterSpacing: '-0.01em',
   }
 
   return (
-    <button style={{ ...base, ...variants[variant], ...style }} disabled={disabled} {...rest}>
+    <button
+      style={{ ...base, ...SIZES[size], ...VARIANTS[variant], ...style }}
+      disabled={disabled}
+      {...rest}
+    >
       {children}
     </button>
   )
