@@ -8,6 +8,12 @@ import { Card } from '@/components/ui/Card'
 
 const BLANK = { name: '', role: '', system_prompt: '' }
 
+const inputStyle: React.CSSProperties = {
+  background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
+  padding: '6px 10px', color: '#374151', fontFamily: 'Inter, sans-serif',
+  fontSize: 13, width: '100%', boxSizing: 'border-box',
+}
+
 export default function TeamPage() {
   const [agents, setAgents] = useState<(Agent & { created_by?: string; system_prompt?: string })[]>([])
   const [projectId, setProjectId] = useState('')
@@ -60,18 +66,12 @@ export default function TeamPage() {
   const coreAgents = agents.filter(a => !a.created_by || a.created_by === 'system')
   const customAgents = agents.filter(a => a.created_by && a.created_by !== 'system')
 
-  const inputStyle: React.CSSProperties = {
-    background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 3,
-    padding: '6px 10px', color: '#e8e6e0', fontFamily: 'DM Mono, monospace',
-    fontSize: 10, width: '100%', boxSizing: 'border-box',
-  }
-
   return (
-    <div style={{ padding: 24, fontFamily: 'DM Mono, monospace', maxWidth: 900 }}>
+    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif', maxWidth: 900 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontFamily: 'Noto Serif JP, serif', fontWeight: 300, fontSize: 18, color: '#e8e6e0', margin: 0 }}>
+        <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', margin: 0 }}>
           Team
-          <span style={{ fontSize: 11, color: '#444', fontFamily: 'DM Mono, monospace', marginLeft: 12 }}>
+          <span style={{ fontSize: 13, color: '#9ca3af', fontFamily: 'DM Mono, monospace', marginLeft: 12 }}>
             {agents.length} agents
           </span>
         </h2>
@@ -82,22 +82,22 @@ export default function TeamPage() {
 
       {showHire && (
         <Card style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 14 }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 14 }}>
             Hire new agent
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ fontSize: 9, color: '#444', display: 'block', marginBottom: 4 }}>NAME</label>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Name</label>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Spanish Outreach Specialist" style={inputStyle} />
             </div>
             <div>
-              <label style={{ fontSize: 9, color: '#444', display: 'block', marginBottom: 4 }}>ROLE / SPECIALTY</label>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>Role / Specialty</label>
               <input value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))} placeholder="Writes warm outreach in Spanish for SMBs" style={inputStyle} />
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 9, color: '#444', display: 'block', marginBottom: 4 }}>
-              SYSTEM PROMPT (optional — defines how this agent thinks and writes)
+            <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>
+              System prompt (optional — defines how this agent thinks and writes)
             </label>
             <textarea
               value={form.system_prompt}
@@ -107,7 +107,7 @@ export default function TeamPage() {
               style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
             />
           </div>
-          <div style={{ fontSize: 9, color: '#444', marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>
             The CEO agent can also hire agents automatically when it evaluates that more capacity is needed.
           </div>
           <Button variant="primary" onClick={hire} disabled={saving || !form.name.trim() || !form.role.trim()}>
@@ -116,28 +116,27 @@ export default function TeamPage() {
         </Card>
       )}
 
-      {/* Custom agents */}
       {customAgents.length > 0 && (
         <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>
             Custom agents ({customAgents.length})
           </div>
-          <div style={{ border: '1px solid #222', borderRadius: 4, overflow: 'hidden' }}>
+          <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#ffffff' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#111', borderBottom: '1px solid #222' }}>
+                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                   {['', 'Name', 'Role / Specialty', 'Hired by', 'Status', ''].map(h => (
-                    <th key={h} style={{ padding: '7px 12px', color: '#444', fontSize: 9, textAlign: 'left', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
+                    <th key={h} style={{ padding: '7px 12px', color: '#9ca3af', fontSize: 10, textAlign: 'left', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'DM Mono, monospace' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {customAgents.map(a => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid #1a1a1a' }}>
+                  <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                     <td style={{ padding: '8px 12px' }}><StatusDot status={a.status} /></td>
-                    <td style={{ padding: '8px 12px', fontSize: 11, color: '#c8b89a' }}>{a.name}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 10, color: '#888', maxWidth: 280 }}>{a.role}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 9 }}>
+                    <td style={{ padding: '8px 12px', fontSize: 13, color: '#111827' }}>{a.name}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 13, color: '#6b7280', maxWidth: 280 }}>{a.role}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12 }}>
                       <Badge label={a.created_by === 'ceo' ? 'CEO' : 'user'} />
                     </td>
                     <td style={{ padding: '8px 12px' }}><Badge label={a.status} /></td>
@@ -154,28 +153,27 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Core agents */}
       <div>
-        <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>
           Core team ({coreAgents.length})
         </div>
-        <div style={{ border: '1px solid #222', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#ffffff' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#111', borderBottom: '1px solid #222' }}>
+              <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                 {['', 'Agent', 'Role', 'Status', 'Last task'].map(h => (
-                  <th key={h} style={{ padding: '7px 12px', color: '#444', fontSize: 9, textAlign: 'left', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
+                  <th key={h} style={{ padding: '7px 12px', color: '#9ca3af', fontSize: 10, textAlign: 'left', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'DM Mono, monospace' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {coreAgents.map(a => (
-                <tr key={a.id} style={{ borderBottom: '1px solid #1a1a1a' }}>
+                <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                   <td style={{ padding: '8px 12px' }}><StatusDot status={a.status} /></td>
-                  <td style={{ padding: '8px 12px', fontSize: 11, color: '#e8e6e0' }}>{a.name}</td>
-                  <td style={{ padding: '8px 12px', fontSize: 10, color: '#666', maxWidth: 220 }}>{a.role}</td>
+                  <td style={{ padding: '8px 12px', fontSize: 13, color: '#111827' }}>{a.name}</td>
+                  <td style={{ padding: '8px 12px', fontSize: 13, color: '#6b7280', maxWidth: 220 }}>{a.role}</td>
                   <td style={{ padding: '8px 12px' }}><Badge label={a.status} /></td>
-                  <td style={{ padding: '8px 12px', fontSize: 10, color: '#555', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '8px 12px', fontSize: 12, color: '#9ca3af', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {a.latest_output ?? a.current_task ?? '—'}
                   </td>
                 </tr>

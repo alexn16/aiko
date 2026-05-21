@@ -30,6 +30,12 @@ const INSTRUCTION_TEMPLATES = [
   'Find companies that recently raised funding in the {industry} space.',
 ]
 
+const inputStyle: React.CSSProperties = {
+  width: '100%', background: '#ffffff', border: '1px solid #e5e7eb',
+  borderRadius: 4, padding: '7px 10px', color: '#374151',
+  fontFamily: 'Inter, sans-serif', fontSize: 13, boxSizing: 'border-box',
+}
+
 export function ScrapeModal({ projectId, agentId, onClose, onStarted }: ScrapeModalProps) {
   const [url, setUrl] = useState('')
   const [instruction, setInstruction] = useState('')
@@ -53,29 +59,23 @@ export function ScrapeModal({ projectId, agentId, onClose, onStarted }: ScrapeMo
     if (!instruction) setInstruction(source.instruction)
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', background: '#0a0a0a', border: '1px solid #1a1a1a',
-    borderRadius: 3, padding: '7px 10px', color: '#e8e6e0',
-    fontFamily: 'DM Mono, monospace', fontSize: 10, boxSizing: 'border-box',
-  }
-
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: '#0a0a0acc', display: 'flex',
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', display: 'flex',
       alignItems: 'center', justifyContent: 'center', zIndex: 9999,
     }}>
       <div style={{
-        background: '#111', border: '1px solid #222', borderRadius: 4,
+        background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8,
         padding: 24, width: 560, maxHeight: '90vh', overflowY: 'auto',
-        fontFamily: 'DM Mono, monospace',
+        fontFamily: 'Inter, sans-serif', boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
       }}>
-        <div style={{ fontSize: 13, color: '#e8e6e0', marginBottom: 16, letterSpacing: '0.05em' }}>
+        <div style={{ fontSize: 16, fontWeight: 500, color: '#111827', marginBottom: 16 }}>
           Start Scraping
         </div>
 
         {/* Quick sources */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 9, color: '#555', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>
             Quick sources
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -84,11 +84,11 @@ export function ScrapeModal({ projectId, agentId, onClose, onStarted }: ScrapeMo
                 key={s.label}
                 onClick={() => applySource(s)}
                 style={{
-                  background: url === s.url ? '#1a2a1a' : '#0d0d0d',
-                  border: `1px solid ${url === s.url ? '#2a4a2a' : '#1e1e1e'}`,
-                  borderRadius: 3, color: url === s.url ? '#7eb88a' : '#777',
-                  fontFamily: 'DM Mono, monospace', fontSize: 9,
-                  padding: '4px 8px', cursor: 'pointer',
+                  background: url === s.url ? '#f0fdf4' : '#f9fafb',
+                  border: `1px solid ${url === s.url ? '#bbf7d0' : '#e5e7eb'}`,
+                  borderRadius: 4, color: url === s.url ? '#16a34a' : '#6b7280',
+                  fontFamily: 'Inter, sans-serif', fontSize: 12,
+                  padding: '5px 10px', cursor: 'pointer',
                 }}
                 type="button"
               >
@@ -99,7 +99,7 @@ export function ScrapeModal({ projectId, agentId, onClose, onStarted }: ScrapeMo
         </div>
 
         {/* URL */}
-        <label style={{ fontSize: 9, color: '#555', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>
+        <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 5 }}>
           Starting URL (optional — leave blank to let the agent choose)
         </label>
         <input
@@ -110,7 +110,7 @@ export function ScrapeModal({ projectId, agentId, onClose, onStarted }: ScrapeMo
         />
 
         {/* Instruction */}
-        <label style={{ fontSize: 9, color: '#555', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>
+        <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 5 }}>
           Research instruction *
         </label>
         <textarea
@@ -123,15 +123,15 @@ export function ScrapeModal({ projectId, agentId, onClose, onStarted }: ScrapeMo
 
         {/* Instruction templates */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 9, color: '#444', marginBottom: 5 }}>Templates:</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 5 }}>Templates:</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {INSTRUCTION_TEMPLATES.map(t => (
               <button
                 key={t}
                 onClick={() => setInstruction(t)}
                 style={{
-                  background: 'transparent', border: 'none', color: '#555',
-                  fontFamily: 'DM Mono, monospace', fontSize: 9, cursor: 'pointer',
+                  background: 'transparent', border: 'none', color: '#9ca3af',
+                  fontFamily: 'Inter, sans-serif', fontSize: 12, cursor: 'pointer',
                   textAlign: 'left', padding: '2px 0',
                 }}
                 type="button"

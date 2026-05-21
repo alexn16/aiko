@@ -116,13 +116,13 @@ export default function OfficePage() {
     const slot = AGENT_NAME_TO_SLOT[agentName]
     const cfg = slot ? modelConfigs[slot] : undefined
     if (!cfg || !cfg.base_url || !cfg.model) {
-      return { provider: 'Default', model: 'Fallback model', tone: '#666', source: 'Fallback' as const }
+      return { provider: 'Default', model: 'Fallback model', tone: '#9ca3af', source: 'Fallback' as const }
     }
 
     return {
       provider: providerLabel(cfg.base_url),
       model: cfg.model,
-      tone: cfg.base_url.toLowerCase().includes('localhost') ? '#7eb88a' : '#8aa7d6',
+      tone: cfg.base_url.toLowerCase().includes('localhost') ? '#16a34a' : '#2563eb',
       source: 'Configured' as const,
     }
   }
@@ -151,18 +151,18 @@ export default function OfficePage() {
   }
 
   return (
-    <div style={{ padding: 24, fontFamily: 'DM Mono, monospace' }}>
-      <h2 style={{ fontFamily: 'Noto Serif JP, serif', fontWeight: 300, fontSize: 18, color: '#e8e6e0', marginBottom: 16, letterSpacing: '0.05em' }}>
+    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif' }}>
+      <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', marginBottom: 16 }}>
         Live Office
       </h2>
 
-      <div style={{ marginBottom: 16, border: '1px solid #272117', borderRadius: 4, background: '#13100d', padding: '10px 12px', fontSize: 10, color: '#c8b58c' }}>
+      <div style={{ marginBottom: 16, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fffbeb', padding: '10px 12px', fontSize: 12, color: '#92400e' }}>
         Approval-first safety: agents can research and draft, but external sending still requires explicit approval in Approval Center.
       </div>
 
-      <div style={{ marginBottom: 16, border: '1px solid #1a1a1a', borderRadius: 4, background: '#101010', padding: '10px 12px' }}>
-        <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Company flow</div>
-        <div style={{ fontSize: 10, color: '#8a8a8a', lineHeight: 1.7 }}>
+      <div style={{ marginBottom: 16, border: '1px solid #e5e7eb', borderRadius: 6, background: '#ffffff', padding: '12px 14px' }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>Company flow</div>
+        <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.8, fontFamily: 'DM Mono, monospace' }}>
           Client<br />
           ↑<br />
           CEO Agent<br />
@@ -171,19 +171,19 @@ export default function OfficePage() {
           ↑<br />
           Research / Leads / Copywriting / Outreach / Reporting / Quality
         </div>
-        <div style={{ marginTop: 8, fontSize: 10, color: '#777' }}>
+        <div style={{ marginTop: 8, fontSize: 12, color: '#9ca3af' }}>
           AÏKO works like a small marketing company. Agents report work upward before anything reaches the client.
         </div>
       </div>
 
 
       {/* Agent table */}
-      <div style={{ border: '1px solid #222', borderRadius: 4, marginBottom: 24, overflow: 'hidden' }}>
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 24, overflow: 'hidden', background: '#ffffff' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#111', borderBottom: '1px solid #222' }}>
+            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
               {['', 'Agent', 'Role', 'Reports to', 'AI Model', 'Status', 'Current task', 'Progress', ''].map(h => (
-                <th key={h} style={{ padding: '8px 12px', color: '#444', fontSize: 9, textAlign: 'left', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
+                <th key={h} style={{ padding: '8px 12px', color: '#9ca3af', fontSize: 10, textAlign: 'left', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'DM Mono, monospace' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -191,25 +191,25 @@ export default function OfficePage() {
             {agents.map(agent => {
               const assignment = modelAssignment(agent.name)
               return (
-                <tr key={agent.id} style={{ borderBottom: '1px solid #1a1a1a', background: agent.status !== 'idle' ? '#0d0d0d' : 'transparent' }}>
+                <tr key={agent.id} style={{ borderBottom: '1px solid #f3f4f6', background: agent.status !== 'idle' ? '#f9fafb' : '#ffffff' }}>
                 <td style={{ padding: '8px 12px' }}><StatusDot status={agent.status} /></td>
-                <td style={{ padding: '8px 12px', fontSize: 11, color: '#e8e6e0' }}>{agent.name}</td>
-                <td style={{ padding: '8px 12px', fontSize: 10, color: '#666' }}>{agent.role}</td>
-                <td style={{ padding: '8px 12px', fontSize: 10, color: '#8a8a8a', minWidth: 130 }}>{REPORTS_TO[agent.name] ?? 'CEO Agent'}</td>
+                <td style={{ padding: '8px 12px', fontSize: 13, color: '#111827' }}>{agent.name}</td>
+                <td style={{ padding: '8px 12px', fontSize: 12, color: '#6b7280' }}>{agent.role}</td>
+                <td style={{ padding: '8px 12px', fontSize: 12, color: '#9ca3af', minWidth: 130 }}>{REPORTS_TO[agent.name] ?? 'CEO Agent'}</td>
                 <td style={{ padding: '8px 12px', minWidth: 180 }}>
-                  <div style={{ fontSize: 9, color: assignment.tone }}>{assignment.provider}</div>
-                  <div style={{ fontSize: 10, color: '#999', marginBottom: 4 }}>{assignment.model}</div>
-                  <span style={{ fontSize: 9, color: assignment.source === 'Configured' ? '#8e8e8e' : '#6a6a6a', border: '1px solid #2a2a2a', borderRadius: 999, padding: '1px 6px' }}>
+                  <div style={{ fontSize: 10, color: assignment.tone, fontFamily: 'DM Mono, monospace' }}>{assignment.provider}</div>
+                  <div style={{ fontSize: 11, color: '#374151', marginBottom: 3, fontFamily: 'DM Mono, monospace' }}>{assignment.model}</div>
+                  <span style={{ fontSize: 9, color: assignment.source === 'Configured' ? '#6b7280' : '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 999, padding: '1px 6px', fontFamily: 'DM Mono, monospace' }}>
                     {assignment.source}
                   </span>
                 </td>
                 <td style={{ padding: '8px 12px' }}><Badge label={agent.status} /></td>
-                <td style={{ padding: '8px 12px', fontSize: 10, color: '#888', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <td style={{ padding: '8px 12px', fontSize: 12, color: '#6b7280', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {agent.current_task ?? '—'}
                 </td>
                 <td style={{ padding: '8px 12px', minWidth: 80 }}>
-                  <div style={{ height: 2, background: '#222', borderRadius: 1 }}>
-                    <div style={{ height: '100%', width: `${agent.progress}%`, background: '#7eb88a', borderRadius: 1, transition: 'width 0.5s' }} />
+                  <div style={{ height: 3, background: '#e5e7eb', borderRadius: 2 }}>
+                    <div style={{ height: '100%', width: `${agent.progress}%`, background: '#16a34a', borderRadius: 2, transition: 'width 0.5s' }} />
                   </div>
                 </td>
                 <td style={{ padding: '8px 12px' }}>
@@ -227,7 +227,7 @@ export default function OfficePage() {
       {/* Browser stream */}
       {browsingAgent && (
         <div style={{ marginBottom: 24, maxWidth: 680 }}>
-          <div style={{ marginBottom: 8, fontSize: 10, color: '#8a8a8a' }}>
+          <div style={{ marginBottom: 8, fontSize: 12, color: '#6b7280' }}>
             Live browser session: {browsingAgent.name} is actively navigating websites.
           </div>
           <BrowserStream agentId={browsingAgent.id} active={true} />
@@ -235,15 +235,15 @@ export default function OfficePage() {
       )}
 
       {/* Instruction input */}
-      <div style={{ border: '1px solid #1a1a1a', borderRadius: 4, padding: 12, marginBottom: 24 }}>
-        <div style={{ fontSize: 9, color: '#444', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>Direction update</div>
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 14, marginBottom: 24, background: '#ffffff' }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>Direction update</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
           <select
             value={selectedAgentId}
             onChange={e => setSelectedAgentId(e.target.value)}
             style={{
-              background: '#111', border: '1px solid #222', borderRadius: 3,
-              padding: '7px 10px', color: '#e8e6e0', fontFamily: 'DM Mono, monospace', fontSize: 10,
+              background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
+              padding: '7px 10px', color: '#374151', fontFamily: 'Inter, sans-serif', fontSize: 13,
             }}
           >
             <option value="">Select agent…</option>
@@ -258,8 +258,8 @@ export default function OfficePage() {
             onKeyDown={e => e.key === 'Enter' && sendInstruction()}
             placeholder="Tell an agent what to do or how to change focus…"
             style={{
-              flex: 1, background: '#111', border: '1px solid #222', borderRadius: 3,
-              padding: '7px 12px', color: '#e8e6e0', fontFamily: 'DM Mono, monospace', fontSize: 11,
+              flex: 1, background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
+              padding: '7px 12px', color: '#374151', fontFamily: 'Inter, sans-serif', fontSize: 13,
             }}
           />
 
@@ -268,12 +268,12 @@ export default function OfficePage() {
           </Button>
         </div>
 
-        <div style={{ marginBottom: 8, fontSize: 10, color: '#777' }}>
+        <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
           {selectedAgent ? `Target: ${selectedAgent.name} · ${modelAssignment(selectedAgent.name).provider} / ${modelAssignment(selectedAgent.name).model} · Status: ${selectedAgent.status}` : 'Select an agent to send a direction update.'}
         </div>
 
         {selectedAgent && (
-          <div style={{ marginBottom: 8, fontSize: 10, color: '#6f6f6f' }}>
+          <div style={{ marginBottom: 8, fontSize: 12, color: '#9ca3af' }}>
             Reporting path: {reportingPath(selectedAgent.name)}
           </div>
         )}
@@ -283,7 +283,7 @@ export default function OfficePage() {
             <button
               key={template}
               onClick={() => setInstruction(template)}
-              style={{ background: '#101010', border: '1px solid #222', borderRadius: 3, color: '#9a9a9a', fontSize: 10, padding: '4px 8px', cursor: 'pointer' }}
+              style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 4, color: '#6b7280', fontSize: 12, padding: '4px 10px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
               type="button"
             >
               {template}
@@ -306,8 +306,8 @@ export default function OfficePage() {
       )}
 
       {/* Activity feed */}
-      <div style={{ border: '1px solid #1a1a1a', borderRadius: 4, padding: 12 }}>
-        <div style={{ fontSize: 9, color: '#444', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>Activity</div>
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 14, background: '#ffffff' }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 10 }}>Activity</div>
         <ActivityFeed logs={logs} />
       </div>
     </div>

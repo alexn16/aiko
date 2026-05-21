@@ -6,29 +6,31 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'sm' | 'md'
 }
 
-export function Button({ variant = 'ghost', size = 'md', style, children, ...rest }: ButtonProps) {
+export function Button({ variant = 'ghost', size = 'md', style, disabled, children, ...rest }: ButtonProps) {
   const base: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    border: '1px solid #222',
-    borderRadius: 4,
-    fontFamily: 'DM Mono, monospace',
-    cursor: 'pointer',
-    letterSpacing: '0.05em',
-    fontSize: size === 'sm' ? 9 : 11,
-    padding: size === 'sm' ? '4px 10px' : '6px 14px',
-    transition: 'border-color 0.15s, color 0.15s',
+    borderRadius: 6,
+    fontFamily: 'Inter, sans-serif',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: size === 'sm' ? 12 : 13,
+    fontWeight: 400,
+    padding: size === 'sm' ? '4px 10px' : '7px 14px',
+    transition: 'background 0.1s, opacity 0.1s',
+    opacity: disabled ? 0.45 : 1,
+    border: '1px solid transparent',
+    whiteSpace: 'nowrap',
   }
 
   const variants: Record<string, React.CSSProperties> = {
-    primary: { background: '#c8b89a', color: '#0a0a0a', borderColor: '#c8b89a', fontWeight: 500 },
-    ghost:   { background: 'transparent', color: '#e8e6e0' },
-    danger:  { background: 'transparent', color: '#c87070', borderColor: '#c8707044' },
+    primary: { background: '#111827', color: '#ffffff', borderColor: '#111827' },
+    ghost:   { background: 'transparent', color: '#374151', borderColor: '#e5e7eb' },
+    danger:  { background: 'transparent', color: '#dc2626', borderColor: '#fecaca' },
   }
 
   return (
-    <button style={{ ...base, ...variants[variant], ...style }} {...rest}>
+    <button style={{ ...base, ...variants[variant], ...style }} disabled={disabled} {...rest}>
       {children}
     </button>
   )

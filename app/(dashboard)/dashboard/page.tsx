@@ -22,7 +22,6 @@ export default function DashboardPage() {
   const [projectId, setProjectId] = useState(PROJECT_ID)
 
   useEffect(() => {
-    // Get first project if no default set
     if (!projectId) {
       fetch('/api/projects').then(r => r.json()).then(d => {
         if (d.projects?.[0]?.id) setProjectId(d.projects[0].id)
@@ -49,35 +48,41 @@ export default function DashboardPage() {
       .catch(() => {})
   }, [projectId])
 
+  const METRIC_COLORS: Record<string, string> = {
+    'Leads found': '#111827',
+    'Messages sent': '#16a34a',
+    'Replies': '#d97706',
+    'Pending approval': '#2563eb',
+  }
+
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ fontFamily: 'Noto Serif JP, serif', fontWeight: 300, fontSize: 22, color: '#e8e6e0', marginBottom: 24 }}>
+      <h1 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 20, color: '#111827', marginBottom: 24 }}>
         AÏKO
       </h1>
 
-      {/* Metric cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 24 }}>
         {[
-          { label: 'Leads found',       value: stats.leads,   color: '#e8e6e0' },
-          { label: 'Messages sent',     value: stats.sent,    color: '#7eb88a' },
-          { label: 'Replies',           value: stats.replies, color: '#c8a84a' },
-          { label: 'Pending approval',  value: stats.pending, color: '#7098c8' },
+          { label: 'Leads found',      value: stats.leads },
+          { label: 'Messages sent',    value: stats.sent },
+          { label: 'Replies',          value: stats.replies },
+          { label: 'Pending approval', value: stats.pending },
         ].map(m => (
           <Card key={m.label}>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 28, color: m.color, fontWeight: 300 }}>{m.value}</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 8 }}>{m.label}</div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 28, color: METRIC_COLORS[m.label], fontWeight: 300 }}>{m.value}</div>
           </Card>
         ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24, alignItems: 'start' }}>
         <div>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12 }}>Active agents</div>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12 }}>Active agents</div>
           <AgentGrid agents={agents} maxCount={4} />
         </div>
 
         <Card>
-          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12 }}>Activity</div>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 12 }}>Activity</div>
           <ActivityFeed logs={logs} />
         </Card>
       </div>

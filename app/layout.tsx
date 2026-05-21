@@ -24,12 +24,12 @@ const NAV_ITEMS = [
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, background: '#0a0a0a', color: '#e8e6e0', display: 'flex', minHeight: '100vh' }}>
+      <body style={{ margin: 0, background: '#f9fafb', color: '#111827', display: 'flex', minHeight: '100vh' }}>
         {/* Sidebar */}
         <nav style={{
           width: 200,
-          background: '#111',
-          borderRight: '1px solid #1a1a1a',
+          background: '#ffffff',
+          borderRight: '1px solid #e5e7eb',
           display: 'flex',
           flexDirection: 'column',
           padding: '24px 0',
@@ -41,13 +41,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           zIndex: 100,
         }}>
           <div style={{
-            fontFamily: '"Noto Serif JP", serif',
-            fontWeight: 300,
-            fontSize: 16,
-            color: '#c8b89a',
+            fontFamily: 'Inter, sans-serif',
+            fontWeight: 500,
+            fontSize: 15,
+            color: '#111827',
             padding: '0 20px 24px',
-            borderBottom: '1px solid #1a1a1a',
-            letterSpacing: '0.05em',
+            borderBottom: '1px solid #e5e7eb',
+            letterSpacing: '0.02em',
           }}>
             AÏKO
           </div>
@@ -60,11 +60,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 style={{
                   display: 'block',
                   padding: '8px 20px',
-                  fontFamily: '"DM Mono", monospace',
-                  fontSize: 11,
-                  color: '#666',
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: 13,
+                  color: '#6b7280',
                   textDecoration: 'none',
-                  letterSpacing: '0.05em',
                 }}
               >
                 {item.label}
@@ -72,7 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             ))}
           </div>
 
-          <div style={{ padding: '0 20px', fontFamily: '"DM Mono", monospace', fontSize: 9, color: '#333', letterSpacing: '0.1em' }}>
+          <div style={{ padding: '0 20px', fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#d1d5db', letterSpacing: '0.1em' }}>
             v1.0 · self-hosted
           </div>
         </nav>

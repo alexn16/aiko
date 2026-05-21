@@ -1,30 +1,28 @@
 'use client'
 
 const STATUS_COLORS: Record<string, string> = {
-  idle:     '#444444',
-  active:   '#7eb88a',
-  browsing: '#7eb88a',
-  writing:  '#c8a84a',
-  waiting:  '#7098c8',
-  error:    '#c87070',
-  paused:   '#444444',
+  idle:     '#d1d5db',
+  active:   '#16a34a',
+  browsing: '#16a34a',
+  writing:  '#d97706',
+  waiting:  '#2563eb',
+  error:    '#dc2626',
+  paused:   '#d1d5db',
 }
 
 export function StatusDot({ status }: { status: string }) {
-  const color = STATUS_COLORS[status] ?? '#444444'
-  const isActive = status === 'active' || status === 'browsing' || status === 'writing'
+  const color = STATUS_COLORS[status] ?? '#d1d5db'
+  const isActive = ['active', 'browsing', 'writing'].includes(status)
 
   return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: 5,
-        height: 5,
-        borderRadius: '50%',
-        background: color,
-        flexShrink: 0,
-        animation: isActive ? 'pulse 2s ease-in-out infinite' : undefined,
-      }}
-    />
+    <span style={{
+      display: 'inline-block',
+      width: 7,
+      height: 7,
+      borderRadius: '50%',
+      background: color,
+      flexShrink: 0,
+      animation: isActive ? 'pulse 1.8s ease-in-out infinite' : undefined,
+    }} />
   )
 }

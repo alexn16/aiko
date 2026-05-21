@@ -19,12 +19,12 @@ export function BrowserStream({ agentId, active }: BrowserStreamProps) {
 
   return (
     <div style={{
-      border: '1px solid #222',
-      borderRadius: 4,
+      border: '1px solid #e5e7eb',
+      borderRadius: 6,
       overflow: 'hidden',
-      background: '#0a0a0a',
+      background: '#f9fafb',
     }}>
-      <div style={{ padding: '6px 10px', background: '#111', borderBottom: '1px solid #1a1a1a', fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#666', letterSpacing: '0.1em' }}>
+      <div style={{ padding: '6px 10px', background: '#ffffff', borderBottom: '1px solid #e5e7eb', fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.1em' }}>
         LIVE BROWSER
       </div>
       {/* eslint-disable-next-line @next/next/no-img-element */}

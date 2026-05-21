@@ -16,7 +16,7 @@ export function ApprovalQueue({ projectId }: { projectId: string }) {
 
   if (!approvals.length) {
     return (
-      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#333', padding: '24px 0' }}>
+      <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#9ca3af', padding: '24px 0' }}>
         No pending approvals.
       </div>
     )

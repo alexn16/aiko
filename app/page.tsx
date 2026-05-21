@@ -13,13 +13,6 @@ const quickLinks = [
   { href: '/reports', label: 'View Reports', description: 'Track outcomes and strategic recommendations.' },
 ]
 
-const pillars = [
-  'Marketing-only multi-agent operating system',
-  'Always-on orchestration with live activity stream',
-  'Human approval gate before any external outreach',
-  'Self-hosted architecture with pluggable model providers',
-]
-
 const flow = [
   { label: '1. Home', detail: 'Set context and open the right work surface.' },
   { label: '2. Live Office', detail: 'Agents run research, enrichment, and drafting tasks.' },
@@ -90,25 +83,25 @@ export default function Home() {
   return (
     <div style={{ padding: 32, maxWidth: 980 }}>
       <div style={{ marginBottom: 24 }}>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, letterSpacing: '0.12em', color: '#666', textTransform: 'uppercase' }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, letterSpacing: '0.12em', color: '#9ca3af', textTransform: 'uppercase' }}>
           AÏKO · AI Marketing Operating System
         </div>
-        <h1 style={{ fontFamily: 'Noto Serif JP, serif', fontSize: 40, fontWeight: 300, lineHeight: 1.2, color: '#e8e6e0', margin: '10px 0 14px' }}>
+        <h1 style={{ fontFamily: 'Inter, sans-serif', fontSize: 32, fontWeight: 500, lineHeight: 1.2, color: '#111827', margin: '10px 0 14px' }}>
           Build, validate, and scale outbound growth with specialized AI agents.
         </h1>
-        <p style={{ margin: 0, color: '#9e9e9e', maxWidth: 760, lineHeight: 1.6 }}>
+        <p style={{ margin: 0, color: '#6b7280', maxWidth: 760, lineHeight: 1.6, fontSize: 14 }}>
           AÏKO is not a general chatbot. It is an always-running, human-supervised marketing company layer for research, lead generation,
           copywriting, outreach monitoring, and sales validation.
         </p>
       </div>
 
-      <section style={{ marginBottom: 24, border: '1px solid #1d1d1d', borderRadius: 10, padding: 14, background: '#0f0f0f' }}>
-        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
+      <section style={{ marginBottom: 24, border: '1px solid #e5e7eb', borderRadius: 8, padding: 16, background: '#ffffff' }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
           System Status
         </div>
-        <div style={{ color: '#bcbcbc', fontSize: 13, marginBottom: 10 }}>
-          Active project: <span style={{ color: '#e8e6e0' }}>{projectName}</span>
-          <span style={{ marginLeft: 12, color: livePulse === 'Active' ? '#7eb88a' : '#8a8a8a' }}>● {livePulse}</span>
+        <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 12 }}>
+          Active project: <span style={{ color: '#111827', fontWeight: 500 }}>{projectName}</span>
+          <span style={{ marginLeft: 12, color: livePulse === 'Active' ? '#16a34a' : '#9ca3af' }}>● {livePulse}</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(90px, 1fr))', gap: 10 }}>
           {[
@@ -118,63 +111,52 @@ export default function Home() {
             { label: 'Pending', value: stats?.pending ?? '—' },
             { label: 'Active agents', value: activeAgents },
           ].map((item) => (
-            <div key={item.label} style={{ border: '1px solid #1f1f1f', borderRadius: 8, padding: 10, background: '#111' }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#666', marginBottom: 6 }}>{item.label}</div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 20, color: '#d8d8d8' }}>{item.value}</div>
+            <div key={item.label} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, background: '#f9fafb' }}>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#9ca3af', marginBottom: 6 }}>{item.label}</div>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 20, color: '#111827' }}>{item.value}</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 10, color: '#8a8a8a', fontSize: 12 }}>
+        <div style={{ marginTop: 10, color: '#9ca3af', fontSize: 12 }}>
           Latest activity: {lastActivity} {lastUpdatedAt ? `· ${new Date(lastUpdatedAt).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
         </div>
       </section>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 30 }}>
-        <Link href="/dashboard" style={{ textDecoration: 'none', background: '#1b2420', border: '1px solid #2c3c33', color: '#b5d0bd', padding: '10px 14px', borderRadius: 8, fontFamily: 'DM Mono, monospace', fontSize: 12 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 28 }}>
+        <Link href="/dashboard" style={{ textDecoration: 'none', background: '#111827', color: '#ffffff', padding: '9px 14px', borderRadius: 6, fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
           Open Dashboard
         </Link>
-        <Link href="/approval" style={{ textDecoration: 'none', background: '#201d16', border: '1px solid #3b3428', color: '#d7c9a4', padding: '10px 14px', borderRadius: 8, fontFamily: 'DM Mono, monospace', fontSize: 12 }}>
+        <Link href="/approval" style={{ textDecoration: 'none', background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151', padding: '9px 14px', borderRadius: 6, fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
           Review Pending Approvals
         </Link>
-        <Link href="/settings" style={{ textDecoration: 'none', background: '#151a21', border: '1px solid #2b3442', color: '#b7c7e8', padding: '10px 14px', borderRadius: 8, fontFamily: 'DM Mono, monospace', fontSize: 12 }}>
+        <Link href="/settings" style={{ textDecoration: 'none', background: '#ffffff', border: '1px solid #e5e7eb', color: '#374151', padding: '9px 14px', borderRadius: 6, fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
           Configure Models & SMTP
         </Link>
       </div>
 
-      <section style={{ marginBottom: 30 }}>
-        <h2 style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
+      <section style={{ marginBottom: 28 }}>
+        <h2 style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
           Campaign Flow
         </h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
           {flow.map((step) => (
-            <div key={step.label} style={{ border: '1px solid #1f1f1f', borderRadius: 10, padding: 12, background: '#101010' }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#d3d3d3', marginBottom: 6 }}>{step.label}</div>
-              <div style={{ color: '#8f8f8f', fontSize: 13, lineHeight: 1.5 }}>{step.detail}</div>
+            <div key={step.label} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, background: '#ffffff' }}>
+              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#111827', marginBottom: 6 }}>{step.label}</div>
+              <div style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.5 }}>{step.detail}</div>
             </div>
           ))}
         </div>
       </section>
 
-      <section style={{ marginBottom: 30 }}>
-        <h2 style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
-          System Pillars
-        </h2>
-        <ul style={{ margin: 0, paddingLeft: 18, color: '#c8c8c8', lineHeight: 1.8 }}>
-          {pillars.map((pillar) => (
-            <li key={pillar}>{pillar}</li>
-          ))}
-        </ul>
-      </section>
-
       <section>
-        <h2 style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
+        <h2 style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 12 }}>
           Start Here
         </h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
           {quickLinks.map((item) => (
-            <Link key={item.href} href={item.href} style={{ textDecoration: 'none', color: 'inherit', border: '1px solid #222', background: '#111', borderRadius: 10, padding: 14 }}>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#e8e6e0', marginBottom: 6 }}>{item.label}</div>
-              <div style={{ fontSize: 13, color: '#888', lineHeight: 1.5 }}>{item.description}</div>
+            <Link key={item.href} href={item.href} style={{ textDecoration: 'none', color: 'inherit', border: '1px solid #e5e7eb', background: '#ffffff', borderRadius: 8, padding: 14 }}>
+              <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 13, fontWeight: 500, color: '#111827', marginBottom: 6 }}>{item.label}</div>
+              <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>{item.description}</div>
             </Link>
           ))}
         </div>

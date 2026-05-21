@@ -9,11 +9,24 @@ interface ApprovalItemProps {
   onAction: () => void
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending:          { label: 'Pending quality check', color: '#888' },
-  quality_passed:   { label: 'Quality passed ✓',      color: '#7eb88a' },
-  quality_rejected: { label: 'Quality rejected',       color: '#c87878' },
-  approved:         { label: 'Approved',               color: '#8aa7d6' },
+const STATUS_LABELS: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  pending:          { label: 'Pending quality check', color: '#6b7280', bg: '#f9fafb',  border: '#e5e7eb' },
+  quality_passed:   { label: 'Quality passed ✓',      color: '#16a34a', bg: '#f0fdf4',  border: '#bbf7d0' },
+  quality_rejected: { label: 'Quality rejected',       color: '#dc2626', bg: '#fef2f2',  border: '#fecaca' },
+  approved:         { label: 'Approved',               color: '#2563eb', bg: '#eff6ff',  border: '#bfdbfe' },
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#ffffff',
+  border: '1px solid #e5e7eb',
+  borderRadius: 4,
+  padding: '6px 10px',
+  color: '#374151',
+  fontFamily: 'Inter, sans-serif',
+  fontSize: 13,
+  marginBottom: 8,
+  boxSizing: 'border-box',
 }
 
 export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
@@ -76,29 +89,16 @@ export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
     })
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    background: '#0a0a0a',
-    border: '1px solid #1a1a1a',
-    borderRadius: 3,
-    padding: '6px 10px',
-    color: '#e8e6e0',
-    fontFamily: 'DM Mono, monospace',
-    fontSize: 10,
-    marginBottom: 8,
-    boxSizing: 'border-box',
-  }
-
   return (
-    <div style={{ background: '#111', border: `1px solid ${isRejected ? '#3a1a1a' : '#222'}`, borderRadius: 4, padding: 16, fontFamily: 'DM Mono, monospace' }}>
+    <div style={{ background: '#ffffff', border: `1px solid ${isRejected ? '#fecaca' : '#e5e7eb'}`, borderRadius: 6, padding: 16, fontFamily: 'Inter, sans-serif' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 11, color: '#e8e6e0', marginBottom: 2 }}>
+          <div style={{ fontSize: 14, color: '#111827', fontWeight: 500, marginBottom: 2 }}>
             {approval.company_name ?? 'Unknown company'}
           </div>
           {approval.email && (
-            <div style={{ fontSize: 10, color: '#7098c8' }}>{approval.email}</div>
+            <div style={{ fontSize: 13, color: '#2563eb' }}>{approval.email}</div>
           )}
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -110,17 +110,16 @@ export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
       {qualityInfo && (
         <div style={{
           marginBottom: 10,
-          padding: '5px 8px',
-          borderRadius: 3,
-          background: isRejected ? '#1a0a0a' : '#0d120d',
-          border: `1px solid ${isRejected ? '#3a1a1a' : '#1a2a1a'}`,
-          fontSize: 9,
+          padding: '6px 10px',
+          borderRadius: 4,
+          background: qualityInfo.bg,
+          border: `1px solid ${qualityInfo.border}`,
+          fontSize: 12,
           color: qualityInfo.color,
-          letterSpacing: '0.08em',
         }}>
           {qualityInfo.label}
           {approval.quality_reason && (
-            <span style={{ color: '#666', marginLeft: 8 }}>— {approval.quality_reason}</span>
+            <span style={{ color: '#9ca3af', marginLeft: 8 }}>— {approval.quality_reason}</span>
           )}
         </div>
       )}
@@ -147,12 +146,12 @@ export function ApprovalItem({ approval, onAction }: ApprovalItemProps) {
 
       {/* Error / Note */}
       {error && (
-        <div style={{ marginBottom: 10, padding: '6px 8px', background: '#1a0a0a', border: '1px solid #3a1a1a', borderRadius: 3, fontSize: 10, color: '#c87878' }}>
+        <div style={{ marginBottom: 10, padding: '7px 10px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, fontSize: 13, color: '#dc2626' }}>
           {error}
         </div>
       )}
       {note && (
-        <div style={{ marginBottom: 10, padding: '6px 8px', background: '#0d120d', border: '1px solid #1a2a1a', borderRadius: 3, fontSize: 10, color: '#7eb88a' }}>
+        <div style={{ marginBottom: 10, padding: '7px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, fontSize: 13, color: '#16a34a' }}>
           {note}
         </div>
       )}

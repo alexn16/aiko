@@ -79,12 +79,12 @@ export function LeadTable({ leads, agentId, projectId, onAction }: LeadTableProp
   }
 
   const selectStyle: React.CSSProperties = {
-    background: '#111', border: '1px solid #222', borderRadius: 2,
-    color: '#999', fontFamily: 'DM Mono, monospace', fontSize: 9, padding: '2px 4px',
+    background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 3,
+    color: '#6b7280', fontFamily: 'Inter, sans-serif', fontSize: 12, padding: '3px 6px',
   }
 
   return (
-    <div style={{ fontFamily: 'DM Mono, monospace' }}>
+    <div style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <input
@@ -92,8 +92,8 @@ export function LeadTable({ leads, agentId, projectId, onAction }: LeadTableProp
           value={filter}
           onChange={e => setFilter(e.target.value)}
           style={{
-            flex: 1, minWidth: 200, background: '#111', border: '1px solid #222', borderRadius: 3,
-            padding: '7px 12px', color: '#e8e6e0', fontFamily: 'DM Mono, monospace', fontSize: 11,
+            flex: 1, minWidth: 200, background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
+            padding: '7px 12px', color: '#374151', fontFamily: 'Inter, sans-serif', fontSize: 13,
             boxSizing: 'border-box',
           }}
         />
@@ -109,12 +109,12 @@ export function LeadTable({ leads, agentId, projectId, onAction }: LeadTableProp
         )}
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+      <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 6, background: '#ffffff' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid #222' }}>
+            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
               {['Company', 'Contact', 'Email', 'Phone', 'City', 'Status', ''].map(h => (
-                <th key={h} style={{ padding: '6px 8px', color: '#555', textAlign: 'left', letterSpacing: '0.1em', fontSize: 9, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '7px 10px', color: '#9ca3af', textAlign: 'left', letterSpacing: '0.08em', fontSize: 10, textTransform: 'uppercase', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -122,18 +122,18 @@ export function LeadTable({ leads, agentId, projectId, onAction }: LeadTableProp
             {visible.map(lead => {
               const rowState = loadingRows[lead.id]
               return (
-                <tr key={lead.id} style={{ borderBottom: '1px solid #1a1a1a', opacity: rowState ? 0.7 : 1 }}>
-                  <td style={{ padding: '8px', color: '#e8e6e0', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <tr key={lead.id} style={{ borderBottom: '1px solid #f3f4f6', opacity: rowState ? 0.7 : 1 }}>
+                  <td style={{ padding: '8px 10px', color: '#111827', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {lead.website
-                      ? <a href={lead.website} target="_blank" rel="noreferrer" style={{ color: '#e8e6e0', textDecoration: 'none' }}>{lead.company_name ?? '—'}</a>
+                      ? <a href={lead.website} target="_blank" rel="noreferrer" style={{ color: '#111827', textDecoration: 'none' }}>{lead.company_name ?? '—'}</a>
                       : (lead.company_name ?? '—')}
                   </td>
-                  <td style={{ padding: '8px', color: '#888', whiteSpace: 'nowrap' }}>{lead.contact_name ?? '—'}</td>
-                  <td style={{ padding: '8px', color: '#7098c8', whiteSpace: 'nowrap' }}>{lead.email ?? '—'}</td>
-                  <td style={{ padding: '8px', color: '#888', whiteSpace: 'nowrap' }}>{lead.phone ?? '—'}</td>
-                  <td style={{ padding: '8px', color: '#888', whiteSpace: 'nowrap' }}>{lead.city ?? '—'}</td>
-                  <td style={{ padding: '8px' }}><Badge label={lead.status} /></td>
-                  <td style={{ padding: '8px' }}>
+                  <td style={{ padding: '8px 10px', color: '#6b7280', whiteSpace: 'nowrap' }}>{lead.contact_name ?? '—'}</td>
+                  <td style={{ padding: '8px 10px', color: '#2563eb', whiteSpace: 'nowrap' }}>{lead.email ?? '—'}</td>
+                  <td style={{ padding: '8px 10px', color: '#6b7280', whiteSpace: 'nowrap' }}>{lead.phone ?? '—'}</td>
+                  <td style={{ padding: '8px 10px', color: '#6b7280', whiteSpace: 'nowrap' }}>{lead.city ?? '—'}</td>
+                  <td style={{ padding: '8px 10px' }}><Badge label={lead.status} /></td>
+                  <td style={{ padding: '8px 10px' }}>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       <select
                         value={channelOverride[lead.id] ?? 'email'}
@@ -156,7 +156,7 @@ export function LeadTable({ leads, agentId, projectId, onAction }: LeadTableProp
           </tbody>
         </table>
         {visible.length === 0 && (
-          <div style={{ padding: '16px 8px', color: '#333', fontSize: 11 }}>
+          <div style={{ padding: '16px 10px', color: '#9ca3af', fontSize: 13 }}>
             {filter ? `No leads match "${filter}".` : 'No leads yet. Use "+ Start scraping" to find leads.'}
           </div>
         )}

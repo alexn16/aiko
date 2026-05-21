@@ -8,6 +8,12 @@ import { Card } from '@/components/ui/Card'
 
 const BLANK_LEAD = { company_name: '', contact_name: '', email: '', phone: '', website: '', city: '', country: '' }
 
+const inputStyle: React.CSSProperties = {
+  background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
+  padding: '6px 10px', color: '#374151', fontFamily: 'Inter, sans-serif',
+  fontSize: 13, width: '100%', boxSizing: 'border-box',
+}
+
 export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
@@ -49,18 +55,12 @@ export default function LeadsPage() {
     load(projectId)
   }
 
-  const inputStyle: React.CSSProperties = {
-    background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 3,
-    padding: '6px 10px', color: '#e8e6e0', fontFamily: 'DM Mono, monospace',
-    fontSize: 10, width: '100%', boxSizing: 'border-box',
-  }
-
   return (
-    <div style={{ padding: 24, fontFamily: 'DM Mono, monospace' }}>
+    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <h2 style={{ fontFamily: 'Noto Serif JP, serif', fontWeight: 300, fontSize: 18, color: '#e8e6e0', margin: 0 }}>
+        <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', margin: 0 }}>
           Leads
-          <span style={{ fontSize: 11, color: '#444', fontFamily: 'DM Mono, monospace', marginLeft: 12 }}>
+          <span style={{ fontSize: 13, color: '#9ca3af', fontFamily: 'DM Mono, monospace', marginLeft: 12 }}>
             {leads.length} total
           </span>
         </h2>
@@ -74,10 +74,9 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      {/* Manual lead creation */}
       {showAdd && (
         <Card style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 14 }}>Add lead manually</div>
+          <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 14 }}>Add lead manually</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
             {([
               { field: 'company_name', label: 'Company name *', placeholder: 'Acme Corp' },
@@ -89,7 +88,7 @@ export default function LeadsPage() {
               { field: 'country',      label: 'Country',        placeholder: 'Spain' },
             ] as const).map(({ field, label, placeholder }) => (
               <div key={field}>
-                <label style={{ fontSize: 9, color: '#444', display: 'block', marginBottom: 4, letterSpacing: '0.08em' }}>{label.toUpperCase()}</label>
+                <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>{label}</label>
                 <input
                   value={newLead[field]}
                   onChange={e => setNewLead(p => ({ ...p, [field]: e.target.value }))}

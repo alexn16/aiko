@@ -22,6 +22,12 @@ const AGENT_SLOTS = [
 
 interface ModelRow { base_url: string; api_key: string; model: string }
 
+const inputStyle: React.CSSProperties = {
+  background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 4,
+  padding: '6px 8px', color: '#374151', fontFamily: 'Inter, sans-serif',
+  fontSize: 13, width: '100%', boxSizing: 'border-box',
+}
+
 export default function SettingsPage() {
   const [configs, setConfigs] = useState<Record<string, ModelRow>>({})
   const [saved, setSaved] = useState(false)
@@ -78,21 +84,15 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const inputStyle: React.CSSProperties = {
-    background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 3,
-    padding: '6px 8px', color: '#e8e6e0', fontFamily: 'DM Mono, monospace',
-    fontSize: 10, width: '100%', boxSizing: 'border-box',
-  }
-
   return (
-    <div style={{ padding: 24, fontFamily: 'DM Mono, monospace', maxWidth: 900 }}>
-      <h2 style={{ fontFamily: 'Noto Serif JP, serif', fontWeight: 300, fontSize: 18, color: '#e8e6e0', marginBottom: 24 }}>
+    <div style={{ padding: 24, fontFamily: 'Inter, sans-serif', maxWidth: 900 }}>
+      <h2 style={{ fontFamily: 'Inter, sans-serif', fontWeight: 500, fontSize: 18, color: '#111827', marginBottom: 24 }}>
         Settings
       </h2>
 
       {/* Project config */}
       <Card style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 16 }}>Project</div>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 16 }}>Project</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {([
             { field: 'name' as const, label: 'Project name' },
@@ -101,7 +101,7 @@ export default function SettingsPage() {
             { field: 'description' as const, label: 'Description' },
           ]).map(({ field, label }) => (
             <div key={field}>
-              <label style={{ fontSize: 9, color: '#444', letterSpacing: '0.1em', display: 'block', marginBottom: 4 }}>{label.toUpperCase()}</label>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>{label}</label>
               <input
                 value={project[field]}
                 onChange={e => setProject(p => ({ ...p, [field]: e.target.value }))}
@@ -115,8 +115,8 @@ export default function SettingsPage() {
 
       {/* SMTP config */}
       <Card style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Email / SMTP</div>
-        <div style={{ fontSize: 9, color: '#444', marginBottom: 16 }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 4 }}>Email / SMTP</div>
+        <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>
           Required for the email outreach channel. Works with Gmail (App Password), Mailgun SMTP, Postmark, and any standard SMTP relay.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -128,7 +128,7 @@ export default function SettingsPage() {
             { field: 'from' as const,  label: 'From address',         placeholder: 'AÏKO <you@example.com>', type: 'text' },
           ]).map(({ field, label, placeholder, type }) => (
             <div key={field}>
-              <label style={{ fontSize: 9, color: '#444', letterSpacing: '0.1em', display: 'block', marginBottom: 4 }}>{label.toUpperCase()}</label>
+              <label style={{ fontSize: 12, color: '#6b7280', display: 'block', marginBottom: 4 }}>{label}</label>
               <input
                 value={smtp[field] as string}
                 onChange={e => setSmtp(s => ({ ...s, [field]: e.target.value }))}
@@ -145,39 +145,39 @@ export default function SettingsPage() {
               checked={smtp.secure}
               onChange={e => setSmtp(s => ({ ...s, secure: e.target.checked }))}
             />
-            <label htmlFor="smtp-secure" style={{ fontSize: 10, color: '#888' }}>TLS / port 465</label>
+            <label htmlFor="smtp-secure" style={{ fontSize: 13, color: '#6b7280' }}>TLS / port 465</label>
           </div>
         </div>
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Button variant="primary" onClick={saveSmtp}>Save SMTP</Button>
-          {smtpSaved && <span style={{ fontSize: 10, color: '#7eb88a' }}>Saved ✓</span>}
+          {smtpSaved && <span style={{ fontSize: 12, color: '#16a34a' }}>Saved ✓</span>}
         </div>
       </Card>
 
       {/* Model configs */}
       <Card>
-        <div style={{ fontSize: 9, color: '#666', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 16 }}>Model configuration</div>
-        <div style={{ fontSize: 9, color: '#444', marginBottom: 16 }}>
+        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 16 }}>Model configuration</div>
+        <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 16 }}>
           Configure one model per agent slot. Works with OpenAI-compatible endpoints (OpenAI, Ollama, LM Studio, Groq, Mistral, and similar).
         </div>
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid #1a1a1a' }}>
+              <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
                 {['Agent', 'Purpose', 'Profile', 'Base URL', 'API Key', 'Model'].map(h => (
-                  <th key={h} style={{ padding: '6px 8px', color: '#444', fontSize: 9, textAlign: 'left', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{h}</th>
+                  <th key={h} style={{ padding: '6px 8px', color: '#9ca3af', fontSize: 10, textAlign: 'left', letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'DM Mono, monospace' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {AGENT_SLOTS.map(({ slot, label, purpose, cost, privacy }) => (
-                <tr key={slot} style={{ borderBottom: '1px solid #111' }}>
-                  <td style={{ padding: '8px', fontSize: 10, color: '#c8b89a', whiteSpace: 'nowrap' }}>{label}</td>
-                  <td style={{ padding: '8px', fontSize: 9, color: '#888', minWidth: 170 }}>
+                <tr key={slot} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '8px', fontSize: 13, color: '#111827', whiteSpace: 'nowrap' }}>{label}</td>
+                  <td style={{ padding: '8px', fontSize: 12, color: '#6b7280', minWidth: 170 }}>
                     {purpose}
                   </td>
-                  <td style={{ padding: '8px', fontSize: 9, color: '#666', minWidth: 120 }}>
+                  <td style={{ padding: '8px', fontSize: 12, color: '#9ca3af', minWidth: 120 }}>
                     {cost} · {privacy}
                   </td>
                   <td style={{ padding: '4px 8px', minWidth: 200 }}>
@@ -211,13 +211,13 @@ export default function SettingsPage() {
           </table>
         </div>
 
-        <div style={{ marginTop: 10, fontSize: 9, color: '#555' }}>
-          Tip: use <code>http://localhost:11434/v1</code> with model names like <code>llama3</code> for local Ollama slots.
+        <div style={{ marginTop: 10, fontSize: 12, color: '#9ca3af' }}>
+          Tip: use <code style={{ fontFamily: 'DM Mono, monospace', background: '#f3f4f6', padding: '1px 4px', borderRadius: 3 }}>http://localhost:11434/v1</code> with model names like <code style={{ fontFamily: 'DM Mono, monospace', background: '#f3f4f6', padding: '1px 4px', borderRadius: 3 }}>llama3</code> for local Ollama slots.
         </div>
 
         <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Button variant="primary" onClick={saveConfigs}>Save model configs</Button>
-          {saved && <span style={{ fontSize: 10, color: '#7eb88a' }}>Saved ✓</span>}
+          {saved && <span style={{ fontSize: 12, color: '#16a34a' }}>Saved ✓</span>}
         </div>
       </Card>
     </div>
