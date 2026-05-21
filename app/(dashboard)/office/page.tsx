@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { BrowserStream } from '@/components/agents/BrowserStream'
 import { ActivityFeed } from '@/components/agents/ActivityFeed'
+import { JobEvaluationCard } from '@/components/jobs/JobEvaluation'
+import type { JobEvaluation } from '@/lib/agents/evaluator-agent'
 
 
 interface ModelRow { base_url: string; model: string }
@@ -75,6 +77,8 @@ export default function OfficePage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [browsingAgent, setBrowsingAgent] = useState<Agent | null>(null)
   const [modelConfigs, setModelConfigs] = useState<Record<string, ModelRow>>({})
+  const [evaluating, setEvaluating] = useState(false)
+  const [pendingEval, setPendingEval] = useState<{ jobId: string; evaluation: JobEvaluation } | null>(null)
 
   useEffect(() => {
     fetch('/api/model-configs').then(r => r.json()).then(d => setModelConfigs(d.configs ?? {})).catch(() => {})
@@ -124,13 +128,18 @@ export default function OfficePage() {
   }
 
   async function sendInstruction() {
-    if (!instruction || !selectedAgentId || !projectId) return
-    await fetch('/api/agents/run', {
+    if (!instruction.trim() || !projectId) return
+    setEvaluating(true)
+    const res = await fetch('/api/jobs/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId: selectedAgentId, projectId, instruction }),
+      body: JSON.stringify({ instruction, projectId }),
     })
-    setInstruction('')
+    const data = await res.json()
+    setEvaluating(false)
+    if (data.evaluation) {
+      setPendingEval({ jobId: data.jobId, evaluation: data.evaluation })
+    }
   }
 
   async function stopAgent(agentId: string) {
@@ -254,7 +263,9 @@ export default function OfficePage() {
             }}
           />
 
-          <Button variant="primary" onClick={sendInstruction}>Send</Button>
+          <Button variant="primary" onClick={sendInstruction} disabled={evaluating}>
+            {evaluating ? 'Evaluating…' : 'Evaluate & run'}
+          </Button>
         </div>
 
         <div style={{ marginBottom: 8, fontSize: 10, color: '#777' }}>
@@ -280,6 +291,19 @@ export default function OfficePage() {
           ))}
         </div>
       </div>
+
+      {/* Job evaluation card */}
+      {pendingEval && (
+        <div style={{ marginBottom: 24 }}>
+          <JobEvaluationCard
+            jobId={pendingEval.jobId}
+            projectId={projectId}
+            evaluation={pendingEval.evaluation}
+            onApprove={() => { setPendingEval(null); setInstruction('') }}
+            onCancel={() => setPendingEval(null)}
+          />
+        </div>
+      )}
 
       {/* Activity feed */}
       <div style={{ border: '1px solid #1a1a1a', borderRadius: 4, padding: 12 }}>

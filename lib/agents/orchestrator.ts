@@ -1,5 +1,5 @@
 import { callLLM } from '@/lib/models/provider'
-import { getModelConfig, getAllModelConfigs } from '@/lib/models/config'
+import { getAllModelConfigs } from '@/lib/models/config'
 import { runResearchAgent } from '@/lib/agents/research-agent'
 import { runLeadGenAgent } from '@/lib/agents/leadgen-agent'
 import { generateOutreachMessage } from '@/lib/agents/copywriting-agent'
@@ -9,6 +9,7 @@ import { runCeoAgent } from '@/lib/agents/ceo-agent'
 import { runProjectManagerAgent } from '@/lib/agents/project-manager-agent'
 import { runSocialMediaAgent } from '@/lib/agents/social-media-agent'
 import { runBrowserAgent } from '@/lib/agents/browser-agent'
+import { runCustomAgent } from '@/lib/agents/custom-agent'
 import { db } from '@/lib/db/client'
 
 export async function orchestrate(params: {
@@ -26,16 +27,30 @@ export async function orchestrate(params: {
     throw new Error('No model configured. Please configure at least one model in Settings.')
   }
 
-  // Use a lightweight LLM call to parse intent
+  // Fetch custom agents for this project so the router knows about them
+  const customAgentsResult = await db.query(
+    "SELECT name, role FROM agents WHERE project_id=$1 AND created_by NOT IN ('system') ORDER BY name",
+    [projectId]
+  )
+  const customAgentNames = customAgentsResult.rows.map((a: { name: string }) => a.name)
+
+  const allAgents = [
+    'research', 'leadgen', 'copywriting', 'strategy', 'reporting',
+    'ceo', 'pm', 'social', 'browser',
+    ...customAgentNames,
+  ]
+
   const intentResponse = await callLLM(fallbackConfig, [
     {
       role: 'system',
       content: `You are an AI task router. Given a user instruction, decide which agent should handle it.
-Agents: research, leadgen, copywriting, strategy, reporting, ceo, pm, social, browser.
-Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "email|linkedin|whatsapp|form or null", "platform": "linkedin or null" }`
+Core agents: research, leadgen, copywriting, strategy, reporting, ceo, pm, social, browser.
+Custom agents also available: ${customAgentNames.length > 0 ? customAgentNames.join(', ') : 'none'}.
+Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "email|linkedin|whatsapp|form or null", "platform": "linkedin or null" }
+For custom agents, use their exact name as the "agent" value.`
     },
     { role: 'user', content: instruction }
-  ], { jsonMode: true, maxTokens: 100 })
+  ], { jsonMode: true, maxTokens: 150 })
 
   let intent: { agent?: string; leadId?: string | null; channel?: string | null; platform?: string | null }
   try {
@@ -46,8 +61,28 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
   if (!intent.agent) intent.agent = 'browser'
 
   const agentName = intent.agent as string
-
   const cfg = (slot: string) => configs[slot] ?? fallbackConfig
+
+  // Check if this is a custom agent
+  const customAgent = customAgentsResult.rows.find(
+    (a: { name: string }) => a.name.toLowerCase() === agentName.toLowerCase()
+  )
+  if (customAgent) {
+    const customAgentRow = await db.query(
+      'SELECT id, system_prompt FROM agents WHERE project_id=$1 AND name=$2 LIMIT 1',
+      [projectId, customAgent.name]
+    )
+    const row = customAgentRow.rows[0]
+    if (row) {
+      return runCustomAgent({
+        agentId: row.id,
+        projectId,
+        instruction,
+        systemPrompt: row.system_prompt ?? `You are ${customAgent.name}. ${customAgent.role}. Complete the given task thoroughly.`,
+        modelConfig: fallbackConfig,
+      })
+    }
+  }
 
   switch (agentName) {
     case 'research':
@@ -65,7 +100,7 @@ Return JSON: { "agent": "agent_name", "leadId": "uuid or null", "channel": "emai
         channel: (intent.channel ?? 'email') as 'email' | 'linkedin' | 'whatsapp' | 'form',
         modelConfig: cfg('copywritingAgent'),
         agentId,
-        qualityModelConfig: cfg('qualityAgent'),  // cfg() always returns a fallback
+        qualityModelConfig: cfg('qualityAgent'),
       })
 
     case 'strategy':
