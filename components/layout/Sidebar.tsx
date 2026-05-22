@@ -2,6 +2,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+const CEO_ITEMS = [
+  { href: '/ceo',      label: 'CEO' },
+  { href: '/projects', label: 'Projects' },
+]
+
 const NAV_ITEMS = [
   { href: '/',           label: 'Home' },
   { href: '/dashboard',  label: 'Dashboard' },
@@ -16,8 +21,34 @@ const NAV_ITEMS = [
   { href: '/settings',   label: 'Settings' },
 ]
 
+function NavLink({ href, label, isActive }: { href: string; label: string; isActive: boolean }) {
+  return (
+    <Link
+      href={href}
+      style={{
+        display: 'block',
+        padding: '8px 20px',
+        fontSize: 13,
+        fontWeight: isActive ? 500 : 400,
+        color: isActive ? '#0f172a' : '#64748b',
+        textDecoration: 'none',
+        background: isActive ? '#f8fafc' : 'transparent',
+        borderLeft: isActive ? '2px solid #6366f1' : '2px solid transparent',
+        transition: 'background 0.1s, color 0.1s',
+      }}
+    >
+      {label}
+    </Link>
+  )
+}
+
 export function Sidebar() {
   const path = usePathname()
+
+  function isActive(href: string) {
+    if (href === '/') return path === '/'
+    return path.startsWith(href)
+  }
 
   return (
     <nav style={{
@@ -51,31 +82,23 @@ export function Sidebar() {
 
       {/* Nav */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-        {NAV_ITEMS.map(item => {
-          const isActive = item.href === '/'
-            ? path === '/'
-            : path.startsWith(item.href)
+        {/* CEO section */}
+        <div style={{ padding: '4px 20px 2px', marginTop: 2 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Command
+          </div>
+        </div>
+        {CEO_ITEMS.map(item => (
+          <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
+        ))}
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              style={{
-                display: 'block',
-                padding: '8px 20px',
-                fontSize: 13,
-                fontWeight: isActive ? 500 : 400,
-                color: isActive ? '#0f172a' : '#64748b',
-                textDecoration: 'none',
-                background: isActive ? '#f8fafc' : 'transparent',
-                borderLeft: isActive ? '2px solid #6366f1' : '2px solid transparent',
-                transition: 'background 0.1s, color 0.1s',
-              }}
-            >
-              {item.label}
-            </Link>
-          )
-        })}
+        {/* Separator */}
+        <div style={{ height: 1, background: '#f1f5f9', margin: '8px 0' }} />
+
+        {/* Standard nav */}
+        {NAV_ITEMS.map(item => (
+          <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
+        ))}
       </div>
 
       {/* Footer */}

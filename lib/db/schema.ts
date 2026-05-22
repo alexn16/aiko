@@ -90,3 +90,59 @@ export interface Setting {
   value: Record<string, unknown>
   updated_at: string
 }
+
+// ── CEO Multi-Project System ──────────────────────────────────────────────────
+
+export interface CompanyMemory {
+  id: string
+  summary: string
+  global_priorities: string[]
+  active_projects: string[]
+  blocked_items: string[]
+  last_updated_by: string
+  updated_at: string
+}
+
+export interface ProjectMemory {
+  id: string
+  project_id: string
+  notes: string
+  next_steps: string[]
+  blockers: string[]
+  context: Record<string, unknown>
+  updated_at: string
+}
+
+export interface ProjectMap {
+  id: string
+  project_id: string
+  nodes: Array<{ id: string; label: string; type: string; count?: number }>
+  edges: Array<{ from: string; to: string }>
+  updated_at: string
+}
+
+export interface ProjectManager {
+  id: string
+  name: string
+  specialty: string
+  status: 'available' | 'busy' | 'away'
+  project_id: string | null
+  current_focus: string
+  created_at: string
+}
+
+export interface CeoCommand {
+  id: string
+  command: string
+  response: string
+  intent: string
+  actions: Array<{ type: string; data: Record<string, unknown> }>
+  project_id: string | null
+  created_at: string
+}
+
+export interface ProjectWithPM extends Project {
+  goal: string | null
+  assigned_pm_id: string | null
+  pm_name?: string | null
+}
