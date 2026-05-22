@@ -146,3 +146,25 @@ export interface ProjectWithPM extends Project {
   assigned_pm_id: string | null
   pm_name?: string | null
 }
+
+export interface CeoReviewFinding {
+  project_id: string
+  project_name: string
+  status: 'healthy' | 'attention' | 'blocked' | 'stale'
+  issues: string[]
+  positive: string[]
+}
+
+export interface CeoReview {
+  id: string
+  summary: string
+  project_count: number
+  active_project_count: number
+  pending_approval_count: number
+  blocked_project_count: number
+  priority_project_id: string | null
+  priority_project_name: string | null
+  findings: CeoReviewFinding[]
+  recommended_actions: string[]
+  created_at: string
+}

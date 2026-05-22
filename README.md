@@ -24,6 +24,25 @@ outreach monitoring, qualification, reporting, and strategy — with a mandatory
 - `/reports` — generated performance summaries
 - `/settings` — model + SMTP configuration
 - `/map` and `/functions` — in-app system documentation
+- `/ceo` — CEO command centre and supervision reviews (see below)
+- `/projects` — multi-project overview
+- `/projects/[id]` — per-project workspace (pipeline map, memory, agents, activity)
+
+## CEO Multi-Project System
+
+AÏKO has a global CEO layer that operates across all projects.
+
+**CEO Command Centre (`/ceo`)**
+The CEO understands all active projects, assigned Project Managers (Kenji, Mara, Sven), and company memory. You issue natural-language commands and the CEO executes structured actions: create projects, assign PMs, update priorities, generate pipeline maps.
+
+**CEO Supervision Reviews**
+The CEO can perform a full company review at any time. Click "Run CEO review" on the CEO page to trigger it. The review:
+- Inspects every active project for blockers, stale activity, missing PMs, pending approvals, and undefined next steps
+- Generates a structured executive memo with findings per project and prioritised recommended actions
+- Updates company memory with the latest summary and priorities
+- Saves a full history of all past reviews
+
+Reviews are read-only analysis — no emails sent, no approvals changed, no model routing altered.
 
 ## Core architecture
 
