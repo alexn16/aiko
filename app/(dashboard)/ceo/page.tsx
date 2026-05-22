@@ -46,6 +46,9 @@ interface ReviewFinding {
   status: 'healthy' | 'attention' | 'blocked' | 'stale'
   issues: string[]
   positive: string[]
+  pm_report_summary: string | null
+  pm_report_status: string | null
+  pm_report_at: string | null
 }
 
 interface CeoReview {
@@ -642,44 +645,87 @@ function ReviewDetail({ review }: { review: CeoReview }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {review.findings.map(f => {
               const s = FINDING_STYLE[f.status] ?? FINDING_STYLE.attention
+              const pmAge = f.pm_report_at
+                ? relativeDate(f.pm_report_at)
+                : null
               return (
                 <div key={f.project_id} style={{
-                  padding: '12px 14px', borderRadius: 8,
-                  background: s.bg, border: `1px solid ${s.border}`,
+                  borderRadius: 8, border: `1px solid ${s.border}`,
+                  overflow: 'hidden',
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{
-                      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
-                      background: s.dot,
-                    }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-                      {f.project_name}
-                    </span>
-                    <span style={{
-                      fontSize: 10, fontWeight: 500, color: s.labelColor,
-                      marginLeft: 'auto', textTransform: 'capitalize',
+                  {/* Finding header */}
+                  <div style={{ padding: '10px 14px', background: s.bg }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: f.positive.length + f.issues.length > 0 ? 6 : 0 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: s.dot }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                        {f.project_name}
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 500, color: s.labelColor, marginLeft: 'auto', textTransform: 'capitalize' }}>
+                        {f.status}
+                      </span>
+                    </div>
+                    <div style={{ paddingLeft: 15 }}>
+                      {f.positive.length > 0 && (
+                        <div style={{ marginBottom: f.issues.length > 0 ? 4 : 0 }}>
+                          {f.positive.map((p, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+                              <span style={{ color: '#10b981', fontSize: 11, flexShrink: 0 }}>✓</span>
+                              <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{p}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {f.issues.map((issue, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+                          <span style={{ color: s.dot, fontSize: 11, flexShrink: 0 }}>·</span>
+                          <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{issue}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* PM report strip */}
+                  {f.pm_report_summary ? (
+                    <div style={{
+                      padding: '8px 14px',
+                      background: '#ffffff',
+                      borderTop: `1px solid ${s.border}`,
                     }}>
-                      {f.status}
-                    </span>
-                  </div>
-                  <div style={{ paddingLeft: 15 }}>
-                    {f.positive.length > 0 && (
-                      <div style={{ marginBottom: f.issues.length > 0 ? 5 : 0 }}>
-                        {f.positive.map((p, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 3 }}>
-                            <span style={{ color: '#10b981', fontSize: 11, flexShrink: 0 }}>✓</span>
-                            <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{p}</span>
-                          </div>
-                        ))}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          PM report
+                        </span>
+                        <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#cbd5e1' }}>
+                          {pmAge}
+                        </span>
+                        {f.pm_report_status && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 500,
+                            color: (FINDING_STYLE[f.pm_report_status] ?? FINDING_STYLE.attention).labelColor,
+                            background: (FINDING_STYLE[f.pm_report_status] ?? FINDING_STYLE.attention).bg,
+                            border: `1px solid ${(FINDING_STYLE[f.pm_report_status] ?? FINDING_STYLE.attention).border}`,
+                            borderRadius: 4, padding: '1px 6px',
+                            textTransform: 'capitalize',
+                          }}>
+                            {f.pm_report_status}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    {f.issues.map((issue, i) => (
-                      <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 3 }}>
-                        <span style={{ color: s.dot, fontSize: 11, flexShrink: 0 }}>·</span>
-                        <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.5 }}>{issue}</span>
+                      <div style={{ fontSize: 11, color: '#374151', lineHeight: 1.6, fontStyle: 'italic' }}>
+                        "{f.pm_report_summary}"
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '7px 14px',
+                      background: '#fafafa',
+                      borderTop: `1px solid ${s.border}`,
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}>
+                      <span style={{ fontSize: 10, color: '#cbd5e1' }}>○</span>
+                      <span style={{ fontSize: 10, color: '#94a3b8' }}>No Project Manager report yet</span>
+                    </div>
+                  )}
                 </div>
               )
             })}

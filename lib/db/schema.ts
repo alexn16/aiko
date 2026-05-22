@@ -155,6 +155,23 @@ export interface CeoReviewFinding {
   positive: string[]
 }
 
+export interface PMReport {
+  id: string
+  project_id: string
+  project_manager_id: string | null
+  pm_name: string | null
+  project_name?: string
+  status: 'healthy' | 'attention' | 'blocked' | 'stale'
+  summary: string
+  progress: number
+  blockers: string[]
+  completed_work: string[]
+  current_focus: string
+  recommended_next_actions: string[]
+  needs_client_approval: boolean
+  created_at: string
+}
+
 export interface CeoReview {
   id: string
   summary: string

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { db } from '@/lib/db/client'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { PMReportPanel } from '@/components/projects/PMReportPanel'
 
 async function getProjectData(id: string) {
   const [project, memory, map, agents, leads, activity] = await Promise.all([
@@ -18,7 +19,7 @@ async function getProjectData(id: string) {
     db.query(`
       SELECT
         COUNT(*) AS total,
-        COUNT(*) FILTER (WHERE status='new') AS new_count,
+        COUNT(*) FILTER (WHERE status='new')       AS new_count,
         COUNT(*) FILTER (WHERE status='contacted') AS contacted,
         COUNT(*) FILTER (WHERE status='qualified') AS qualified
       FROM leads WHERE project_id=$1
@@ -61,7 +62,6 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
   if (!data) notFound()
 
   const { project, memory, map, agents, leads, activity } = data
-
   const activeAgents = agents.filter((a: { status: string }) => !['idle', 'paused'].includes(a.status))
 
   const LABEL: React.CSSProperties = {
@@ -77,7 +77,8 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
 
   return (
     <div style={{ padding: '28px 32px' }}>
-      {/* Header */}
+
+      {/* ── Header ───────────────────────────────────────────────────────── */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
           <Link href="/projects" style={{ fontSize: 12, color: '#94a3b8', textDecoration: 'none' }}>
@@ -97,9 +98,9 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
               </p>
             )}
           </div>
-          {project.pm_name && (
+          {project.pm_name ? (
             <div style={{
-              padding: '8px 12px', background: '#f8fafc', borderRadius: 8,
+              padding: '8px 14px', background: '#f8fafc', borderRadius: 8,
               border: '1px solid #f1f5f9', textAlign: 'right',
             }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{project.pm_name}</div>
@@ -110,22 +111,27 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
                 </div>
               )}
             </div>
+          ) : (
+            <div style={{
+              padding: '8px 14px', background: '#fef2f2', borderRadius: 8,
+              border: '1px solid #fecaca', fontSize: 11, color: '#ef4444',
+            }}>
+              No PM assigned
+            </div>
           )}
         </div>
       </div>
 
-      {/* Stats strip */}
+      {/* ── Stats strip ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
         {[
           { label: 'Total leads', value: leads.total ?? 0 },
-          { label: 'New', value: leads.new_count ?? 0 },
-          { label: 'Contacted', value: leads.contacted ?? 0 },
-          { label: 'Qualified', value: leads.qualified ?? 0 },
-          { label: 'Agents on', value: activeAgents.length },
+          { label: 'New',         value: leads.new_count ?? 0 },
+          { label: 'Contacted',   value: leads.contacted ?? 0 },
+          { label: 'Qualified',   value: leads.qualified ?? 0 },
+          { label: 'Agents on',   value: activeAgents.length },
         ].map(s => (
-          <div key={s.label} style={{
-            flex: 1, padding: '12px 14px', ...CARD, textAlign: 'center',
-          }}>
+          <div key={s.label} style={{ flex: 1, padding: '12px 14px', ...CARD, textAlign: 'center' }}>
             <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 22, color: '#0f172a', fontWeight: 400 }}>
               {s.value}
             </div>
@@ -134,34 +140,30 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
         ))}
       </div>
 
-      {/* 2-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      {/* ── Main grid: 3 cols ────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
 
-        {/* Left: Pipeline map + Project memory */}
+        {/* Column 1: PM Report (full height) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <PMReportPanel projectId={project.id} />
 
           {/* Pipeline map */}
           <div style={{ ...CARD, padding: '16px 18px' }}>
             <div style={LABEL}>Pipeline map</div>
             {map && Array.isArray(map.nodes) && map.nodes.length > 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'nowrap', overflowX: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {map.nodes.map((node: { id: string; label: string; type: string; count?: number }, i: number) => (
-                  <div key={node.id} style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                    <div style={{
-                      padding: '8px 12px', borderRadius: 8,
-                      background: node.type === 'stage' ? '#f8fafc' : '#f1f5f9',
-                      border: '1px solid #e2e8f0',
-                      textAlign: 'center', minWidth: 80,
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 500, color: '#374151' }}>{node.label}</div>
-                      {node.count !== undefined && (
-                        <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, color: '#0f172a', marginTop: 2 }}>
-                          {node.count}
-                        </div>
-                      )}
-                    </div>
-                    {i < map.nodes.length - 1 && (
-                      <div style={{ width: 24, textAlign: 'center', color: '#cbd5e1', fontSize: 14, flexShrink: 0 }}>→</div>
+                  <div key={node.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {i > 0 && (
+                      <span style={{ color: '#cbd5e1', fontSize: 10, paddingLeft: 20 }}>↓</span>
+                    )}
+                    {i === 0 && <span style={{ width: 6, height: 6, background: '#6366f1', borderRadius: '50%', flexShrink: 0 }} />}
+                    {i > 0 && <span style={{ width: 6, height: 6, background: '#e2e8f0', borderRadius: '50%', flexShrink: 0 }} />}
+                    <span style={{ fontSize: 11, fontWeight: 500, color: '#374151' }}>{node.label}</span>
+                    {node.count !== undefined && (
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#94a3b8', marginLeft: 'auto' }}>
+                        {node.count}
+                      </span>
                     )}
                   </div>
                 ))}
@@ -172,6 +174,10 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
               </div>
             )}
           </div>
+        </div>
+
+        {/* Column 2: Project memory + Agents */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Project memory */}
           <div style={{ ...CARD, padding: '16px 18px' }}>
@@ -213,10 +219,6 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
               <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No memory recorded yet.</div>
             )}
           </div>
-        </div>
-
-        {/* Right: Agents + Activity */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Agents */}
           <div style={{ ...CARD, padding: '16px 18px' }}>
@@ -227,22 +229,28 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
               </Link>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {agents.slice(0, 8).map((a: {
-                id: string; name: string; role: string; status: string; current_task: string | null; progress: number
+              {agents.slice(0, 10).map((a: {
+                id: string; name: string; status: string; current_task: string | null
               }) => (
                 <div key={a.id} style={{
                   display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '6px 8px', borderRadius: 7, background: '#fafafa',
+                  padding: '5px 7px', borderRadius: 6, background: '#fafafa',
                 }}>
                   <span style={{
                     width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
                     background: STATUS_DOT[a.status] ?? '#e2e8f0',
                   }} />
-                  <span style={{ fontSize: 12, fontWeight: 500, color: '#0f172a', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 500, color: '#0f172a',
+                    flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
                     {a.name}
                   </span>
                   {a.current_task && (
-                    <span style={{ fontSize: 10, color: '#94a3b8', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{
+                      fontSize: 9, color: '#94a3b8',
+                      maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
                       {a.current_task}
                     </span>
                   )}
@@ -250,17 +258,21 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
               ))}
             </div>
           </div>
+        </div>
 
-          {/* Activity feed */}
+        {/* Column 3: Activity feed */}
+        <div>
           <div style={{ ...CARD, padding: '16px 18px' }}>
             <div style={LABEL}>Recent activity</div>
             {activity.length === 0 ? (
               <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No activity yet.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {activity.map((log: {
-                  action: string; details: Record<string, unknown> | null;
-                  created_at: string; agent_name: string
+                  action: string
+                  details: Record<string, unknown> | null
+                  created_at: string
+                  agent_name: string
                 }, i: number) => {
                   const isError = log.action === 'error'
                   const text = typeof log.details?.message === 'string'
@@ -273,7 +285,7 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
                     <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                       <div style={{
                         fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#cbd5e1',
-                        flexShrink: 0, marginTop: 2, minWidth: 32,
+                        flexShrink: 0, marginTop: 1, minWidth: 30,
                       }}>
                         {timeAgo(log.created_at)}
                       </div>
@@ -282,7 +294,8 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
                           {log.agent_name}
                         </span>
                         <span style={{
-                          fontSize: 11, color: isError ? '#ef4444' : '#374151',
+                          fontSize: 11,
+                          color: isError ? '#ef4444' : '#374151',
                           lineHeight: 1.5, marginLeft: 5,
                         }}>
                           {text}

@@ -1,8 +1,8 @@
 /**
  * CEO Review Agent
  *
- * Inspects all active projects, PMs, memories, agent activity, and pending
- * approvals, then produces a structured company-level review.
+ * Inspects all active projects, PMs, memories, agent activity, PM reports,
+ * and pending approvals, then produces a structured company-level review.
  *
  * Safe read-only analysis — no emails sent, no approvals changed, no secrets
  * exposed, no model routing altered.
@@ -17,6 +17,10 @@ export interface CeoReviewFinding {
   status: 'healthy' | 'attention' | 'blocked' | 'stale'
   issues: string[]
   positive: string[]
+  // PM report snapshot (null if no report exists yet)
+  pm_report_summary: string | null
+  pm_report_status: string | null
+  pm_report_at: string | null
 }
 
 export interface CeoReviewResult {
@@ -35,7 +39,7 @@ export interface CeoReviewResult {
 
 const STALE_HOURS = 48
 
-const CEO_REVIEW_SYSTEM = `You are the CEO of AÏKO, an AI marketing company. You have just completed a systematic review of all active projects and teams.
+const CEO_REVIEW_SYSTEM = `You are the CEO of AÏKO, an AI marketing company. You have just completed a systematic review of all active projects and teams. Each Project Manager has submitted a status report — treat those as the primary source of truth for narrative context.
 
 Write a structured executive review. Be direct and specific. Sound like a founder reviewing weekly ops — calm, decisive, no filler.
 
@@ -59,6 +63,7 @@ Return ONLY valid JSON:
 
 Rules:
 - findings must cover every active project
+- If a PM report exists, use its summary as the narrative base for that project's finding
 - recommended_actions: 3–6 items, ordered by priority, each actionable
 - Do not invent data — only use what is in the context
 - status "stale" means no activity in 48+ hours; "blocked" means explicit blockers exist; "attention" means something needs a decision; "healthy" means progressing normally`
@@ -80,6 +85,18 @@ interface RawProject {
   lead_count: number
   pending_approvals: number
   active_agent_count: number
+}
+
+interface LatestPMReport {
+  project_id: string
+  summary: string
+  status: string
+  progress: number
+  blockers: string[]
+  needs_client_approval: boolean
+  current_focus: string
+  pm_name: string | null
+  created_at: string
 }
 
 async function loadProjectData(): Promise<RawProject[]> {
@@ -123,6 +140,32 @@ async function loadProjectData(): Promise<RawProject[]> {
   return result.rows
 }
 
+async function loadLatestPMReports(projectIds: string[]): Promise<Map<string, LatestPMReport>> {
+  if (projectIds.length === 0) return new Map()
+
+  // Try loading from project_manager_reports — table may not exist on first run
+  try {
+    const result = await db.query(`
+      SELECT DISTINCT ON (r.project_id)
+        r.project_id, r.summary, r.status, r.progress,
+        r.blockers, r.needs_client_approval, r.current_focus, r.created_at,
+        pm.name AS pm_name
+      FROM project_manager_reports r
+      LEFT JOIN project_managers pm ON pm.id = r.project_manager_id
+      WHERE r.project_id = ANY($1::uuid[])
+      ORDER BY r.project_id, r.created_at DESC
+    `, [projectIds])
+
+    const map = new Map<string, LatestPMReport>()
+    for (const row of result.rows) {
+      map.set(row.project_id, row)
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
+
 function detectConditions(p: RawProject, now: Date): string[] {
   const issues: string[] = []
 
@@ -160,7 +203,20 @@ function detectConditions(p: RawProject, now: Date): string[] {
   return issues
 }
 
-function classifyStatus(p: RawProject, issues: string[]): CeoReviewFinding['status'] {
+function classifyStatus(
+  p: RawProject,
+  issues: string[],
+  pmReport: LatestPMReport | undefined
+): CeoReviewFinding['status'] {
+  // PM report status takes precedence if recent (within 24h)
+  if (pmReport) {
+    const ageHours = (Date.now() - new Date(pmReport.created_at).getTime()) / 3_600_000
+    if (ageHours < 24) {
+      const s = pmReport.status as CeoReviewFinding['status']
+      if (['healthy', 'attention', 'blocked', 'stale'].includes(s)) return s
+    }
+  }
+
   const blockers = p.memory_blockers ?? []
   if (blockers.length > 0) return 'blocked'
 
@@ -190,65 +246,87 @@ function buildPositives(p: RawProject): string[] {
 export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoReviewResult> {
   const now = new Date()
 
-  // 1. Load all project data in one query
+  // 1. Load all project data
   const projects = await loadProjectData()
 
   // 2. Load company memory
   const memRow = await db.query('SELECT * FROM company_memory LIMIT 1')
   const companyMemory = memRow.rows[0] ?? {}
 
-  // 3. Rule-based detection per project
+  // 3. Load latest PM reports (best available source of truth per project)
+  const pmReports = await loadLatestPMReports(projects.map(p => p.id))
+
+  // 4. Rule-based detection per project
   const localFindings: CeoReviewFinding[] = projects.map(p => {
+    const pmReport = pmReports.get(p.id)
     const issues = detectConditions(p, now)
-    const status = classifyStatus(p, issues)
+    const status = classifyStatus(p, issues, pmReport)
     return {
       project_id: p.id,
       project_name: p.name,
       status,
       issues,
       positive: buildPositives(p),
+      pm_report_summary: pmReport?.summary ?? null,
+      pm_report_status:  pmReport?.status ?? null,
+      pm_report_at:      pmReport?.created_at ?? null,
     }
   })
 
-  // 4. Build totals
+  // 5. Build totals
   const pendingApprovals = projects.reduce((s, p) => s + (p.pending_approvals ?? 0), 0)
   const blockedCount = localFindings.filter(f => f.status === 'blocked').length
   const staleCount = localFindings.filter(f => f.status === 'stale').length
 
-  // 5. Build LLM context
+  // 6. Build LLM context — PM reports are the narrative core
   const ctx = {
     company_memory: {
       summary: companyMemory.summary ?? '',
       global_priorities: companyMemory.global_priorities ?? [],
     },
     review_date: now.toISOString().slice(0, 10),
-    projects: projects.map(p => ({
-      id: p.id,
-      name: p.name,
-      goal: p.goal,
-      pm: p.pm_name ?? 'none',
-      pm_focus: p.pm_focus ?? '',
-      leads: p.lead_count,
-      pending_approvals: p.pending_approvals,
-      active_agents: p.active_agent_count,
-      memory_notes: p.memory_notes ?? '',
-      next_steps: p.memory_next_steps ?? [],
-      blockers: p.memory_blockers ?? [],
-      has_map: (p.map_nodes && (p.map_nodes as unknown[]).length > 0),
-      hours_since_activity: p.latest_activity_at
-        ? Math.round((now.getTime() - new Date(p.latest_activity_at).getTime()) / 3_600_000)
-        : null,
-      local_issues: localFindings.find(f => f.project_id === p.id)?.issues ?? [],
-    })),
+    projects: projects.map(p => {
+      const pmReport = pmReports.get(p.id)
+      return {
+        id: p.id,
+        name: p.name,
+        goal: p.goal,
+        pm: p.pm_name ?? 'none',
+        pm_focus: p.pm_focus ?? '',
+        leads: p.lead_count,
+        pending_approvals: p.pending_approvals,
+        active_agents: p.active_agent_count,
+        memory_notes: p.memory_notes ?? '',
+        next_steps: p.memory_next_steps ?? [],
+        blockers: p.memory_blockers ?? [],
+        has_map: !!(p.map_nodes && (p.map_nodes as unknown[]).length > 0),
+        hours_since_activity: p.latest_activity_at
+          ? Math.round((now.getTime() - new Date(p.latest_activity_at).getTime()) / 3_600_000)
+          : null,
+        local_issues: localFindings.find(f => f.project_id === p.id)?.issues ?? [],
+        // PM report is the narrative source — use it when available
+        pm_report: pmReport ? {
+          from: pmReport.pm_name ?? 'PM',
+          status: pmReport.status,
+          summary: pmReport.summary,
+          progress: pmReport.progress,
+          blockers: pmReport.blockers,
+          current_focus: pmReport.current_focus,
+          needs_client_approval: pmReport.needs_client_approval,
+          age_hours: Math.round((now.getTime() - new Date(pmReport.created_at).getTime()) / 3_600_000),
+        } : null,
+      }
+    }),
     summary_stats: {
       total_projects: projects.length,
       blocked: blockedCount,
       stale: staleCount,
       total_pending_approvals: pendingApprovals,
+      projects_with_pm_reports: pmReports.size,
     },
   }
 
-  // 6. Call LLM for narrative review
+  // 7. Call LLM for narrative review
   let parsed: {
     summary: string
     priority_project_name: string | null
@@ -272,7 +350,6 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoRevi
     )
     parsed = JSON.parse(raw)
   } catch {
-    // Fallback: use rule-based data if LLM fails
     parsed = {
       summary: `AÏKO is managing ${projects.length} active project${projects.length !== 1 ? 's' : ''}. ${blockedCount > 0 ? `${blockedCount} project${blockedCount > 1 ? 's are' : ' is'} blocked. ` : ''}${pendingApprovals > 0 ? `${pendingApprovals} outreach draft${pendingApprovals > 1 ? 's' : ''} need review.` : ''}`.trim(),
       priority_project_name: null,
@@ -291,7 +368,7 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoRevi
     }
   }
 
-  // 7. Resolve priority project ID
+  // 8. Resolve priority project ID
   let priorityProjectId: string | null = null
   if (parsed.priority_project_name) {
     const match = projects.find(
@@ -300,7 +377,7 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoRevi
     priorityProjectId = match?.id ?? null
   }
 
-  // 8. Merge LLM findings with local rule-based data
+  // 9. Merge findings — preserve PM report snapshot
   const mergedFindings: CeoReviewFinding[] = localFindings.map(local => {
     const llm = parsed.findings?.find(
       f => f.project_name?.toLowerCase() === local.project_name.toLowerCase()
@@ -311,10 +388,14 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoRevi
       status: (llm?.status as CeoReviewFinding['status']) ?? local.status,
       issues: llm?.issues?.length ? llm.issues : local.issues,
       positive: llm?.positive?.length ? llm.positive : local.positive,
+      // Always carry forward PM report snapshot
+      pm_report_summary: local.pm_report_summary,
+      pm_report_status:  local.pm_report_status,
+      pm_report_at:      local.pm_report_at,
     }
   })
 
-  // 9. Save review
+  // 10. Save review
   const reviewResult = await db.query(
     `INSERT INTO ceo_reviews
        (summary, project_count, active_project_count, pending_approval_count,
@@ -335,7 +416,7 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoRevi
 
   const saved = reviewResult.rows[0]
 
-  // 10. Update company memory with review summary + priorities
+  // 11. Update company memory
   const memId = companyMemory.id
   const newPriorities = (parsed.recommended_actions ?? []).slice(0, 4)
 
