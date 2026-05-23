@@ -60,6 +60,25 @@ Each provider is tested before being activated. Role assignments let you choose 
 - `/projects` — multi-project overview
 - `/projects/[id]` — per-project workspace (memory, agents, activity)
 
+## CEO Chat vs Project Manager Chat
+
+AÏKO has two levels of AI conversation:
+
+**CEO Chat (`/ceo`)**
+Global company-level brain. The CEO understands all projects, all PMs, and the company's overall priorities. Use it to create projects, assign PMs, change strategy, run reviews, and manage the company as a whole.
+
+**Project Manager Chat (`/projects/[id]` → PM Chat tab)**
+Project-specific execution brain. Each assigned PM (Kenji, Mara, or Sven) manages only their project. Use the PM Chat to coordinate execution: campaigns, lead strategy, outreach drafts, project memory, blockers, and upward reports to CEO.
+
+The PM has full context about their project: target market, value proposition, project memory, assigned agents, recent activity, and pending approvals. They coordinate agents operationally — never sending external messages without client approval.
+
+Each project workspace has tabbed views:
+- **Overview** — stats, memory, agents, activity summary + "Open PM Chat" button
+- **PM Chat** — direct conversation with the assigned PM
+- **Reports** — PM progress reports
+- **Agents** — all agents for this project
+- **Activity** — full activity log
+
 ## CEO Multi-Project System
 
 AÏKO has a global CEO layer that operates across all projects.

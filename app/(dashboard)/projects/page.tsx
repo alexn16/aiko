@@ -71,35 +71,25 @@ export default async function ProjectsPage() {
             pm_name: string | null; pm_specialty: string | null;
             lead_count: number; active_agents: number; created_at: string;
           }) => (
-            <Link key={p.id} href={`/projects/${p.id}`} style={{ textDecoration: 'none' }}>
+            <div key={p.id} style={{
+              background: '#ffffff', borderRadius: 10,
+              border: '1px solid #f1f5f9',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              padding: '16px 20px',
+              display: 'flex', alignItems: 'center', gap: 20,
+            }}>
+              {/* Project initial */}
               <div style={{
-                background: '#ffffff', borderRadius: 10,
-                border: '1px solid #f1f5f9',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                padding: '16px 20px',
-                display: 'flex', alignItems: 'center', gap: 20,
-                transition: 'box-shadow 0.15s, border-color 0.15s',
-              }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'
-                  ;(e.currentTarget as HTMLElement).style.borderColor = '#e2e8f0'
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)'
-                  ;(e.currentTarget as HTMLElement).style.borderColor = '#f1f5f9'
-                }}
-              >
-                {/* Project initial */}
-                <div style={{
-                  width: 40, height: 40, borderRadius: 10, background: '#f1f5f9',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 15, fontWeight: 700, color: '#0f172a', flexShrink: 0,
-                }}>
-                  {p.name.charAt(0).toUpperCase()}
-                </div>
+                width: 40, height: 40, borderRadius: 10, background: '#f1f5f9',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 15, fontWeight: 700, color: '#0f172a', flexShrink: 0,
+              }}>
+                {p.name.charAt(0).toUpperCase()}
+              </div>
 
-                {/* Main info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Main info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Link href={`/projects/${p.id}`} style={{ textDecoration: 'none' }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>
                     {p.name}
                   </div>
@@ -113,39 +103,47 @@ export default async function ProjectsPage() {
                       {p.description}
                     </div>
                   )}
-                </div>
-
-                {/* PM */}
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {p.pm_name ? (
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: '#0f172a' }}>{p.pm_name}</div>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{p.pm_specialty}</div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: 11, color: '#cbd5e1' }}>No PM</div>
-                  )}
-                </div>
-
-                {/* Stats */}
-                <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, color: '#0f172a', lineHeight: 1 }}>
-                      {p.lead_count}
-                    </div>
-                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>leads</div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, color: p.active_agents > 0 ? '#10b981' : '#cbd5e1', lineHeight: 1 }}>
-                      {p.active_agents}
-                    </div>
-                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>active</div>
-                  </div>
-                </div>
-
-                <div style={{ color: '#cbd5e1', fontSize: 16 }}>›</div>
+                </Link>
               </div>
-            </Link>
+
+              {/* PM + Chat link */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                {p.pm_name ? (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: '#0f172a' }}>{p.pm_name}</div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>{p.pm_specialty}</div>
+                    <Link href={`/projects/${p.id}`} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      fontSize: 10, color: '#6366f1', fontWeight: 500,
+                      textDecoration: 'none', background: '#eef2ff',
+                      padding: '3px 8px', borderRadius: 5, border: '1px solid #c7d2fe',
+                    }}>
+                      💬 PM Chat
+                    </Link>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: '#cbd5e1' }}>No PM</div>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: 'flex', gap: 16, flexShrink: 0 }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, color: '#0f172a', lineHeight: 1 }}>
+                    {p.lead_count}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>leads</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, color: p.active_agents > 0 ? '#10b981' : '#cbd5e1', lineHeight: 1 }}>
+                    {p.active_agents}
+                  </div>
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>active</div>
+                </div>
+              </div>
+
+              <Link href={`/projects/${p.id}`} style={{ color: '#cbd5e1', fontSize: 16, textDecoration: 'none' }}>›</Link>
+            </div>
           ))}
         </div>
       )}

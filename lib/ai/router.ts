@@ -14,7 +14,7 @@ import type { ChatMessage } from './providers/openai-compat'
 import { callOpenAICompat, streamOpenAICompat, testOpenAICompat } from './providers/openai-compat'
 import { callAnthropic, streamAnthropic, testAnthropic } from './providers/anthropic'
 
-export type AgentRole = 'ceo' | 'research' | 'copywriting' | 'review' | 'qa' | 'local_fallback'
+export type AgentRole = 'ceo' | 'research' | 'copywriting' | 'review' | 'qa' | 'local_fallback' | 'project_manager'
 
 export interface ProviderRow {
   id: string

@@ -638,18 +638,28 @@ export default function CeoPage() {
 
               {status && status.projects.length > 0 && (
                 <PanelSection label="Active projects">
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {status.projects.map(p => (
-                      <a key={p.id} href={`/projects/${p.id}`} style={{
-                        display: 'block', padding: '6px 9px', borderRadius: 6,
+                      <div key={p.id} style={{
+                        padding: '7px 9px', borderRadius: 6,
                         background: '#ffffff', border: '1px solid #f1f5f9',
-                        textDecoration: 'none',
                       }}>
-                        <div style={{ fontSize: 12, fontWeight: 500, color: '#0f172a' }}>{p.name}</div>
-                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
-                          {p.pm_name ? `PM: ${p.pm_name}` : 'No PM assigned'}
-                        </div>
-                      </a>
+                        <a href={`/projects/${p.id}`} style={{ textDecoration: 'none', display: 'block', marginBottom: 4 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: '#0f172a' }}>{p.name}</div>
+                          <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>
+                            {p.pm_name ? `PM: ${p.pm_name}` : 'No PM assigned'}
+                          </div>
+                        </a>
+                        {p.pm_name && (
+                          <a href={`/projects/${p.id}?tab=pm-chat`} style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                            fontSize: 10, color: '#6366f1', fontWeight: 500,
+                            textDecoration: 'none',
+                          }}>
+                            <span style={{ fontSize: 9 }}>💬</span> Chat with {p.pm_name}
+                          </a>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </PanelSection>
