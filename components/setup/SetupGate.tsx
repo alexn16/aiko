@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 // ── Provider presets ──────────────────────────────────────────────────────────
 
@@ -10,7 +11,6 @@ interface Preset {
   models: string[]
   needsKey: boolean
   hint: string
-  externalLink?: { label: string; url: string }
 }
 
 const PRESETS: Preset[] = [
@@ -21,7 +21,6 @@ const PRESETS: Preset[] = [
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     needsKey: true,
     hint: 'API key from platform.openai.com',
-    externalLink: { label: 'Open ChatGPT', url: 'https://chat.openai.com' },
   },
   {
     id: 'anthropic',
@@ -74,6 +73,7 @@ const INPUT: React.CSSProperties = {
 export function SetupGate({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false)
   const [configured, setConfigured] = useState(true) // optimistic — hide flash
+  const router = useRouter()
 
   useEffect(() => {
     fetch('/api/setup')
@@ -82,16 +82,23 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
       .catch(() => { setConfigured(false); setChecked(true) })
   }, [])
 
+  function handleDone() {
+    setConfigured(true)
+    router.push('/ceo')
+  }
+
   if (!checked) return null // brief blank while checking (avoids flash)
   if (configured) return <>{children}</>
 
   return (
-    <>
-      {/* Dim app behind */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <SetupForm onDone={() => setConfigured(true)} />
-      </div>
-    </>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: '#f8fafc',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <SetupForm onDone={handleDone} />
+    </div>
   )
 }
 
@@ -188,25 +195,8 @@ function SetupForm({ onDone }: { onDone: () => void }) {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+        <div style={{ marginTop: 6 }}>
           <div style={{ fontSize: 11, color: '#94a3b8' }}>{preset.hint}</div>
-          {preset.externalLink && (
-            <a
-              href={preset.externalLink.url}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                fontSize: 11, fontWeight: 500, color: '#6366f1',
-                textDecoration: 'none', whiteSpace: 'nowrap',
-                padding: '3px 9px', borderRadius: 6,
-                background: '#eef2ff', border: '1px solid #c7d2fe',
-                transition: 'opacity 0.1s',
-              }}
-            >
-              {preset.externalLink.label} ↗
-            </a>
-          )}
         </div>
       </div>
 
