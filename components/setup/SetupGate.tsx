@@ -10,6 +10,7 @@ interface Preset {
   models: string[]
   needsKey: boolean
   hint: string
+  externalLink?: { label: string; url: string }
 }
 
 const PRESETS: Preset[] = [
@@ -20,6 +21,7 @@ const PRESETS: Preset[] = [
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     needsKey: true,
     hint: 'API key from platform.openai.com',
+    externalLink: { label: 'Open ChatGPT', url: 'https://chat.openai.com' },
   },
   {
     id: 'anthropic',
@@ -186,7 +188,26 @@ function SetupForm({ onDone }: { onDone: () => void }) {
             </button>
           ))}
         </div>
-        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>{preset.hint}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>{preset.hint}</div>
+          {preset.externalLink && (
+            <a
+              href={preset.externalLink.url}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 11, fontWeight: 500, color: '#6366f1',
+                textDecoration: 'none', whiteSpace: 'nowrap',
+                padding: '3px 9px', borderRadius: 6,
+                background: '#eef2ff', border: '1px solid #c7d2fe',
+                transition: 'opacity 0.1s',
+              }}
+            >
+              {preset.externalLink.label} ↗
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Base URL */}
