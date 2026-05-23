@@ -3,6 +3,7 @@ import { db } from '@/lib/db/client'
 import { createInstruction } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
+import { getApprovalSummaryForCompany } from '@/lib/approvals'
 
 export interface CEOCommandResult {
   response: string
@@ -63,7 +64,7 @@ Rules:
 - response must always be natural language — never raw JSON, never bullet points, never technical field names`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -85,6 +86,7 @@ async function buildCompanyContext(): Promise<string> {
     `),
     getTaskSummaryForCompany(),
     getOutputSummaryForCompany(),
+    getApprovalSummaryForCompany(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -117,6 +119,11 @@ async function buildCompanyContext(): Promise<string> {
       total: outputSummary.total,
       pending_approval_count: outputSummary.pending_approval.length,
       recent_titles: outputSummary.recent.slice(0, 3).map(o => o.title),
+    },
+    approval_summary: {
+      pending: approvalSummary.pending,
+      approved: approvalSummary.approved,
+      changes_requested: approvalSummary.changes_requested,
     },
   }
 

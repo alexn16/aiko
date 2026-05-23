@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { href: '/office',     label: 'Live Office' },
   { href: '/team',       label: 'Team' },
   { href: '/leads',      label: 'Leads' },
-  { href: '/approval',   label: 'Approval' },
+  { href: '/approvals',  label: 'Approvals' },
   { href: '/campaigns',  label: 'Campaigns' },
   { href: '/reports',    label: 'Reports' },
   { href: '/functions',  label: 'Functions' },

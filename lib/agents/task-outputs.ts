@@ -1,5 +1,6 @@
 import { db } from '@/lib/db/client'
 import { callAI } from '@/lib/ai/router'
+import { createApprovalFromOutput } from '@/lib/approvals'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -55,7 +56,18 @@ export async function createTaskOutput(params: {
       requires_approval,
     ]
   )
-  return result.rows[0] as AgentTaskOutput
+  const output = result.rows[0] as AgentTaskOutput
+
+  // Auto-create approval item when the output requires approval
+  if (requires_approval) {
+    try {
+      await createApprovalFromOutput(output)
+    } catch {
+      // non-fatal — approval item creation should never block output creation
+    }
+  }
+
+  return output
 }
 
 export async function listTaskOutputs(filters: {

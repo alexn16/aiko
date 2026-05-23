@@ -185,6 +185,29 @@ Agents produce visible deliverables when executing tasks. Outputs are stored int
 
 **Safety:** Generating outputs never sends external messages. Outreach drafts and approval items require explicit approval before any external action.
 
+## Approval Center (`/approvals`)
+
+External-facing outputs (outreach drafts, campaign proposals, approval items) automatically create entries in the Approval Center when generated.
+
+**Flow:**
+1. Agent generates an output with `requires_approval = true`
+2. An approval item is created automatically in `approval_items`
+3. Client reviews the item in the Approval Center
+4. Client can approve, request changes, or reject
+
+**On approve:** linked output marked approved, PM notified via internal message
+**On reject:** linked output marked rejected, owner agent notified
+**On changes requested:** output reset to draft, owner agent receives a new revision task
+
+**UI:** `/approvals` — full approval queue with filters and inline editing
+
+**API:**
+- `GET /api/approval-items` — list items (filter by project_id, status, item_type)
+- `POST /api/approval-items` — create manually
+- `PATCH /api/approval-items/[id]` — approve / reject / request changes
+
+**Safety:** Approving an item is internal permission only. It does not send any external emails or messages. External sends remain a separate explicit action.
+
 ## Core architecture
 
 - **Frontend**: Next.js App Router (`app/`)
