@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 interface Preset {
   id: string
   name: string
+  type: string
   baseUrl: string
   models: string[]
   needsKey: boolean
@@ -16,7 +17,8 @@ interface Preset {
 const PRESETS: Preset[] = [
   {
     id: 'openai',
-    name: 'OpenAI',
+    name: 'OpenAI API',
+    type: 'openai_api',
     baseUrl: 'https://api.openai.com/v1',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     needsKey: true,
@@ -24,8 +26,9 @@ const PRESETS: Preset[] = [
   },
   {
     id: 'anthropic',
-    name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com/v1',
+    name: 'Anthropic API',
+    type: 'anthropic_api',
+    baseUrl: '',
     models: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5'],
     needsKey: true,
     hint: 'API key from console.anthropic.com',
@@ -33,6 +36,7 @@ const PRESETS: Preset[] = [
   {
     id: 'groq',
     name: 'Groq',
+    type: 'openai_compatible',
     baseUrl: 'https://api.groq.com/openai/v1',
     models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'],
     needsKey: true,
@@ -41,6 +45,7 @@ const PRESETS: Preset[] = [
   {
     id: 'ollama',
     name: 'Ollama (local)',
+    type: 'ollama',
     baseUrl: 'http://localhost:11434/v1',
     models: ['llama3.2', 'qwen2.5', 'mistral', 'gemma3'],
     needsKey: false,
@@ -49,17 +54,12 @@ const PRESETS: Preset[] = [
   {
     id: 'custom',
     name: 'Custom',
+    type: 'openai_compatible',
     baseUrl: '',
     models: [],
     needsKey: true,
     hint: 'Any OpenAI-compatible endpoint',
   },
-]
-
-const ALL_SLOTS = [
-  'browserAgent', 'researchAgent', 'copywritingAgent', 'leadGenAgent',
-  'outreachAgent', 'strategyAgent', 'reportingAgent', 'qualityAgent',
-  'salesValidationAgent', 'ceoAgent', 'projectManagerAgent', 'socialMediaAgent',
 ]
 
 const INPUT: React.CSSProperties = {
@@ -68,7 +68,7 @@ const INPUT: React.CSSProperties = {
   boxSizing: 'border-box', outline: 'none', fontFamily: 'Inter, sans-serif',
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Gate wrapper ──────────────────────────────────────────────────────────────
 
 export function SetupGate({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false)
@@ -87,7 +87,7 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
     router.push('/ceo')
   }
 
-  if (!checked) return null // brief blank while checking (avoids flash)
+  if (!checked) return null
   if (configured) return <>{children}</>
 
   return (
@@ -117,38 +117,46 @@ function SetupForm({ onDone }: { onDone: () => void }) {
     setPreset(p)
     setBaseUrl(p.baseUrl)
     setModel(p.models[0] ?? '')
-    setError(null)
-  }
-
-  function selectModel(m: string) {
-    setModel(m)
     setCustomModel('')
+    setError(null)
   }
 
   const effectiveModel = customModel.trim() || model
 
   async function save() {
-    if (!baseUrl.trim()) { setError('Enter a base URL.'); return }
     if (!effectiveModel.trim()) { setError('Enter a model name.'); return }
+    if (preset.needsKey && !apiKey.trim()) { setError('API key is required.'); return }
     setSaving(true)
     setError(null)
 
-    // Apply same config to all agent slots
-    const configs: Record<string, { base_url: string; api_key: string; model: string }> = {}
-    for (const slot of ALL_SLOTS) {
-      configs[slot] = { base_url: baseUrl.trim(), api_key: apiKey.trim(), model: effectiveModel.trim() }
-    }
-
     try {
-      const res = await fetch('/api/model-configs', {
+      // Create provider connection
+      const createRes = await fetch('/api/providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ configs }),
+        body: JSON.stringify({
+          name: preset.name,
+          type: preset.type,
+          base_url: baseUrl.trim() || null,
+          model: effectiveModel.trim(),
+          api_key: apiKey.trim() || null,
+        }),
       })
-      if (!res.ok) throw new Error('Save failed')
+      if (!createRes.ok) throw new Error('Save failed')
+      const { id } = await createRes.json()
+
+      // Test the connection
+      const testRes = await fetch(`/api/providers/${id}/test`, { method: 'POST' })
+      const testData = await testRes.json()
+      if (!testData.ok) {
+        // Delete the bad entry and surface the error
+        await fetch(`/api/providers/${id}`, { method: 'DELETE' })
+        throw new Error(`Connection test failed: ${testData.error ?? 'Unknown error'}`)
+      }
+
       onDone()
-    } catch {
-      setError('Could not save. Check the console and try again.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not connect. Check your key and try again.')
     } finally {
       setSaving(false)
     }
@@ -166,10 +174,11 @@ function SetupForm({ onDone }: { onDone: () => void }) {
           AÏKO
         </div>
         <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>
-          Choose your AI
+          Choose AÏKO's brain
         </div>
         <p style={{ fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
-          AÏKO works with any OpenAI-compatible model. Pick a provider, enter your key, and you&apos;re in.
+          AÏKO needs an AI brain before the company can operate.
+          Connect ChatGPT, Claude, or another provider to start the CEO.
         </p>
       </div>
 
@@ -195,30 +204,30 @@ function SetupForm({ onDone }: { onDone: () => void }) {
             </button>
           ))}
         </div>
-        <div style={{ marginTop: 6 }}>
-          <div style={{ fontSize: 11, color: '#94a3b8' }}>{preset.hint}</div>
-        </div>
+        <div style={{ marginTop: 6, fontSize: 11, color: '#94a3b8' }}>{preset.hint}</div>
       </div>
 
-      {/* Base URL */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
-          Base URL
-        </label>
-        <input
-          value={baseUrl}
-          onChange={e => setBaseUrl(e.target.value)}
-          placeholder="https://api.openai.com/v1"
-          style={INPUT}
-          onFocus={e => { e.target.style.borderColor = '#6366f1' }}
-          onBlur={e => { e.target.style.borderColor = '#e2e8f0' }}
-        />
-      </div>
+      {/* Base URL — hidden for Anthropic (uses SDK default) */}
+      {preset.type !== 'anthropic_api' && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
+            Base URL
+          </label>
+          <input
+            value={baseUrl}
+            onChange={e => setBaseUrl(e.target.value)}
+            placeholder="https://api.openai.com/v1"
+            style={INPUT}
+            onFocus={e => { e.target.style.borderColor = '#6366f1' }}
+            onBlur={e => { e.target.style.borderColor = '#e2e8f0' }}
+          />
+        </div>
+      )}
 
       {/* API key */}
       <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
-          API key {!preset.needsKey && <span style={{ color: '#94a3b8', fontWeight: 400 }}>(not needed for local)</span>}
+          API key{!preset.needsKey && <span style={{ color: '#94a3b8', fontWeight: 400 }}> (not needed for local)</span>}
         </label>
         <input
           type="password"
@@ -241,7 +250,7 @@ function SetupForm({ onDone }: { onDone: () => void }) {
             {preset.models.map(m => (
               <button
                 key={m}
-                onClick={() => selectModel(m)}
+                onClick={() => { setModel(m); setCustomModel('') }}
                 type="button"
                 style={{
                   padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
@@ -289,11 +298,11 @@ function SetupForm({ onDone }: { onDone: () => void }) {
           letterSpacing: '-0.01em', transition: 'background 0.15s',
         }}
       >
-        {saving ? 'Saving…' : 'Save and enter AÏKO'}
+        {saving ? 'Connecting…' : 'Connect and enter AÏKO'}
       </button>
 
       <p style={{ fontSize: 11, color: '#94a3b8', margin: '12px 0 0', textAlign: 'center', lineHeight: 1.5 }}>
-        You can change models any time in Settings. The same model is applied to all agents initially.
+        You can add more providers or change assignments any time in Connect AI.
       </p>
     </div>
   )

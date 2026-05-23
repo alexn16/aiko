@@ -3,8 +3,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const CEO_ITEMS = [
-  { href: '/ceo',      label: 'CEO' },
-  { href: '/projects', label: 'Projects' },
+  { href: '/ceo',        label: 'CEO' },
+  { href: '/projects',   label: 'Projects' },
+  { href: '/connect-ai', label: 'Connect AI' },
 ]
 
 const NAV_ITEMS = [
