@@ -1,4 +1,5 @@
 import { db } from '@/lib/db/client'
+import { createTaskFromAgentMessage } from './tasks'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -73,7 +74,24 @@ export async function sendAgentMessage(params: AgentMessageParams): Promise<stri
       JSON.stringify(params.metadata ?? {}),
     ]
   )
-  return result.rows[0].id as string
+  const messageId = result.rows[0].id as string
+
+  // Auto-create task from message (best-effort, never throws)
+  try {
+    await createTaskFromAgentMessage({
+      id: messageId,
+      project_id: params.project_id ?? null,
+      from_role: params.from_role,
+      to_role: params.to_role,
+      message_type: params.message_type ?? 'update',
+      subject: params.subject,
+      content: params.content,
+    })
+  } catch (err) {
+    console.error('[sendAgentMessage] task creation failed (non-fatal)', err)
+  }
+
+  return messageId
 }
 
 export async function listAgentMessages(filters: AgentMessageFilters = {}): Promise<AgentMessage[]> {

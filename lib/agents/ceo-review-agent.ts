@@ -243,7 +243,7 @@ function buildPositives(p: RawProject): string[] {
   return positives
 }
 
-export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoReviewResult> {
+export async function runCeoReviewAgent(modelConfig: LLMConfig, taskContext?: string): Promise<CeoReviewResult> {
   const now = new Date()
 
   // 1. Load all project data
@@ -324,6 +324,7 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig): Promise<CeoRevi
       total_pending_approvals: pendingApprovals,
       projects_with_pm_reports: pmReports.size,
     },
+    agent_tasks: taskContext ? JSON.parse(taskContext) : null,
   }
 
   // 7. Call LLM for narrative review

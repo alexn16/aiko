@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { callAI, getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
+import { getTaskSummaryForProject } from '@/lib/agents/tasks'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 
@@ -12,8 +13,13 @@ async function buildProjectContext(projectId: string): Promise<{
   recentActivity: Record<string, unknown>[]
   latestReport: Record<string, unknown> | null
   pendingApprovals: number
+  task_summary: {
+    total: number
+    by_status: Record<string, number>
+    active_titles: string[]
+  }
 }> {
-  const [projectRes, memRes, agentRes, activityRes, reportRes, approvalRes] = await Promise.all([
+  const [projectRes, memRes, agentRes, activityRes, reportRes, approvalRes, taskSummary] = await Promise.all([
     db.query(`
       SELECT p.*, pm.id AS pm_id, pm.name AS pm_name,
              pm.specialty AS pm_specialty, pm.current_focus AS pm_focus
@@ -39,6 +45,7 @@ async function buildProjectContext(projectId: string): Promise<{
       SELECT COUNT(*) AS n FROM approvals
       WHERE project_id=$1 AND status IN ('pending','quality_passed')
     `, [projectId]),
+    getTaskSummaryForProject(projectId),
   ])
 
   const project = projectRes.rows[0] ?? null
@@ -50,6 +57,11 @@ async function buildProjectContext(projectId: string): Promise<{
     recentActivity: activityRes.rows,
     latestReport: reportRes.rows[0] ?? null,
     pendingApprovals: parseInt(approvalRes.rows[0]?.n ?? '0', 10),
+    task_summary: {
+      total: taskSummary.total,
+      by_status: taskSummary.by_status,
+      active_titles: taskSummary.active.slice(0, 5).map(t => t.title),
+    },
   }
 }
 
@@ -69,6 +81,9 @@ function buildSystemPrompt(ctx: Awaited<ReturnType<typeof buildProjectContext>>)
 
   const agentList = ctx.agents.map((a) => `${a.name} (${a.status ?? 'idle'})`).join(', ')
   const pendingStr = ctx.pendingApprovals > 0 ? `${ctx.pendingApprovals} approval(s) pending` : 'no pending approvals'
+  const taskStr = ctx.task_summary.total > 0
+    ? `${ctx.task_summary.total} tasks — ${JSON.stringify(ctx.task_summary.by_status)}${ctx.task_summary.active_titles.length > 0 ? `; active: ${ctx.task_summary.active_titles.join(', ')}` : ''}`
+    : 'no tasks yet'
 
   return `You are ${pm}, Project Manager for ${projectName} at AÏKO, an AI marketing company.
 
@@ -88,6 +103,7 @@ ${blockers.length > 0 ? `Blockers: ${blockers.join('; ')}` : ''}
 
 Agents available: ${agentList || 'None assigned yet'}
 Approvals: ${pendingStr}
+Tasks: ${taskStr}
 
 Your responsibilities:
 - Manage marketing execution for ${projectName} only

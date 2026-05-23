@@ -1,6 +1,7 @@
 import { callLLM, LLMConfig } from '@/lib/models/provider'
 import { db } from '@/lib/db/client'
 import { createInstruction } from '@/lib/agents/internal-communication'
+import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 
 export interface CEOCommandResult {
   response: string
@@ -61,7 +62,7 @@ Rules:
 - response must always be natural language — never raw JSON, never bullet points, never technical field names`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -81,6 +82,7 @@ async function buildCompanyContext(): Promise<string> {
       ORDER BY a.updated_at DESC
       LIMIT 10
     `),
+    getTaskSummaryForCompany(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -101,6 +103,14 @@ async function buildCompanyContext(): Promise<string> {
     project_managers: pms.rows,
     pending_approvals: parseInt(approvals.rows[0]?.n ?? '0', 10),
     active_agents: agents.rows,
+    task_summary: {
+      total: taskSummary.total,
+      by_status: taskSummary.by_status,
+      active_count: taskSummary.active.length,
+      blocked_count: taskSummary.blocked.length,
+      review_count: taskSummary.review.length,
+      active_titles: taskSummary.active.slice(0, 5).map(t => t.title),
+    },
   }
 
   return JSON.stringify(ctx, null, 2)

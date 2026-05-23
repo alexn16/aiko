@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { BrowserStream } from '@/components/agents/BrowserStream'
 import { ActivityFeed } from '@/components/agents/ActivityFeed'
 import { InternalCommsPanel } from '@/components/agents/InternalCommsPanel'
+import { TasksPanel } from '@/components/agents/TasksPanel'
 import { JobEvaluationCard } from '@/components/jobs/JobEvaluation'
 import type { JobEvaluation } from '@/lib/agents/evaluator-agent'
 
@@ -304,11 +305,19 @@ export default function OfficePage() {
       </div>
 
       {/* Internal communications */}
-      <div>
+      <div style={{ marginBottom: 32 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', margin: '0 0 16px' }}>
           Internal communications
         </h2>
         <InternalCommsPanel />
+      </div>
+
+      {/* Agent tasks */}
+      <div>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', margin: '0 0 16px' }}>
+          Agent tasks
+        </h2>
+        <TasksPanel />
       </div>
     </div>
   )

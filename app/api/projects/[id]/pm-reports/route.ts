@@ -3,6 +3,7 @@ import { db } from '@/lib/db/client'
 import { runProjectManagerReportAgent } from '@/lib/agents/project-manager-report-agent'
 import { getAllModelConfigs } from '@/lib/models/config'
 import { createManagerReport } from '@/lib/agents/internal-communication'
+import { getTaskSummaryForProject } from '@/lib/agents/tasks'
 
 export async function GET(
   _req: NextRequest,
@@ -43,6 +44,22 @@ export async function POST(
       )
     }
 
+    // Fetch task summary for context
+    let taskSummaryData: Record<string, unknown> | undefined
+    try {
+      const ts = await getTaskSummaryForProject(params.id)
+      taskSummaryData = {
+        total: ts.total,
+        by_status: ts.by_status,
+        completed_today: ts.completed_today.map(t => t.title),
+        active: ts.active.slice(0, 5).map(t => t.title),
+        blocked: ts.blocked.map(t => t.title),
+        planned: [] as string[],
+      }
+    } catch {
+      // non-fatal
+    }
+
     const report = await runProjectManagerReportAgent(params.id, modelConfig)
 
     // Send report message to CEO via internal comms
@@ -54,13 +71,13 @@ export async function POST(
         subject: `PM Report: ${reportResult.project_name ?? 'Project'} — ${reportResult.status ?? 'update'}`,
         content: reportResult.summary ?? '',
         project_id: params.id,
-        metadata: { report_id: reportResult.id, status: reportResult.status },
+        metadata: { report_id: reportResult.id, status: reportResult.status, task_summary: taskSummaryData },
       })
     } catch (msgErr) {
       console.error('[api/projects/[id]/pm-reports] failed to send report message', msgErr)
     }
 
-    return NextResponse.json({ report })
+    return NextResponse.json({ report, task_summary: taskSummaryData })
   } catch (err) {
     console.error('[api/projects/[id]/pm-reports POST]', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

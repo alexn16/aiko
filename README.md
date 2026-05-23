@@ -132,6 +132,33 @@ AÏKO has a structured internal messaging layer so agents can coordinate with ea
 - `createHandoff()` — typed helper for agent-to-agent handoffs
 - `createBlocker()` — typed helper for flagging blockers
 
+## Agent task tracking
+
+Every internal instruction, handoff, or approval request automatically creates a task. Tasks track what each agent role is working on — separate from external outreach.
+
+**Statuses:** planned → in_progress → waiting / review / blocked → completed / cancelled
+
+**Task types:** research, strategy, lead_generation, copywriting, qa_review, outreach_preparation, report, approval_preparation, project_map, memory_update, client_update
+
+**Priority:** low, normal, high, urgent
+
+**Auto-created from messages:**
+- `instruction` → planned task for recipient
+- `handoff` → planned task for recipient
+- `approval_request` → review task for recipient
+- `blocker` → blocked task for sender
+
+**UI surfaces:**
+- **Project workspace → Tasks tab** — project-scoped task list with action buttons
+- **Live Office** — global task view across all projects
+
+**API:**
+- `GET /api/agent-tasks` — list tasks (filter by project_id, owner_role, status, task_type)
+- `POST /api/agent-tasks` — create task
+- `PATCH /api/agent-tasks/[id]` — update status, priority, output
+
+**Safety:** Tasks are internal only. No external messages are sent when tasks are created or completed. Outreach tasks only prepare drafts — sending still requires approval.
+
 ## Core architecture
 
 - **Frontend**: Next.js App Router (`app/`)

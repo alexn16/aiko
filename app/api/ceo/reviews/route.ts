@@ -3,6 +3,7 @@ import { db } from '@/lib/db/client'
 import { runCeoReviewAgent } from '@/lib/agents/ceo-review-agent'
 import { getAllModelConfigs } from '@/lib/models/config'
 import { createInstruction } from '@/lib/agents/internal-communication'
+import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 
 export async function GET() {
   try {
@@ -30,7 +31,24 @@ export async function POST() {
       return NextResponse.json({ error: 'No model configured. Add a model in Settings.' }, { status: 503 })
     }
 
-    const review = await runCeoReviewAgent(modelConfig)
+    // Fetch task summary for enriched review context
+    let taskContext: string | undefined
+    try {
+      const ts = await getTaskSummaryForCompany()
+      const staleThreshold = Date.now() - 24 * 60 * 60 * 1000
+      const staleTasks = [...ts.active, ...ts.blocked].filter(
+        t => new Date(t.updated_at ?? t.created_at).getTime() < staleThreshold
+      )
+      taskContext = JSON.stringify({
+        blocked_tasks: ts.blocked.map(t => ({ title: t.title, project_id: t.project_id })),
+        stale_tasks: staleTasks.map(t => ({ title: t.title, project_id: t.project_id })),
+        review_queue_count: ts.review.length,
+      })
+    } catch {
+      // non-fatal
+    }
+
+    const review = await runCeoReviewAgent(modelConfig, taskContext)
 
     // Dispatch instructions for recommended actions
     try {
