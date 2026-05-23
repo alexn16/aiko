@@ -17,6 +17,17 @@ interface AgentTask {
   completed_at: string | null
 }
 
+interface TaskOutput {
+  id: string
+  task_id: string | null
+  output_type: string
+  title: string
+  status: string
+  content: string
+  requires_approval: boolean
+  created_at: string
+}
+
 interface Props {
   projectId?: string
 }
@@ -33,6 +44,15 @@ const STATUS_BADGE: Record<string, React.CSSProperties> = {
   blocked:     { background: '#fee2e2', color: '#dc2626' },
   completed:   { background: '#dcfce7', color: '#16a34a' },
   cancelled:   { background: '#f1f5f9', color: '#94a3b8' },
+}
+
+const OUTPUT_STATUS_BADGE: Record<string, React.CSSProperties> = {
+  draft:    { background: '#f1f5f9', color: '#475569' },
+  ready:    { background: '#dbeafe', color: '#1d4ed8' },
+  reviewed: { background: '#ede9fe', color: '#6d28d9' },
+  approved: { background: '#dcfce7', color: '#16a34a' },
+  rejected: { background: '#fee2e2', color: '#dc2626' },
+  archived: { background: '#f8fafc', color: '#94a3b8' },
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -131,76 +151,263 @@ function PriorityDot({ priority }: { priority: string }) {
   )
 }
 
+// ── OutputExpandSection ────────────────────────────────────────────────────────
+
+function OutputExpandSection({ taskId, onStatusChange }: {
+  taskId: string
+  onStatusChange?: () => void
+}) {
+  const [outputs, setOutputs] = useState<TaskOutput[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/task-outputs?task_id=${taskId}`)
+      .then(r => r.json())
+      .then(d => { if (d.outputs) setOutputs(d.outputs) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [taskId])
+
+  async function handleOutputAction(outputId: string, status: string) {
+    try {
+      await fetch(`/api/task-outputs/${outputId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      setOutputs(prev => prev.map(o => o.id === outputId ? { ...o, status } : o))
+      onStatusChange?.()
+    } catch {
+      // silently fail
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: '10px 14px', fontSize: 11, color: '#94a3b8' }}>
+        Loading outputs…
+      </div>
+    )
+  }
+
+  if (outputs.length === 0) {
+    return (
+      <div style={{ padding: '10px 14px', fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>
+        No outputs yet.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {outputs.map(output => (
+        <div key={output.id} style={{
+          background: '#fafafa',
+          border: '1px solid #f1f5f9',
+          borderRadius: 6,
+          padding: '10px 12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', flex: 1 }}>
+              {output.title}
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 500, borderRadius: 4,
+              padding: '1px 6px',
+              ...(OUTPUT_STATUS_BADGE[output.status] ?? OUTPUT_STATUS_BADGE.draft),
+            }}>
+              {output.status}
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 500, borderRadius: 4,
+              padding: '1px 6px',
+              background: '#f0f9ff', color: '#0369a1',
+            }}>
+              {output.output_type.replace(/_/g, ' ')}
+            </span>
+            {output.requires_approval && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, borderRadius: 4,
+                padding: '1px 6px',
+                background: '#fee2e2', color: '#dc2626',
+              }}>
+                needs approval
+              </span>
+            )}
+          </div>
+          {output.content && (
+            <div style={{
+              fontSize: 11, color: '#64748b', lineHeight: 1.5,
+              overflow: 'hidden', maxHeight: 48,
+              marginBottom: 8,
+            }}>
+              {output.content.slice(0, 150)}{output.content.length > 150 ? '…' : ''}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {output.status === 'draft' && (
+              <button
+                onClick={() => handleOutputAction(output.id, 'ready')}
+                style={{
+                  fontSize: 10, fontWeight: 500,
+                  padding: '2px 8px', borderRadius: 4,
+                  border: '1px solid #e2e8f0',
+                  background: '#f0fdf4', color: '#16a34a',
+                  cursor: 'pointer',
+                }}
+              >
+                Mark ready
+              </button>
+            )}
+            {output.status === 'ready' && output.requires_approval && (
+              <button
+                onClick={() => handleOutputAction(output.id, 'approved')}
+                style={{
+                  fontSize: 10, fontWeight: 500,
+                  padding: '2px 8px', borderRadius: 4,
+                  border: '1px solid #e2e8f0',
+                  background: '#f0fdf4', color: '#16a34a',
+                  cursor: 'pointer',
+                }}
+              >
+                Approve
+              </button>
+            )}
+            {(output.status === 'draft' || output.status === 'ready') && (
+              <button
+                onClick={() => handleOutputAction(output.id, 'rejected')}
+                style={{
+                  fontSize: 10, fontWeight: 500,
+                  padding: '2px 8px', borderRadius: 4,
+                  border: '1px solid #e2e8f0',
+                  background: '#fef2f2', color: '#dc2626',
+                  cursor: 'pointer',
+                }}
+              >
+                Reject
+              </button>
+            )}
+            {(output.status === 'approved' || output.status === 'rejected') && (
+              <button
+                onClick={() => handleOutputAction(output.id, 'archived')}
+                style={{
+                  fontSize: 10, fontWeight: 500,
+                  padding: '2px 8px', borderRadius: 4,
+                  border: '1px solid #e2e8f0',
+                  background: '#f8fafc', color: '#64748b',
+                  cursor: 'pointer',
+                }}
+              >
+                Archive
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── TaskCard ───────────────────────────────────────────────────────────────────
 
 function TaskCard({
   task,
   showProject,
   onAction,
+  outputCount,
+  onOutputCountChange,
 }: {
   task: AgentTask
   showProject: boolean
   onAction: (id: string, status: string) => void
+  outputCount: number
+  onOutputCountChange: (taskId: string, delta: number) => void
 }) {
   const actions = getActions(task.status)
+  const [generating, setGenerating] = useState(false)
+  const [genSuccess, setGenSuccess] = useState(false)
+  const [outputsExpanded, setOutputsExpanded] = useState(false)
+
+  async function handleGenerateOutput() {
+    setGenerating(true)
+    try {
+      const res = await fetch(`/api/agent-tasks/${task.id}/generate-output`, {
+        method: 'POST',
+      })
+      if (res.ok) {
+        setGenSuccess(true)
+        onOutputCountChange(task.id, 1)
+        setTimeout(() => setGenSuccess(false), 3000)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   return (
     <div style={{
       background: '#ffffff',
       border: '1px solid #f1f5f9',
       borderRadius: 8,
-      padding: '12px 14px',
       marginBottom: 8,
+      overflow: 'hidden',
     }}>
-      {/* Top row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
-        <PriorityDot priority={task.priority} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>
-            {task.title}
-          </div>
-          {task.description && (
-            <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
-              {task.description.slice(0, 120)}{task.description.length > 120 ? '…' : ''}
+      <div style={{ padding: '12px 14px' }}>
+        {/* Top row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+          <PriorityDot priority={task.priority} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>
+              {task.title}
             </div>
-          )}
+            {task.description && (
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 3, lineHeight: 1.4 }}>
+                {task.description.slice(0, 120)}{task.description.length > 120 ? '…' : ''}
+              </div>
+            )}
+          </div>
+          <StatusBadge status={task.status} />
         </div>
-        <StatusBadge status={task.status} />
-      </div>
 
-      {/* Meta row */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        flexWrap: 'wrap', marginBottom: actions.length > 0 ? 8 : 0,
-      }}>
-        <span style={{
-          fontSize: 10, fontWeight: 500, color: '#475569',
-          background: '#f8fafc', border: '1px solid #f1f5f9',
-          borderRadius: 4, padding: '1px 6px',
+        {/* Meta row */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          flexWrap: 'wrap', marginBottom: 8,
         }}>
-          {task.owner_role}
-        </span>
-        {task.assigned_by_role && task.assigned_by_role !== 'system' && (
-          <span style={{ fontSize: 10, color: '#94a3b8' }}>
-            from {task.assigned_by_role}
+          <span style={{
+            fontSize: 10, fontWeight: 500, color: '#475569',
+            background: '#f8fafc', border: '1px solid #f1f5f9',
+            borderRadius: 4, padding: '1px 6px',
+          }}>
+            {task.owner_role}
           </span>
-        )}
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>
-          {task.task_type.replace(/_/g, ' ')}
-        </span>
-        {showProject && task.project_id && (
+          {task.assigned_by_role && task.assigned_by_role !== 'system' && (
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>
+              from {task.assigned_by_role}
+            </span>
+          )}
           <span style={{ fontSize: 10, color: '#94a3b8' }}>
-            project:{task.project_id.slice(0, 8)}
+            {task.task_type.replace(/_/g, ' ')}
           </span>
-        )}
-        <span style={{ fontSize: 10, color: '#cbd5e1', marginLeft: 'auto' }}>
-          {timeAgo(task.created_at)}
-        </span>
-      </div>
+          {showProject && task.project_id && (
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>
+              project:{task.project_id.slice(0, 8)}
+            </span>
+          )}
+          {outputCount > 0 && (
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>
+              {outputCount} output{outputCount !== 1 ? 's' : ''}
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: '#cbd5e1', marginLeft: 'auto' }}>
+            {timeAgo(task.created_at)}
+          </span>
+        </div>
 
-      {/* Actions */}
-      {actions.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {/* Actions row */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {actions.map(a => (
             <button
               key={a.next}
@@ -222,6 +429,55 @@ function TaskCard({
               {a.label}
             </button>
           ))}
+
+          {/* Generate output button */}
+          {genSuccess ? (
+            <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>
+              Output generated
+            </span>
+          ) : (
+            <button
+              onClick={handleGenerateOutput}
+              disabled={generating}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                padding: '3px 10px',
+                borderRadius: 5,
+                border: '1px solid #e2e8f0',
+                background: '#eff6ff',
+                color: generating ? '#94a3b8' : '#1d4ed8',
+                cursor: generating ? 'default' : 'pointer',
+                opacity: generating ? 0.7 : 1,
+              }}
+            >
+              {generating ? 'Generating…' : 'Generate output'}
+            </button>
+          )}
+
+          {/* View outputs button */}
+          {outputCount > 0 && (
+            <button
+              onClick={() => setOutputsExpanded(o => !o)}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                padding: '3px 10px',
+                borderRadius: 5,
+                border: '1px solid #e2e8f0',
+                background: outputsExpanded ? '#0f172a' : '#f8fafc',
+                color: outputsExpanded ? '#ffffff' : '#374151',
+                cursor: 'pointer',
+              }}
+            >
+              {outputsExpanded ? 'Hide outputs' : `View outputs (${outputCount})`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Inline output expand */}
+      {outputsExpanded && (
+        <div style={{ borderTop: '1px solid #f1f5f9' }}>
+          <OutputExpandSection taskId={task.id} />
         </div>
       )}
     </div>
@@ -235,6 +491,7 @@ export function TasksPanel({ projectId }: Props) {
   const [filter, setFilter] = useState<FilterTab>('all')
   const [loading, setLoading] = useState(true)
   const [composeOpen, setComposeOpen] = useState(false)
+  const [outputCounts, setOutputCounts] = useState<Record<string, number>>({})
   const [form, setForm] = useState({
     title: '',
     owner_role: 'Project Manager',
@@ -260,16 +517,41 @@ export function TasksPanel({ projectId }: Props) {
     }
   }, [projectId, filter])
 
+  const fetchOutputCounts = useCallback(async () => {
+    try {
+      const params = new URLSearchParams()
+      if (projectId) params.set('project_id', projectId)
+      params.set('limit', '500')
+      const res = await fetch(`/api/task-outputs?${params}`)
+      const data = await res.json()
+      if (data.outputs) {
+        const counts: Record<string, number> = {}
+        for (const output of data.outputs) {
+          if (output.task_id) {
+            counts[output.task_id] = (counts[output.task_id] ?? 0) + 1
+          }
+        }
+        setOutputCounts(counts)
+      }
+    } catch {
+      // silently fail
+    }
+  }, [projectId])
+
   useEffect(() => {
     setLoading(true)
     fetchTasks()
-  }, [fetchTasks])
+    fetchOutputCounts()
+  }, [fetchTasks, fetchOutputCounts])
 
   // 30s auto-refresh
   useEffect(() => {
-    const id = setInterval(fetchTasks, 30_000)
+    const id = setInterval(() => {
+      fetchTasks()
+      fetchOutputCounts()
+    }, 30_000)
     return () => clearInterval(id)
-  }, [fetchTasks])
+  }, [fetchTasks, fetchOutputCounts])
 
   async function handleAction(id: string, status: string) {
     try {
@@ -282,6 +564,13 @@ export function TasksPanel({ projectId }: Props) {
     } catch {
       // silently fail
     }
+  }
+
+  function handleOutputCountChange(taskId: string, delta: number) {
+    setOutputCounts(prev => ({
+      ...prev,
+      [taskId]: (prev[taskId] ?? 0) + delta,
+    }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -448,6 +737,8 @@ export function TasksPanel({ projectId }: Props) {
               task={task}
               showProject={showProject}
               onAction={handleAction}
+              outputCount={outputCounts[task.id] ?? 0}
+              onOutputCountChange={handleOutputCountChange}
             />
           ))}
         </div>

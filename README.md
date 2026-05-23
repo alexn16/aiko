@@ -159,6 +159,32 @@ Every internal instruction, handoff, or approval request automatically creates a
 
 **Safety:** Tasks are internal only. No external messages are sent when tasks are created or completed. Outreach tasks only prepare drafts — sending still requires approval.
 
+## Task execution outputs
+
+Agents produce visible deliverables when executing tasks. Outputs are stored internally and never sent externally without approval.
+
+**Output types:** research_brief, lead_list, outreach_draft, qa_review, report, campaign_proposal, project_map_update, memory_update, approval_item, note
+
+**Output statuses:** draft → ready → reviewed → approved / rejected / archived
+
+**How outputs are generated:**
+- Click "Generate output" on any task card — the assigned agent AI generates an appropriate deliverable
+- Output type is inferred from task_type (research → research_brief, copywriting → outreach_draft, etc.)
+- External-facing outputs (outreach_draft, approval_item) automatically require approval
+
+**UI surfaces:**
+- **Task cards** — show output count, "Generate output" button, inline output expand
+- **Project workspace → Outputs tab** — all outputs for the project
+- **Live Office** — global outputs view with approval filter
+
+**API:**
+- `GET /api/task-outputs` — list outputs (filter by project_id, task_id, output_type, status)
+- `POST /api/task-outputs` — create output manually
+- `PATCH /api/task-outputs/[id]` — update status or content
+- `POST /api/agent-tasks/[id]/generate-output` — generate AI output for a task
+
+**Safety:** Generating outputs never sends external messages. Outreach drafts and approval items require explicit approval before any external action.
+
 ## Core architecture
 
 - **Frontend**: Next.js App Router (`app/`)

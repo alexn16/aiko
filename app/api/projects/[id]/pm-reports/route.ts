@@ -4,6 +4,7 @@ import { runProjectManagerReportAgent } from '@/lib/agents/project-manager-repor
 import { getAllModelConfigs } from '@/lib/models/config'
 import { createManagerReport } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForProject } from '@/lib/agents/tasks'
+import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 
 export async function GET(
   _req: NextRequest,
@@ -44,10 +45,20 @@ export async function POST(
       )
     }
 
-    // Fetch task summary for context
+    // Fetch task summary and output summary for context
     let taskSummaryData: Record<string, unknown> | undefined
     try {
-      const ts = await getTaskSummaryForProject(params.id)
+      const [ts, os] = await Promise.all([
+        getTaskSummaryForProject(params.id),
+        getOutputSummaryForProject(params.id),
+      ])
+
+      // Calculate this week's outputs
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      const outputsThisWeek = os.recent.filter(
+        o => new Date(o.created_at).getTime() > weekAgo
+      ).length
+
       taskSummaryData = {
         total: ts.total,
         by_status: ts.by_status,
@@ -55,6 +66,12 @@ export async function POST(
         active: ts.active.slice(0, 5).map(t => t.title),
         blocked: ts.blocked.map(t => t.title),
         planned: [] as string[],
+        outputs: {
+          total: os.total,
+          pending_approval: os.pending_approval.length,
+          completed_outputs: os.recent.filter(o => o.status === 'approved').map(o => o.title),
+          outputs_this_week: outputsThisWeek,
+        },
       }
     } catch {
       // non-fatal

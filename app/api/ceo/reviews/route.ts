@@ -4,6 +4,7 @@ import { runCeoReviewAgent } from '@/lib/agents/ceo-review-agent'
 import { getAllModelConfigs } from '@/lib/models/config'
 import { createInstruction } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
+import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
 
 export async function GET() {
   try {
@@ -31,10 +32,13 @@ export async function POST() {
       return NextResponse.json({ error: 'No model configured. Add a model in Settings.' }, { status: 503 })
     }
 
-    // Fetch task summary for enriched review context
+    // Fetch task summary and output summary for enriched review context
     let taskContext: string | undefined
     try {
-      const ts = await getTaskSummaryForCompany()
+      const [ts, os] = await Promise.all([
+        getTaskSummaryForCompany(),
+        getOutputSummaryForCompany(),
+      ])
       const staleThreshold = Date.now() - 24 * 60 * 60 * 1000
       const staleTasks = [...ts.active, ...ts.blocked].filter(
         t => new Date(t.updated_at ?? t.created_at).getTime() < staleThreshold
@@ -43,6 +47,13 @@ export async function POST() {
         blocked_tasks: ts.blocked.map(t => ({ title: t.title, project_id: t.project_id })),
         stale_tasks: staleTasks.map(t => ({ title: t.title, project_id: t.project_id })),
         review_queue_count: ts.review.length,
+        outputs_pending_approval: os.pending_approval.map(o => ({
+          title: o.title,
+          output_type: o.output_type,
+          project_id: o.project_id,
+        })),
+        projects_with_no_outputs: [] as string[], // populated below
+        total_outputs: os.total,
       })
     } catch {
       // non-fatal

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { callAI, getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { getTaskSummaryForProject } from '@/lib/agents/tasks'
+import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 
@@ -18,8 +19,13 @@ async function buildProjectContext(projectId: string): Promise<{
     by_status: Record<string, number>
     active_titles: string[]
   }
+  output_summary: {
+    total: number
+    pending_approval_count: number
+    recent_titles: string[]
+  }
 }> {
-  const [projectRes, memRes, agentRes, activityRes, reportRes, approvalRes, taskSummary] = await Promise.all([
+  const [projectRes, memRes, agentRes, activityRes, reportRes, approvalRes, taskSummary, outputSummary] = await Promise.all([
     db.query(`
       SELECT p.*, pm.id AS pm_id, pm.name AS pm_name,
              pm.specialty AS pm_specialty, pm.current_focus AS pm_focus
@@ -46,6 +52,7 @@ async function buildProjectContext(projectId: string): Promise<{
       WHERE project_id=$1 AND status IN ('pending','quality_passed')
     `, [projectId]),
     getTaskSummaryForProject(projectId),
+    getOutputSummaryForProject(projectId),
   ])
 
   const project = projectRes.rows[0] ?? null
@@ -61,6 +68,11 @@ async function buildProjectContext(projectId: string): Promise<{
       total: taskSummary.total,
       by_status: taskSummary.by_status,
       active_titles: taskSummary.active.slice(0, 5).map(t => t.title),
+    },
+    output_summary: {
+      total: outputSummary.total,
+      pending_approval_count: outputSummary.pending_approval.length,
+      recent_titles: outputSummary.recent.slice(0, 3).map(o => o.title),
     },
   }
 }
@@ -84,6 +96,9 @@ function buildSystemPrompt(ctx: Awaited<ReturnType<typeof buildProjectContext>>)
   const taskStr = ctx.task_summary.total > 0
     ? `${ctx.task_summary.total} tasks — ${JSON.stringify(ctx.task_summary.by_status)}${ctx.task_summary.active_titles.length > 0 ? `; active: ${ctx.task_summary.active_titles.join(', ')}` : ''}`
     : 'no tasks yet'
+  const outputStr = ctx.output_summary.total > 0
+    ? `${ctx.output_summary.total} total outputs, ${ctx.output_summary.pending_approval_count} pending approval${ctx.output_summary.recent_titles.length > 0 ? `; recent: ${ctx.output_summary.recent_titles.join(', ')}` : ''}`
+    : 'no outputs yet'
 
   return `You are ${pm}, Project Manager for ${projectName} at AÏKO, an AI marketing company.
 
@@ -104,6 +119,7 @@ ${blockers.length > 0 ? `Blockers: ${blockers.join('; ')}` : ''}
 Agents available: ${agentList || 'None assigned yet'}
 Approvals: ${pendingStr}
 Tasks: ${taskStr}
+Outputs: ${outputStr}
 
 Your responsibilities:
 - Manage marketing execution for ${projectName} only
