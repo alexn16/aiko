@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { href: '/office',     label: 'Live Office' },
   { href: '/team',       label: 'Team' },
   { href: '/leads',      label: 'Leads' },
-  { href: '/map',        label: 'Map' },
   { href: '/approval',   label: 'Approval' },
   { href: '/campaigns',  label: 'Campaigns' },
   { href: '/reports',    label: 'Reports' },

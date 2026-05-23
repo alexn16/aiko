@@ -105,6 +105,7 @@ export default function CeoPage() {
   // Commands state
   const [command, setCommand] = useState('')
   const [cmdLoading, setCmdLoading] = useState(false)
+  const [cmdError, setCmdError] = useState<string | null>(null)
   const [commands, setCommands] = useState<CeoCommand[]>([])
   const logEndRef = useRef<HTMLDivElement>(null)
 
@@ -153,6 +154,8 @@ export default function CeoPage() {
     const cmd = command.trim()
     setCommand('')
     setCmdLoading(true)
+    setCmdError(null)
+    // Optimistic entry
     setCommands(prev => [{
       id: 'pending',
       command: cmd,
@@ -162,13 +165,25 @@ export default function CeoPage() {
       created_at: new Date().toISOString(),
     }, ...prev])
 
-    await fetch('/api/ceo/command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: cmd }),
-    })
-    setCmdLoading(false)
-    await loadData()
+    try {
+      const res = await fetch('/api/ceo/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setCmdError(data.error ?? 'Something went wrong. Check Settings → AI Models.')
+        // Remove the optimistic pending entry
+        setCommands(prev => prev.filter(c => c.id !== 'pending'))
+      }
+    } catch {
+      setCmdError('Could not reach the server. Check your connection.')
+      setCommands(prev => prev.filter(c => c.id !== 'pending'))
+    } finally {
+      setCmdLoading(false)
+      await loadData()
+    }
   }
 
   function handleKey(e: React.KeyboardEvent) {
@@ -458,6 +473,19 @@ export default function CeoPage() {
 
             {/* Input */}
             <div style={{ padding: '14px 28px 20px', borderTop: '1px solid #f1f5f9', background: '#ffffff' }}>
+              {cmdError && (
+                <div style={{
+                  marginBottom: 10, padding: '9px 12px',
+                  background: '#fef2f2', border: '1px solid #fecaca',
+                  borderRadius: 8, fontSize: 12, color: '#dc2626',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                }}>
+                  <span>{cmdError}</span>
+                  <a href="/settings" style={{ color: '#dc2626', fontWeight: 600, fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    Open Settings →
+                  </a>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
                 <textarea
                   value={command}

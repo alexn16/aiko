@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { PMReportPanel } from '@/components/projects/PMReportPanel'
 
 async function getProjectData(id: string) {
-  const [project, memory, map, agents, leads, activity] = await Promise.all([
+  const [project, memory, agents, leads, activity] = await Promise.all([
     db.query(`
       SELECT p.*, pm.name AS pm_name, pm.specialty AS pm_specialty, pm.current_focus AS pm_focus
       FROM projects p
@@ -14,7 +14,6 @@ async function getProjectData(id: string) {
       WHERE p.id = $1
     `, [id]),
     db.query('SELECT * FROM project_memory WHERE project_id=$1', [id]),
-    db.query('SELECT * FROM project_map WHERE project_id=$1', [id]),
     db.query('SELECT * FROM agents WHERE project_id=$1 ORDER BY name', [id]),
     db.query(`
       SELECT
@@ -38,7 +37,6 @@ async function getProjectData(id: string) {
   return {
     project: project.rows[0],
     memory: memory.rows[0] ?? null,
-    map: map.rows[0] ?? null,
     agents: agents.rows,
     leads: leads.rows[0],
     activity: activity.rows,
@@ -61,7 +59,7 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
   const data = await getProjectData(params.id)
   if (!data) notFound()
 
-  const { project, memory, map, agents, leads, activity } = data
+  const { project, memory, agents, leads, activity } = data
   const activeAgents = agents.filter((a: { status: string }) => !['idle', 'paused'].includes(a.status))
 
   const LABEL: React.CSSProperties = {
@@ -143,37 +141,9 @@ export default async function ProjectWorkspacePage({ params }: { params: { id: s
       {/* ── Main grid: 3 cols ────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
 
-        {/* Column 1: PM Report (full height) */}
+        {/* Column 1: PM Report */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <PMReportPanel projectId={project.id} />
-
-          {/* Pipeline map */}
-          <div style={{ ...CARD, padding: '16px 18px' }}>
-            <div style={LABEL}>Pipeline map</div>
-            {map && Array.isArray(map.nodes) && map.nodes.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                {map.nodes.map((node: { id: string; label: string; type: string; count?: number }, i: number) => (
-                  <div key={node.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {i > 0 && (
-                      <span style={{ color: '#cbd5e1', fontSize: 10, paddingLeft: 20 }}>↓</span>
-                    )}
-                    {i === 0 && <span style={{ width: 6, height: 6, background: '#6366f1', borderRadius: '50%', flexShrink: 0 }} />}
-                    {i > 0 && <span style={{ width: 6, height: 6, background: '#e2e8f0', borderRadius: '50%', flexShrink: 0 }} />}
-                    <span style={{ fontSize: 11, fontWeight: 500, color: '#374151' }}>{node.label}</span>
-                    {node.count !== undefined && (
-                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#94a3b8', marginLeft: 'auto' }}>
-                        {node.count}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
-                No map yet — ask the CEO to generate one.
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Column 2: Project memory + Agents */}
