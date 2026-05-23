@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { runProjectManagerReportAgent } from '@/lib/agents/project-manager-report-agent'
 import { getAllModelConfigs } from '@/lib/models/config'
+import { createManagerReport } from '@/lib/agents/internal-communication'
 
 export async function GET(
   _req: NextRequest,
@@ -43,6 +44,22 @@ export async function POST(
     }
 
     const report = await runProjectManagerReportAgent(params.id, modelConfig)
+
+    // Send report message to CEO via internal comms
+    try {
+      const reportResult = report as { project_name?: string; status?: string; summary?: string; id?: string }
+      await createManagerReport({
+        from_role: 'Project Manager',
+        to_role: 'CEO',
+        subject: `PM Report: ${reportResult.project_name ?? 'Project'} — ${reportResult.status ?? 'update'}`,
+        content: reportResult.summary ?? '',
+        project_id: params.id,
+        metadata: { report_id: reportResult.id, status: reportResult.status },
+      })
+    } catch (msgErr) {
+      console.error('[api/projects/[id]/pm-reports] failed to send report message', msgErr)
+    }
+
     return NextResponse.json({ report })
   } catch (err) {
     console.error('[api/projects/[id]/pm-reports POST]', err)

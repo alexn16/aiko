@@ -5,6 +5,7 @@ import { StatusDot } from '@/components/ui/StatusDot'
 import { Button } from '@/components/ui/Button'
 import { BrowserStream } from '@/components/agents/BrowserStream'
 import { ActivityFeed } from '@/components/agents/ActivityFeed'
+import { InternalCommsPanel } from '@/components/agents/InternalCommsPanel'
 import { JobEvaluationCard } from '@/components/jobs/JobEvaluation'
 import type { JobEvaluation } from '@/lib/agents/evaluator-agent'
 
@@ -297,9 +298,17 @@ export default function OfficePage() {
       </div>
 
       {/* Activity */}
-      <div style={{ background: '#ffffff', borderRadius: 10, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 18 }}>
+      <div style={{ background: '#ffffff', borderRadius: 10, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: 18, marginBottom: 28 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', marginBottom: 14 }}>Activity log</div>
         <ActivityFeed logs={logs} />
+      </div>
+
+      {/* Internal communications */}
+      <div>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', margin: '0 0 16px' }}>
+          Internal communications
+        </h2>
+        <InternalCommsPanel />
       </div>
     </div>
   )

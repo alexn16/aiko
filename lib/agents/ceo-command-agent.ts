@@ -1,5 +1,6 @@
 import { callLLM, LLMConfig } from '@/lib/models/provider'
 import { db } from '@/lib/db/client'
+import { createInstruction } from '@/lib/agents/internal-communication'
 
 export interface CEOCommandResult {
   response: string
@@ -175,6 +176,19 @@ async function executeActions(
           [projectId, d.focus ?? '', pmId]
         )
         resolvedProjectId = resolvedProjectId ?? projectId
+
+        // Notify the assigned PM via internal messaging
+        try {
+          await createInstruction({
+            from_role: 'CEO',
+            to_role: 'Project Manager',
+            subject: `Open ${projectName} — build memory and prepare first campaign direction`,
+            content: `You have been assigned to ${projectName}. Build the project memory, create the project map, define the target buyer profile, and prepare the first campaign direction. Report back when ready.`,
+            project_id: projectId,
+          })
+        } catch (msgErr) {
+          console.error('[ceo-command] failed to send PM instruction', msgErr)
+        }
       }
 
       if (action.type === 'update_company_memory') {

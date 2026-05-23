@@ -95,6 +95,43 @@ The CEO can perform a full company review at any time. Click "Run review" on the
 
 Reviews are read-only analysis — no emails sent, no approvals changed.
 
+## Internal agent communication
+
+AÏKO has a structured internal messaging layer so agents can coordinate with each other across the reporting chain — without sending anything externally.
+
+**Message types:**
+- `instruction` — CEO or PM issuing a task to a subordinate
+- `report` — PM or agent reporting status upward
+- `handoff` — passing work between agents (e.g. Research → Lead Gen)
+- `blocker` — flagging a blocked item for attention
+- `update` — general status update
+- `approval_request` — requesting a human decision
+
+**How it works:**
+- All messages are stored in `agent_messages` with `from_role`, `to_role`, `message_type`, `subject`, `content`, and `status`
+- `status` progresses: `sent` → `acknowledged` → `resolved`
+- Messages are scoped to a project (`project_id`) or global (company-wide)
+- The CEO automatically sends an instruction to the assigned PM whenever a project is created
+- PMs automatically report upward to the CEO when generating progress reports
+- CEO reviews automatically generate follow-up instructions for recommended actions
+
+**UI surfaces:**
+- **Project workspace → Comms tab** — all internal messages for that project; compose new messages
+- **Live Office** — global view of all agent communications across every project
+
+**API:**
+- `GET /api/agent-messages` — list messages (filter by project_id, from_role, to_role, message_type, status)
+- `POST /api/agent-messages` — create a message
+- `PATCH /api/agent-messages/[id]` — update status (acknowledged/resolved)
+- `POST /api/projects/[id]/agent-discussion` — project-scoped shorthand
+
+**Library (`lib/agents/internal-communication.ts`):**
+- `sendAgentMessage()` — low-level send
+- `createInstruction()` — typed helper for instructions
+- `createManagerReport()` — typed helper for PM → CEO reports
+- `createHandoff()` — typed helper for agent-to-agent handoffs
+- `createBlocker()` — typed helper for flagging blockers
+
 ## Core architecture
 
 - **Frontend**: Next.js App Router (`app/`)

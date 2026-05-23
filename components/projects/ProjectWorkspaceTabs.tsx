@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { PMChatPanel } from './PMChatPanel'
 import { PMReportPanel } from './PMReportPanel'
+import { InternalCommsPanel } from '@/components/agents/InternalCommsPanel'
 import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ interface Props {
   hasProvider: boolean
 }
 
-type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity'
+type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms'
 
 const STATUS_DOT: Record<string, string> = {
   active: '#10b981', browsing: '#3b82f6', writing: '#f59e0b',
@@ -93,6 +94,7 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
     { id: 'reports',   label: 'Reports' },
     { id: 'agents',    label: `Agents (${agents.length})` },
     { id: 'activity',  label: 'Activity' },
+    { id: 'comms',     label: 'Comms' },
   ]
 
   return (
@@ -385,6 +387,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Comms ───────────────────────────────────────────────────────── */}
+        {tab === 'comms' && (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
+            <div style={{ maxWidth: 760 }}>
+              <InternalCommsPanel projectId={project.id} />
             </div>
           </div>
         )}
