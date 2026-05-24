@@ -11,7 +11,7 @@ export interface WebOperator {
   id: string
   name: string
   role: string
-  status: string          // idle | working | waiting_approval | paused | error
+  status: string          // idle | working | waiting_approval | waiting_user | user_controlling | ready_to_resume | paused | error
   project_id: string | null
   browser_profile_key: string
   current_session_id: string | null
@@ -23,6 +23,9 @@ export interface WebOperator {
   memory_summary: string | null
   requires_user_input: boolean
   waiting_reason: string | null
+  pending_action_type: string | null
+  pending_action_payload: Record<string, unknown> | null
+  pending_action_created_at: string | null
   created_at: string
   updated_at: string
   // joined
@@ -49,6 +52,11 @@ function rowToOperator(row: Record<string, unknown>): WebOperator {
     memory_summary: row.memory_summary ? String(row.memory_summary) : null,
     requires_user_input: Boolean(row.requires_user_input),
     waiting_reason: row.waiting_reason ? String(row.waiting_reason) : null,
+    pending_action_type: row.pending_action_type ? String(row.pending_action_type) : null,
+    pending_action_payload: row.pending_action_payload && typeof row.pending_action_payload === 'object'
+      ? row.pending_action_payload as Record<string, unknown>
+      : null,
+    pending_action_created_at: row.pending_action_created_at ? String(row.pending_action_created_at) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     project_name: row.project_name ? String(row.project_name) : undefined,
@@ -98,6 +106,9 @@ export async function getOrCreateOperatorByName(name: string): Promise<WebOperat
       memory_summary: null,
       requires_user_input: false,
       waiting_reason: null,
+      pending_action_type: null,
+      pending_action_payload: null,
+      pending_action_created_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -412,11 +423,117 @@ export async function clearOperatorWorkflow(operator_id: string): Promise<void> 
       `UPDATE web_operators
        SET current_goal=NULL, current_workflow=NULL, last_instruction=NULL,
            requires_user_input=false, waiting_reason=NULL,
-           current_task=NULL, status='idle', updated_at=NOW()
+           current_task=NULL, status='idle',
+           pending_action_type=NULL, pending_action_payload=NULL, pending_action_created_at=NULL,
+           updated_at=NOW()
        WHERE id=$1`,
       [operator_id]
     )
   } catch {
     // non-fatal
   }
+}
+
+// ── Takeover / pending action helpers ──────────────────────────────────────────
+
+export async function storePendingAction(
+  operator_id: string,
+  action_type: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  // Strip any sensitive fields before storing
+  const safePayload = { ...payload }
+  delete safePayload.password
+  delete safePayload.secret
+  delete safePayload.token
+  delete safePayload.apiKey
+  await db.query(
+    `UPDATE web_operators SET
+      pending_action_type=$1, pending_action_payload=$2, pending_action_created_at=NOW(), updated_at=NOW()
+     WHERE id=$3`,
+    [action_type, JSON.stringify(safePayload), operator_id]
+  )
+}
+
+export async function clearPendingAction(operator_id: string): Promise<void> {
+  await db.query(
+    `UPDATE web_operators SET pending_action_type=NULL, pending_action_payload=NULL, pending_action_created_at=NULL, updated_at=NOW() WHERE id=$1`,
+    [operator_id]
+  )
+}
+
+export async function markLoginCompleted(
+  operator_id: string
+): Promise<{ success: boolean; was_logged_in: boolean; message: string }> {
+  const op = await getWebOperator(operator_id)
+  if (!op) return { success: false, was_logged_in: false, message: 'Operator not found' }
+
+  try {
+    const { executeDetectGmailLogin } = await import('./playwright-executor')
+    const result = await executeDetectGmailLogin({ profileKey: op.browser_profile_key })
+    const isLoggedIn = result.output?.is_logged_in === true
+
+    if (isLoggedIn) {
+      await updateOperatorMemory(operator_id, {
+        requires_user_input: false,
+        waiting_reason: null,
+        memory_summary: 'Logged in. Ready to continue workflow.',
+      })
+      await updateOperatorStatus(operator_id, 'ready_to_resume', {
+        current_task: op.pending_action_type ? `Resume: ${op.pending_action_type}` : 'Ready',
+      })
+      return { success: true, was_logged_in: true, message: 'Login confirmed. Operator is ready to resume.' }
+    } else {
+      return { success: false, was_logged_in: false, message: 'Still not logged in. Please complete the login in the operator browser and try again.' }
+    }
+  } catch (err) {
+    return {
+      success: false,
+      was_logged_in: false,
+      message: `Could not verify login: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
+export async function resumeOperatorWorkflow(
+  operator_id: string
+): Promise<{ success: boolean; result?: unknown; message: string }> {
+  const op = await getWebOperator(operator_id)
+  if (!op?.pending_action_type) {
+    return { success: false, message: 'No pending action to resume.' }
+  }
+  if (op.requires_user_input) {
+    return { success: false, message: `Cannot resume: ${op.waiting_reason ?? 'user input still required'}` }
+  }
+
+  const { delegateToWebOperator } = await import('./delegation')
+  const result = await delegateToWebOperator({
+    operatorName: op.name,
+    projectId: op.project_id ?? undefined,
+    requestedByRole: 'Resume',
+    actionType: op.pending_action_type,
+    instruction: `Resume: ${op.pending_action_type}`,
+    payload: op.pending_action_payload ?? {},
+  })
+
+  if (result.status === 'completed') {
+    await clearPendingAction(operator_id)
+    await updateOperatorStatus(operator_id, 'idle')
+  }
+
+  return {
+    success: result.status === 'completed',
+    result,
+    message: result.message,
+  }
+}
+
+export async function pauseOperator(operator_id: string, reason?: string): Promise<void> {
+  await updateOperatorMemory(operator_id, { waiting_reason: reason ?? 'Paused by user' })
+  await updateOperatorStatus(operator_id, 'paused')
+}
+
+export async function markUserControlling(operator_id: string): Promise<void> {
+  await updateOperatorStatus(operator_id, 'user_controlling', { current_task: 'User is in control' })
+  await updateOperatorMemory(operator_id, { requires_user_input: false, waiting_reason: null })
 }

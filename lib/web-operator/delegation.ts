@@ -14,6 +14,8 @@ import {
   createWebOperator,
   updateOperatorStatus,
   updateOperatorMemory,
+  storePendingAction,
+  clearPendingAction,
 } from '@/lib/web-operator/operators'
 import type { WebOperator } from '@/lib/web-operator/operators'
 
@@ -142,6 +144,16 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     profileKey = operator?.browser_profile_key ?? 'default'
   }
 
+  // 2b. Store pending action for resumable action types
+  const RESUMABLE_ACTIONS = ['open_gmail', 'create_email_draft', 'fill_gmail_to', 'fill_gmail_subject', 'fill_gmail_body', 'send_gmail_draft', 'open_url', 'search']
+  if (operator && RESUMABLE_ACTIONS.includes(req.actionType)) {
+    const safePayload: Record<string, unknown> = {}
+    if (req.query) safePayload.query = req.query
+    if (req.targetUrl) safePayload.url = req.targetUrl
+    if (req.payload) Object.assign(safePayload, req.payload)
+    await storePendingAction(operator.id, req.actionType, safePayload).catch(() => {})
+  }
+
   // 3. Send internal message: requestedByRole → Web Operator
   try {
     await sendAgentMessage({
@@ -200,6 +212,11 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     await updateOperatorStatus(operator.id, newStatus, {
       current_task: result.success ? null : undefined,
     }).catch(() => {})
+
+    // Clear pending action on success
+    if (result.success) {
+      await clearPendingAction(operator.id).catch(() => {})
+    }
   }
 
   // Update operator memory after action

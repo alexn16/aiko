@@ -84,7 +84,7 @@ export function WebOperatorCard() {
                 border: '1px solid #f1f5f9',
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', flexShrink: 0 }}>{op.name}</span>
+                <Link href={`/operators/${op.id}`} style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', flexShrink: 0, textDecoration: 'none' }}>{op.name}</Link>
                 <span style={{ fontSize: 10, color: color, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
                   {op.status.replace(/_/g, ' ')}
                 </span>

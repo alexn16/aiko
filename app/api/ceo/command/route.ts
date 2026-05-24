@@ -46,8 +46,66 @@ export async function POST(request: NextRequest) {
         if (askMatch) operatorName = askMatch[1]
       }
 
-      // Detect Gmail workflow intents
+      // Auto-delegate web research if intent detected
+      let delegationResult: DelegationResult | null = null
+
+      // Detect operator control commands
       const lcCommand = command.trim().toLowerCase()
+      const isLoginDone = lcCommand.match(/(\w+)\s+(is\s+)?logged\s+in\s*(now)?/i)
+      const isContinue = lcCommand.match(/(\w+),?\s+continue/i)
+      const isStop = lcCommand.match(/(\w+),?\s+stop/i) ?? lcCommand.match(/stop\s+(\w+)/i)
+      const isClearWorkflow = lcCommand.match(/clear\s+(\w+)'?s?\s+workflow/i)
+
+      if (isLoginDone || isContinue) {
+        const nameMatch = (isLoginDone || isContinue)?.[1]
+        if (nameMatch && nameMatch.length > 2) {
+          try {
+            const { getWebOperatorByName, markLoginCompleted, resumeOperatorWorkflow } = await import('@/lib/web-operator/operators')
+            const op = await getWebOperatorByName(nameMatch)
+            if (op) {
+              if (isLoginDone) {
+                await markLoginCompleted(op.id)
+              }
+              if (op.pending_action_type) {
+                await resumeOperatorWorkflow(op.id)
+              }
+              if (!delegationResult) {
+                delegationResult = { status: 'completed', message: `${op.name} is resuming workflow.` }
+              }
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
+      if (isStop) {
+        const nameMatch = isStop?.[1]
+        if (nameMatch && nameMatch.length > 2) {
+          try {
+            const { getWebOperatorByName, pauseOperator } = await import('@/lib/web-operator/operators')
+            const op = await getWebOperatorByName(nameMatch)
+            if (op) {
+              await pauseOperator(op.id, 'Stopped by CEO')
+              delegationResult = { status: 'blocked', message: `${op.name} has been paused.` }
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
+      if (isClearWorkflow) {
+        const nameMatch = isClearWorkflow?.[1]
+        if (nameMatch && nameMatch.length > 2) {
+          try {
+            const { getWebOperatorByName, clearOperatorWorkflow } = await import('@/lib/web-operator/operators')
+            const op = await getWebOperatorByName(nameMatch)
+            if (op) {
+              await clearOperatorWorkflow(op.id)
+              delegationResult = { status: 'completed', message: `${op.name}'s workflow has been cleared.` }
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+
+      // Detect Gmail workflow intents (moved below control command detection)
       const isOpenGmail = lcCommand.includes('open gmail') || (lcCommand.includes('gmail') && !lcCommand.includes('draft') && !lcCommand.includes('send') && !lcCommand.includes('email to'))
       const isPrepareEmail = !!(command.trim().match(/prepare.*(email|mail)|write.*(email|mail)|draft.*(email|mail)/i))
       const isSendEmail = !!(command.trim().match(/\bsend\s+(it|the email|the draft|that)\b/i)) && !lcCommand.includes('send email to')
@@ -56,8 +114,6 @@ export async function POST(request: NextRequest) {
       const subjectMatch = command.trim().match(/(?:subject|about|re:)\s+([^,\n.]{3,80})/i)
       const emailSubject = subjectMatch?.[1]
 
-      // Auto-delegate web research if intent detected
-      let delegationResult: DelegationResult | null = null
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
 
       if (isOpenGmail && operatorName) {

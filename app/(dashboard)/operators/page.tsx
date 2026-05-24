@@ -9,19 +9,34 @@ const STATUS_COLOR: Record<string, string> = {
   idle: '#94a3b8',
   working: '#3b82f6',
   waiting_approval: '#f59e0b',
-  paused: '#6366f1',
+  waiting_user: '#f59e0b',
+  user_controlling: '#8b5cf6',
+  ready_to_resume: '#10b981',
+  paused: '#f97316',
   error: '#ef4444',
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  idle: 'idle',
+  working: 'working',
+  waiting_approval: 'waiting approval',
+  waiting_user: 'waiting for user',
+  user_controlling: 'user controlling',
+  ready_to_resume: 'ready to resume',
+  paused: 'paused',
+  error: 'error',
 }
 
 function StatusDot({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? '#94a3b8'
+  const label = STATUS_LABEL[status] ?? status.replace(/_/g, ' ')
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
     }}>
       <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
       <span style={{ fontSize: 11, color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {status.replace(/_/g, ' ')}
+        {label}
       </span>
     </span>
   )
@@ -311,12 +326,20 @@ export default function OperatorsPage() {
                   </button>
                 )}
 
+                {/* View detail */}
+                <Link
+                  href={`/operators/${op.id}`}
+                  style={{ fontSize: 11, color: '#0f172a', textDecoration: 'none', fontWeight: 600 }}
+                >
+                  View →
+                </Link>
+
                 {/* View actions */}
                 <Link
                   href={`/operator?operator_id=${op.id}`}
                   style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none', fontWeight: 500 }}
                 >
-                  View actions →
+                  Actions →
                 </Link>
               </div>
             </div>

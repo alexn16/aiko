@@ -241,7 +241,7 @@ async function executeOpenGmail(opts: { profileKey?: string }): Promise<ExecuteR
   }
 }
 
-async function executeDetectGmailLogin(opts: { profileKey?: string }): Promise<ExecuteResult> {
+export async function executeDetectGmailLogin(opts: { profileKey?: string }): Promise<ExecuteResult> {
   const page = await getOperatorPage(opts.profileKey ?? 'default')
   const url = page.url()
   const title = await page.title().catch(() => '')

@@ -453,6 +453,27 @@ Each operator maintains memory across instructions:
 - **requires_user_input** — true when operator is waiting for login, CAPTCHA, or verification
 - **waiting_reason** — explanation of what the operator needs
 
+### Live supervision and manual takeover
+
+When a Web Operator encounters login, CAPTCHA, verification, or security prompts, it pauses automatically and sets `requires_user_input = true`.
+
+**Operator detail page:** `/operators/[id]` — see current state, latest screenshot, pending action, and take control.
+
+**Manual takeover flow:**
+1. Operator pauses with "Waiting for user input" notice
+2. User opens the operator browser window and completes login/CAPTCHA manually
+3. User clicks "Mark login completed" in AÏKO
+4. AÏKO verifies the login state via browser detection
+5. If confirmed: operator resumes the pending workflow automatically
+
+**CEO Chat control commands:**
+- `"Kevin is logged in now"` → marks login complete, resumes pending workflow
+- `"Kevin, continue"` → resumes workflow
+- `"Kevin, stop"` → pauses operator
+- `"Clear Kevin's workflow"` → clears all workflow memory
+
+**Safety:** AÏKO never automates CAPTCHA solving, phone verification bypass, or login credential submission. These always require direct user action.
+
 ### Gmail browser workflow
 
 The Web Operator can operate Gmail through the browser — no Gmail API required.
