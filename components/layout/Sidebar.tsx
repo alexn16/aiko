@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/reports',    label: 'Reports' },
   { href: '/tools',      label: 'Tools' },
   { href: '/tool-runs',  label: 'Tool Runs' },
+  { href: '/operator',   label: 'Operator' },
   { href: '/functions',  label: 'Functions' },
   { href: '/mode',       label: 'Operating Mode' },
   { href: '/settings',   label: 'Settings' },

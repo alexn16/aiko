@@ -57,6 +57,7 @@ Each provider is tested before being activated. Role assignments let you choose 
 - `/reports` — generated performance summaries
 - `/tools` — Tool Connections (configure web search, website reader, email)
 - `/tool-runs` — Tool execution log
+- `/operator` — Web Operator control room
 - `/mode` — Operating Mode settings and audit log
 - `/settings` — SMTP and legacy model configuration
 - `/functions` — in-app system documentation
@@ -317,6 +318,39 @@ AÏKO can send approved campaign emails and follow up within daily limits.
 
 **UI:** `/mode` — Operating Mode settings and audit log
 **API:** `GET/PATCH /api/mode`, `GET /api/mode/log`
+
+## Web Operator Agent (`/operator`)
+
+The Web Operator is AÏKO's hands on the internet. Instead of building separate native API integrations for every service, the Web Operator can operate websites and web apps through a browser runtime.
+
+**What the Web Operator can do (when runtime is connected):**
+- Search the web and read results
+- Open and read any public web page
+- Fill forms and prepare drafts
+- Open Gmail/Outlook web and prepare email drafts
+- Use LinkedIn, CRMs, and any web app through the browser
+- Copy data, download reports, navigate logged-in sites
+
+**Operating Mode controls what it can do:**
+- **Read Only** — browse_web blocked; no web automation
+- **Auto / Approval Required** — can browse and prepare; stops before sending/submitting and requests approval
+- **Full Access** — can perform approved actions within daily limits
+
+**Dangerous actions always require approval** unless explicitly pre-approved:
+send_email, submit_form, post_publicly, download_file (in auto mode)
+
+**Browser runtime:** The data model, API, and approval flow are active now. Browser execution requires a Playwright runtime. When connected, actions execute. When not connected, all requests are logged and return a clear "runtime not configured" message.
+
+**UI:** `/operator` — Web Operator control room (session, actions, pending approvals, runtime status)
+
+**API:**
+- `POST /api/web-operator/session` — start a session
+- `POST /api/web-operator/action` — request an action
+- `GET /api/web-operator/actions` — action log
+- `POST /api/web-operator/approve-action` — approve a pending browser action
+- `GET /api/web-operator/status` — current status
+
+**Safety:** Every action is logged. Risky actions create approval items. The global pause button stops all operator actions immediately.
 
 ## Tool Connections (`/tools`)
 

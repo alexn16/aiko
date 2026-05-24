@@ -6,6 +6,7 @@ import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 import { getCampaignSummaryForProject } from '@/lib/campaigns'
 import { getModeState, getModeLabel } from '@/lib/operating-mode'
 import { listToolConnections } from '@/lib/tools/tool-router'
+import { listWebOperatorActions } from '@/lib/web-operator/web-operator'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 
@@ -194,11 +195,12 @@ export async function POST(
       )
     }
 
-    // Load project context, operating mode, and tool connections in parallel
-    const [ctx, modeState, toolConnections] = await Promise.all([
+    // Load project context, operating mode, tool connections, and web operator actions in parallel
+    const [ctx, modeState, toolConnections, recentWebActions] = await Promise.all([
       buildProjectContext(params.id),
       getModeState(),
       listToolConnections(),
+      listWebOperatorActions({ project_id: params.id, limit: 3 }),
     ])
     if (!ctx.project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
@@ -227,13 +229,16 @@ export async function POST(
 
     // Build system prompt with mode context
     const toolStatus = toolConnections.map(t => `${t.name}: ${t.status}`).join(', ')
+    const webOpsStr = recentWebActions.length > 0
+      ? `\n\nRecent web operator actions: ${recentWebActions.map(a => `[${a.status}] ${a.action_type}: ${a.description}`).join('; ')}`
+      : ''
     const modeContext = `\n\nCurrent operating mode: ${getModeLabel(modeState.mode)}${modeState.paused ? ' [PAUSED — no agent actions]' : ''}. ${
       modeState.mode === 'read_only'
         ? 'Do not suggest sending emails or browsing the web — only internal planning and preparation is allowed.'
         : modeState.mode === 'auto_approval'
         ? 'Research and outreach preparation are allowed. Do not suggest sending emails directly — all outreach must go through the Approval Center.'
         : `Full external sending is enabled within a ${modeState.daily_send_limit} email daily limit. ${modeState.sends_today} sent today.`
-    }\n\nAvailable tools (${toolStatus}). Web research tools require Auto/Approval or Full Access mode.`
+    }\n\nAvailable tools (${toolStatus}). Web research tools require Auto/Approval or Full Access mode.${webOpsStr}`
     const systemPrompt = buildSystemPrompt(ctx) + modeContext
 
     // Call AI

@@ -8,6 +8,7 @@ import { getCampaignSummaryForCompany } from '@/lib/campaigns'
 import { getLaunchReadinessSummaryForCompany } from '@/lib/campaign-launch-readiness'
 import { getModeState } from '@/lib/operating-mode'
 import { listToolConnections } from '@/lib/tools/tool-router'
+import { getWebOperatorStatus } from '@/lib/web-operator/web-operator'
 
 export interface CEOCommandResult {
   response: string
@@ -68,7 +69,7 @@ Rules:
 - response must always be natural language — never raw JSON, never bullet points, never technical field names`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -95,6 +96,7 @@ async function buildCompanyContext(): Promise<string> {
     getLaunchReadinessSummaryForCompany(),
     getModeState(),
     listToolConnections(),
+    getWebOperatorStatus(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -157,6 +159,11 @@ async function buildCompanyContext(): Promise<string> {
       name: t.name,
       status: t.status,
     })),
+    web_operator: {
+      browser_available: webOperatorStatus.browser_available,
+      active_session_id: webOperatorStatus.active_session?.id ?? null,
+      pending_approvals: webOperatorStatus.pending_approvals,
+    },
   }
 
   return JSON.stringify(ctx, null, 2)

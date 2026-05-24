@@ -12,6 +12,7 @@ import { ApprovalSummaryWidget } from '@/components/approvals/ApprovalSummaryWid
 import { JobEvaluationCard } from '@/components/jobs/JobEvaluation'
 import { OfficeModeWidget } from '@/components/mode/OfficeModeWidget'
 import { ToolActivityPanel } from '@/components/tools/ToolActivityPanel'
+import { WebOperatorCard } from '@/components/web-operator/WebOperatorCard'
 import type { JobEvaluation } from '@/lib/agents/evaluator-agent'
 
 interface ModelRow { base_url: string; model: string }
@@ -146,6 +147,11 @@ export default function OfficePage() {
       {/* Tool Activity */}
       <div style={{ marginBottom: 20, maxWidth: 480 }}>
         <ToolActivityPanel />
+      </div>
+
+      {/* Web Operator */}
+      <div style={{ marginBottom: 20, maxWidth: 480 }}>
+        <WebOperatorCard />
       </div>
 
       {/* Agent roster */}
