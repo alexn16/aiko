@@ -19,6 +19,12 @@ interface DelegationChip {
   taskOutputId?: string
 }
 
+interface CapabilityGap {
+  missing: string[]
+  proposal_id: string
+  score: number
+}
+
 interface CeoCommand {
   id: string
   command: string
@@ -139,6 +145,7 @@ export default function CeoPage() {
   const [cmdError, setCmdError]       = useState<string | null>(null)
   const [commands, setCommands]       = useState<CeoCommand[]>([])
   const [lastDelegation, setLastDelegation] = useState<DelegationChip | null>(null)
+  const [lastCapabilityGap, setLastCapabilityGap] = useState<CapabilityGap | null>(null)
   const bottomRef                     = useRef<HTMLDivElement>(null)
   const inputRef                      = useRef<HTMLTextAreaElement>(null)
 
@@ -193,6 +200,7 @@ export default function CeoPage() {
     setInput('')
     setCmdError(null)
     setLastDelegation(null)
+    setLastCapabilityGap(null)
     setLoading(true)
 
     // Optimistic user message
@@ -218,6 +226,7 @@ export default function CeoPage() {
         setCommands(prev => prev.filter(c => c.id !== optimistic.id))
       } else {
         if (data.delegation) setLastDelegation(data.delegation)
+        if (data.capability_gap) setLastCapabilityGap(data.capability_gap)
       }
     } catch {
       setCmdError('Could not reach the server.')
@@ -487,6 +496,26 @@ export default function CeoPage() {
                   <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                     <div style={{ width: 32, flexShrink: 0 }} />
                     <DelegationChipView chip={lastDelegation} />
+                  </div>
+                )}
+
+                {/* Capability gap chip */}
+                {lastCapabilityGap && !loading && (
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 32, flexShrink: 0 }} />
+                    <div style={{ marginTop: 4 }}>
+                      <Link
+                        href="/system"
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          fontSize: 11, padding: '4px 10px', borderRadius: 6,
+                          fontWeight: 500, textDecoration: 'none',
+                          background: '#fef3c7', color: '#d97706',
+                        }}
+                      >
+                        ⚠ {lastCapabilityGap.missing.length} {lastCapabilityGap.missing.length === 1 ? 'capability' : 'capabilities'} missing — improvement proposal created
+                      </Link>
+                    </div>
                   </div>
                 )}
 

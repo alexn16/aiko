@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/operator',   label: 'Operator' },
   { href: '/functions',  label: 'Functions' },
   { href: '/mode',       label: 'Operating Mode' },
+  { href: '/system',     label: 'System' },
   { href: '/settings',   label: 'Settings' },
 ]
 

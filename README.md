@@ -61,6 +61,7 @@ Each provider is tested before being activated. Role assignments let you choose 
 - `/mode` — Operating Mode settings and audit log
 - `/settings` — SMTP and legacy model configuration
 - `/functions` — in-app system documentation
+- `/system` — Capability map, strategy checker, and improvement proposals
 - `/projects` — multi-project overview
 - `/projects/[id]` — per-project workspace (memory, agents, activity)
 
@@ -271,6 +272,41 @@ Before any external sending exists, AÏKO evaluates whether a campaign is ready 
 - `POST /api/campaigns/[id]/launch-checks` — run a new check
 
 **Safety:** Running a readiness check does not launch or send anything externally. A future explicit launch/send step will be added separately.
+
+## System Capabilities & Self-Improvement
+
+AÏKO can identify when a marketing strategy requires capabilities it doesn't have. It creates structured improvement proposals — but never silently modifies itself.
+
+### Capability map
+Every AÏKO feature is tracked as a `system_capability` with a status: available, partial, missing, planned, or blocked. Categories: research, leads, outreach, email, browser, approvals, reporting, automation, integrations.
+
+**Currently available:** CEO Chat, PM Chat, Website Reader, Web Operator, Lead Capture, Lead Enrichment, Task Tracking, Task Outputs, Approval Center, Campaign Builder, Launch Readiness, Operating Modes, Reporting, CEO Reviews, PM Reports
+
+**Currently missing/partial:** Email Sending, Reply Tracking, CRM Sync, Calendar Booking, LinkedIn Operator (partial), Web Search (partial — needs API key)
+
+### Strategy capability check
+
+The CEO automatically checks capabilities when a strategy is described. If gaps exist:
+1. CEO explains what's missing in plain language
+2. A System Improvement Proposal is created with `status = draft`
+3. Proposal includes an AI-generated implementation prompt for the developer
+4. User reviews and approves the proposal
+5. Developer applies the implementation
+
+### Safety
+- AÏKO never edits its own code automatically
+- No silent migrations or deployments
+- Every system change is proposed, reviewed, and logged
+- The implementation prompt is a plan — a human or AI developer applies it
+
+**UI:** `/system` — Capability map, strategy checker, and improvement proposals
+
+**API:**
+- `GET /api/system/capabilities` — list all capabilities
+- `POST /api/system/check-strategy` — check a strategy against current capabilities
+- `GET /api/system/improvements` — list proposals
+- `POST /api/system/improvements` — create a proposal
+- `PATCH /api/system/improvements/[id]` — approve/reject
 
 ## Core architecture
 

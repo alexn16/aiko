@@ -9,12 +9,18 @@ import { getLaunchReadinessSummaryForCompany } from '@/lib/campaign-launch-readi
 import { getModeState } from '@/lib/operating-mode'
 import { listToolConnections } from '@/lib/tools/tool-router'
 import { getWebOperatorStatus } from '@/lib/web-operator/web-operator'
+import { getMissingCapabilities } from '@/lib/system-capabilities'
 
 export interface CEOCommandResult {
   response: string
   intent: string
   actions: Array<{ type: string; data: Record<string, unknown> }>
   project_id?: string | null
+  capability_gap?: {
+    missing: string[]
+    proposal_id: string
+    score: number
+  } | null
 }
 
 const CEO_SYSTEM_PROMPT = `You are the CEO of AÏKO, an AI marketing company. You manage multiple client projects, a team of 3 Project Managers (Kenji, Mara, Sven), and autonomous AI agents.
@@ -66,10 +72,12 @@ Rules:
 - Always update_company_memory when projects change or priorities shift
 - When creating a project, also generate a project map with 3-5 pipeline stages
 - Never include external API calls, secrets, or send real messages
-- response must always be natural language — never raw JSON, never bullet points, never technical field names`
+- response must always be natural language — never raw JSON, never bullet points, never technical field names
+- When a strategy requires capabilities listed as missing in the system context, acknowledge the gap, explain what is missing, and mention that a System Improvement Proposal can be created. Never pretend capabilities exist that are marked as missing.
+- When asked to "execute" a strategy fully (including email sending, reply tracking, etc.), check missing_capabilities first and if blockers exist, explain what needs to be built.`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus, missingCaps] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -97,6 +105,7 @@ async function buildCompanyContext(): Promise<string> {
     getModeState(),
     listToolConnections(),
     getWebOperatorStatus(),
+    getMissingCapabilities(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -164,6 +173,7 @@ async function buildCompanyContext(): Promise<string> {
       active_session_id: webOperatorStatus.active_session?.id ?? null,
       pending_approvals: webOperatorStatus.pending_approvals,
     },
+    missing_capabilities: missingCaps.map(c => ({ key: c.key, name: c.name })),
   }
 
   return JSON.stringify(ctx, null, 2)
@@ -387,5 +397,6 @@ export async function runCeoCommandAgent(
     intent: String(parsed.intent ?? 'general'),
     actions,
     project_id: resolvedProjectId,
+    capability_gap: null,
   }
 }

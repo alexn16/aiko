@@ -49,8 +49,27 @@ export async function POST(request: NextRequest) {
         }).catch(() => null)
       }
 
+      // Check capability gaps for strategy/create_project intents
+      let capabilityGap: { missing: string[]; proposal_id: string; score: number } | null = null
+      const resolvedProjectId = result.project_id
+      if (['strategy', 'create_project'].includes(String(result.intent)) && resolvedProjectId) {
+        const strategyText = command.trim()
+        try {
+          const { generateCapabilityGapReport } = await import('@/lib/system-improvements')
+          const gap = await generateCapabilityGapReport(strategyText, resolvedProjectId)
+          if (gap.proposal && gap.check_result.missing.length > 0) {
+            capabilityGap = {
+              missing: gap.check_result.missing.map(c => c.name),
+              proposal_id: gap.proposal.id,
+              score: gap.check_result.score,
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       return NextResponse.json({
         ...result,
+        capability_gap: capabilityGap,
         delegation: delegationResult ? {
           status: delegationResult.status,
           message: delegationResult.message,
@@ -77,8 +96,27 @@ export async function POST(request: NextRequest) {
         }).catch(() => null)
       }
 
+      // Check capability gaps for strategy/create_project intents
+      let capabilityGap: { missing: string[]; proposal_id: string; score: number } | null = null
+      const resolvedProjectIdLegacy = result.project_id
+      if (['strategy', 'create_project'].includes(String(result.intent)) && resolvedProjectIdLegacy) {
+        const strategyText = command.trim()
+        try {
+          const { generateCapabilityGapReport } = await import('@/lib/system-improvements')
+          const gap = await generateCapabilityGapReport(strategyText, resolvedProjectIdLegacy)
+          if (gap.proposal && gap.check_result.missing.length > 0) {
+            capabilityGap = {
+              missing: gap.check_result.missing.map(c => c.name),
+              proposal_id: gap.proposal.id,
+              score: gap.check_result.score,
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       return NextResponse.json({
         ...result,
+        capability_gap: capabilityGap,
         delegation: delegationResult ? {
           status: delegationResult.status,
           message: delegationResult.message,
