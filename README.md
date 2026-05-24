@@ -352,6 +352,31 @@ send_email, submit_form, post_publicly, download_file (in auto mode)
 
 **Safety:** Every action is logged. Risky actions create approval items. The global pause button stops all operator actions immediately.
 
+### Agent delegation
+
+Agents do not browse directly — they delegate to the Web Operator:
+
+```
+Research Agent → "Search parking managers in Coruña" → Web Operator → Playwright → results saved as output
+PM Agent → "Research Foreman buyers" → Web Operator → search + read pages → research brief output
+Outreach Agent → "Prepare Gmail draft" → Web Operator → create_email_draft → approval if needed
+```
+
+The CEO and PM chat automatically detect web research intent and delegate to the Web Operator. Delegation results appear as action chips in the chat interface.
+
+**Delegation API:** `POST /api/web-operator/delegate`
+```json
+{
+  "requestedByRole": "Research Agent",
+  "actionType": "search",
+  "query": "parking garage managers Coruña Spain",
+  "projectId": "...",
+  "instruction": "Find companies managing parking facilities in Coruña"
+}
+```
+
+**`lib/web-operator/delegation.ts`:** `delegateToWebOperator`, `delegateSearch`, `delegateReadWebsite`, `delegateEmailDraft`, `delegateExternalAction`
+
 ## Tool Connections (`/tools`)
 
 AÏKO uses external tools to execute real research. Tools are only available in Auto/Approval Required or Full Access mode.

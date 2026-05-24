@@ -12,6 +12,13 @@ interface CompanyMemory {
   updated_at: string
 }
 
+interface DelegationChip {
+  status: 'completed' | 'approval_required' | 'blocked' | 'failed'
+  message: string
+  actionId?: string
+  taskOutputId?: string
+}
+
 interface CeoCommand {
   id: string
   command: string
@@ -19,6 +26,7 @@ interface CeoCommand {
   intent: string
   actions: Array<{ type: string; data: Record<string, unknown> }>
   created_at: string
+  delegation?: DelegationChip | null
 }
 
 interface StatusData {
@@ -126,12 +134,13 @@ export default function CeoPage() {
   const [tab, setTab] = useState<'chat' | 'review'>('chat')
 
   // Chat state
-  const [input, setInput]       = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [cmdError, setCmdError] = useState<string | null>(null)
-  const [commands, setCommands] = useState<CeoCommand[]>([])
-  const bottomRef               = useRef<HTMLDivElement>(null)
-  const inputRef                = useRef<HTMLTextAreaElement>(null)
+  const [input, setInput]             = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [cmdError, setCmdError]       = useState<string | null>(null)
+  const [commands, setCommands]       = useState<CeoCommand[]>([])
+  const [lastDelegation, setLastDelegation] = useState<DelegationChip | null>(null)
+  const bottomRef                     = useRef<HTMLDivElement>(null)
+  const inputRef                      = useRef<HTMLTextAreaElement>(null)
 
   // Reviews
   const [reviews, setReviews]             = useState<CeoReview[]>([])
@@ -183,6 +192,7 @@ export default function CeoPage() {
     if (!text || loading) return
     setInput('')
     setCmdError(null)
+    setLastDelegation(null)
     setLoading(true)
 
     // Optimistic user message
@@ -206,6 +216,8 @@ export default function CeoPage() {
       if (!res.ok || data.error) {
         setCmdError(data.error ?? 'Something went wrong.')
         setCommands(prev => prev.filter(c => c.id !== optimistic.id))
+      } else {
+        if (data.delegation) setLastDelegation(data.delegation)
       }
     } catch {
       setCmdError('Could not reach the server.')
@@ -469,6 +481,14 @@ export default function CeoPage() {
                     )}
                   </div>
                 ))}
+
+                {/* Delegation chip — shown after the last CEO response */}
+                {lastDelegation && !loading && (
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 32, flexShrink: 0 }} />
+                    <DelegationChipView chip={lastDelegation} />
+                  </div>
+                )}
 
                 <div ref={bottomRef} />
               </div>
@@ -780,6 +800,41 @@ export default function CeoPage() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+// ── Delegation chip ───────────────────────────────────────────────────────────
+
+function DelegationChipView({ chip }: { chip: DelegationChip }) {
+  const styles: Record<string, React.CSSProperties> = {
+    completed:        { background: '#dcfce7', color: '#16a34a' },
+    approval_required:{ background: '#fef3c7', color: '#d97706' },
+    blocked:          { background: '#fee2e2', color: '#dc2626' },
+    failed:           { background: '#f1f5f9', color: '#64748b' },
+  }
+  const labels: Record<string, string> = {
+    completed:        '✓ Research saved',
+    approval_required:'⏸ Approval required',
+    blocked:          '✗ Blocked',
+    failed:           '✗ Action failed',
+  }
+  const chipStyle: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    fontSize: 11, padding: '4px 10px', borderRadius: 6,
+    fontWeight: 500, marginTop: 6,
+    ...(styles[chip.status] ?? styles.failed),
+  }
+  return (
+    <div style={{ marginTop: 4 }}>
+      <span style={chipStyle}>
+        {labels[chip.status] ?? chip.status}
+      </span>
+      {chip.message && chip.status !== 'completed' && (
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, marginLeft: 2 }}>
+          {chip.message}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function CeoAvatar() {
   return (

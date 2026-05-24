@@ -38,6 +38,8 @@ export interface WebOperatorAction {
   screenshot_url: string | null
   requires_approval: boolean
   approval_item_id: string | null
+  source_task_id: string | null
+  requested_by_role: string | null
   created_at: string
   completed_at: string | null
 }
@@ -138,12 +140,15 @@ export async function logWebOperatorAction(params: {
   input?: Record<string, unknown>
   status?: string
   requires_approval?: boolean
+  source_task_id?: string | null
+  requested_by_role?: string | null
 }): Promise<WebOperatorAction> {
   const result = await db.query(
     `INSERT INTO web_operator_actions
        (session_id, project_id, agent_role, action_type, target_url,
-        description, input, status, requires_approval)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        description, input, status, requires_approval,
+        source_task_id, requested_by_role)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      RETURNING *`,
     [
       params.session_id ?? null,
@@ -155,6 +160,8 @@ export async function logWebOperatorAction(params: {
       JSON.stringify(params.input ?? {}),
       params.status ?? 'pending',
       params.requires_approval ?? false,
+      params.source_task_id ?? null,
+      params.requested_by_role ?? null,
     ]
   )
   return rowToAction(result.rows[0])
@@ -241,6 +248,8 @@ export async function runWebOperatorAction(opts: {
   target_url?: string | null
   description: string
   input?: Record<string, unknown>
+  source_task_id?: string | null
+  requested_by_role?: string | null
 }): Promise<{
   success: boolean
   action: WebOperatorAction
@@ -378,6 +387,8 @@ function rowToAction(row: Record<string, unknown>): WebOperatorAction {
     screenshot_url: row.screenshot_url ? String(row.screenshot_url) : null,
     requires_approval: Boolean(row.requires_approval),
     approval_item_id: row.approval_item_id ? String(row.approval_item_id) : null,
+    source_task_id: row.source_task_id ? String(row.source_task_id) : null,
+    requested_by_role: row.requested_by_role ? String(row.requested_by_role) : null,
     created_at: String(row.created_at),
     completed_at: row.completed_at ? String(row.completed_at) : null,
   }

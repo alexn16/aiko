@@ -7,6 +7,7 @@ import { getCampaignSummaryForProject } from '@/lib/campaigns'
 import { getModeState, getModeLabel } from '@/lib/operating-mode'
 import { listToolConnections } from '@/lib/tools/tool-router'
 import { listWebOperatorActions } from '@/lib/web-operator/web-operator'
+import { delegateSearch } from '@/lib/web-operator/delegation'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 
@@ -259,7 +260,30 @@ export async function POST(
       [params.id, pmId, response]
     )
 
-    return NextResponse.json({ response, pm_name: ctx.project.pm_name ?? 'PM' })
+    // Auto-delegate web research if user message has web research intent
+    const needsWebResearch = message.trim().toLowerCase().match(
+      /\b(search|find|research|look up|browse|check online|internet|web)\b/
+    )
+    let delegationResult = null
+    if (needsWebResearch) {
+      const query = message.trim().replace(/^(search for|find|research|look up)\s+/i, '').slice(0, 200)
+      const pmName = String(ctx.project.pm_name ?? 'Project Manager')
+      delegationResult = await delegateSearch({
+        query,
+        projectId: params.id,
+        requestedByRole: pmName,
+      }).catch(() => null)
+    }
+
+    return NextResponse.json({
+      response,
+      pm_name: ctx.project.pm_name ?? 'PM',
+      delegation: delegationResult ? {
+        status: delegationResult.status,
+        message: delegationResult.message,
+        actionId: delegationResult.actionId,
+      } : null,
+    })
   } catch (err) {
     console.error('[pm-chat POST]', err)
     const msg = err instanceof Error ? err.message : 'Internal error'

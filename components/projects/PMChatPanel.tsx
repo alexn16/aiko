@@ -9,6 +9,12 @@ interface ChatMessage {
   created_at: string
 }
 
+interface DelegationChip {
+  status: 'completed' | 'approval_required' | 'blocked' | 'failed'
+  message: string
+  actionId?: string
+}
+
 interface PMChatPanelProps {
   projectId: string
   pmName: string | null
@@ -29,13 +35,14 @@ function ts(iso: string) {
 }
 
 export function PMChatPanel({ projectId, pmName, pmSpecialty, hasProvider }: PMChatPanelProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [input, setInput]       = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState<string | null>(null)
-  const [fetched, setFetched]   = useState(false)
-  const bottomRef               = useRef<HTMLDivElement>(null)
-  const inputRef                = useRef<HTMLTextAreaElement>(null)
+  const [messages, setMessages]         = useState<ChatMessage[]>([])
+  const [input, setInput]               = useState('')
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState<string | null>(null)
+  const [fetched, setFetched]           = useState(false)
+  const [lastDelegation, setLastDelegation] = useState<DelegationChip | null>(null)
+  const bottomRef                       = useRef<HTMLDivElement>(null)
+  const inputRef                        = useRef<HTMLTextAreaElement>(null)
 
   const pm = pmName ?? 'Project Manager'
 
@@ -60,6 +67,7 @@ export function PMChatPanel({ projectId, pmName, pmSpecialty, hasProvider }: PMC
     if (!text || loading) return
     setInput('')
     setError(null)
+    setLastDelegation(null)
     setLoading(true)
 
     const optimistic: ChatMessage = {
@@ -81,6 +89,7 @@ export function PMChatPanel({ projectId, pmName, pmSpecialty, hasProvider }: PMC
         setError(data.error ?? 'Something went wrong.')
         setMessages(prev => prev.filter(m => m.id !== optimistic.id))
       } else {
+        if (data.delegation) setLastDelegation(data.delegation)
         await loadMessages()
       }
     } catch {
@@ -266,6 +275,14 @@ export function PMChatPanel({ projectId, pmName, pmSpecialty, hasProvider }: PMC
           </div>
         )}
 
+        {/* Delegation chip — shown after PM response */}
+        {lastDelegation && !loading && (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <div style={{ width: 28, flexShrink: 0 }} />
+            <PMDelegationChip chip={lastDelegation} />
+          </div>
+        )}
+
         {/* Inline chips when conversation has started */}
         {messages.length > 0 && !loading && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -366,6 +383,35 @@ export function PMChatPanel({ projectId, pmName, pmSpecialty, hasProvider }: PMC
           50%       { opacity: 1;    transform: scale(1); }
         }
       `}</style>
+    </div>
+  )
+}
+
+function PMDelegationChip({ chip }: { chip: DelegationChip }) {
+  const styles: Record<string, React.CSSProperties> = {
+    completed:         { background: '#dcfce7', color: '#16a34a' },
+    approval_required: { background: '#fef3c7', color: '#d97706' },
+    blocked:           { background: '#fee2e2', color: '#dc2626' },
+    failed:            { background: '#f1f5f9', color: '#64748b' },
+  }
+  const labels: Record<string, string> = {
+    completed:         '✓ Research saved',
+    approval_required: '⏸ Approval required',
+    blocked:           '✗ Blocked',
+    failed:            '✗ Action failed',
+  }
+  const chipStyle: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    fontSize: 11, padding: '4px 10px', borderRadius: 6,
+    fontWeight: 500,
+    ...(styles[chip.status] ?? styles.failed),
+  }
+  return (
+    <div>
+      <span style={chipStyle}>{labels[chip.status] ?? chip.status}</span>
+      {chip.message && chip.status !== 'completed' && (
+        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>{chip.message}</div>
+      )}
     </div>
   )
 }

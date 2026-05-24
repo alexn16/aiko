@@ -116,6 +116,11 @@ export function WebOperatorCard() {
             </span>
             {truncate(latestAction.description)}
           </div>
+          {latestAction.requested_by_role && (
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+              Requested by: <span style={{ color: '#475569', fontWeight: 500 }}>{latestAction.requested_by_role}</span>
+            </div>
+          )}
           {latestAction.target_url && (
             <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, fontFamily: 'DM Mono, monospace' }}>
               {truncate(latestAction.target_url)}
