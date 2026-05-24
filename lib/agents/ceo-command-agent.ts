@@ -6,6 +6,7 @@ import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForCompany } from '@/lib/approvals'
 import { getCampaignSummaryForCompany } from '@/lib/campaigns'
 import { getLaunchReadinessSummaryForCompany } from '@/lib/campaign-launch-readiness'
+import { getModeState } from '@/lib/operating-mode'
 
 export interface CEOCommandResult {
   response: string
@@ -66,7 +67,7 @@ Rules:
 - response must always be natural language — never raw JSON, never bullet points, never technical field names`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -91,6 +92,7 @@ async function buildCompanyContext(): Promise<string> {
     getApprovalSummaryForCompany(),
     getCampaignSummaryForCompany(),
     getLaunchReadinessSummaryForCompany(),
+    getModeState(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -141,6 +143,12 @@ async function buildCompanyContext(): Promise<string> {
       needs_attention: launchReadiness.needs_attention,
       not_ready: launchReadiness.not_ready,
       blocked: launchReadiness.blocked,
+    },
+    operating_mode: {
+      mode: modeState.mode,
+      paused: modeState.paused,
+      sends_today: modeState.sends_today,
+      daily_send_limit: modeState.daily_send_limit,
     },
   }
 

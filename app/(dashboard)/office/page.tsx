@@ -10,6 +10,7 @@ import { TasksPanel } from '@/components/agents/TasksPanel'
 import { OutputsPanel } from '@/components/agents/OutputsPanel'
 import { ApprovalSummaryWidget } from '@/components/approvals/ApprovalSummaryWidget'
 import { JobEvaluationCard } from '@/components/jobs/JobEvaluation'
+import { OfficeModeWidget } from '@/components/mode/OfficeModeWidget'
 import type { JobEvaluation } from '@/lib/agents/evaluator-agent'
 
 interface ModelRow { base_url: string; model: string }
@@ -137,6 +138,9 @@ export default function OfficePage() {
           Watch and direct your agents in real time. Nothing is sent without your approval.
         </p>
       </div>
+
+      {/* Mode widget */}
+      <OfficeModeWidget />
 
       {/* Agent roster */}
       <div style={{ background: '#ffffff', borderRadius: 10, border: '1px solid #f1f5f9', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', marginBottom: 20, overflow: 'hidden' }}>

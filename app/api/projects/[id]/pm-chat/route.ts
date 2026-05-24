@@ -4,6 +4,7 @@ import { callAI, getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/ro
 import { getTaskSummaryForProject } from '@/lib/agents/tasks'
 import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 import { getCampaignSummaryForProject } from '@/lib/campaigns'
+import { getModeState, getModeLabel } from '@/lib/operating-mode'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 
@@ -145,6 +146,8 @@ Your responsibilities:
 - Never send external messages without explicit client approval
 - Escalate to CEO when cross-project coordination is needed
 
+Operating mode context is injected below. Respect these constraints in your recommendations.
+
 Speak naturally and operationally. 2-5 sentences per message. Mention specific agents when coordinating work. If you need more information, ask. Never output raw JSON or technical field names in your reply.`
 }
 
@@ -190,8 +193,11 @@ export async function POST(
       )
     }
 
-    // Load project context
-    const ctx = await buildProjectContext(params.id)
+    // Load project context and operating mode in parallel
+    const [ctx, modeState] = await Promise.all([
+      buildProjectContext(params.id),
+      getModeState(),
+    ])
     if (!ctx.project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
@@ -217,8 +223,15 @@ export async function POST(
       content: r.content,
     })) as Array<{ role: 'user' | 'assistant' | 'system'; content: string }>
 
-    // Build system prompt
-    const systemPrompt = buildSystemPrompt(ctx)
+    // Build system prompt with mode context
+    const modeContext = `\n\nCurrent operating mode: ${getModeLabel(modeState.mode)}${modeState.paused ? ' [PAUSED — no agent actions]' : ''}. ${
+      modeState.mode === 'read_only'
+        ? 'Do not suggest sending emails or browsing the web — only internal planning and preparation is allowed.'
+        : modeState.mode === 'auto_approval'
+        ? 'Research and outreach preparation are allowed. Do not suggest sending emails directly — all outreach must go through the Approval Center.'
+        : `Full external sending is enabled within a ${modeState.daily_send_limit} email daily limit. ${modeState.sends_today} sent today.`
+    }`
+    const systemPrompt = buildSystemPrompt(ctx) + modeContext
 
     // Call AI
     const response = await callAI({

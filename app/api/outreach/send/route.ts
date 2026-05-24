@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { sendEmail } from '@/lib/email/sender'
+import { canPerformAction, incrementSendCount } from '@/lib/operating-mode'
 
 export async function POST(request: NextRequest) {
   const { approvalId } = await request.json()
+
+  // Operating mode check
+  const modeCheck = await canPerformAction('send_email')
+  if (!modeCheck.allowed) {
+    return NextResponse.json(
+      { error: modeCheck.reason, mode: modeCheck.mode, paused: modeCheck.paused },
+      { status: 409 }
+    )
+  }
 
   const result = await db.query(
     `SELECT a.*, l.email, l.company_name
@@ -30,6 +40,8 @@ export async function POST(request: NextRequest) {
       { status: 422 }
     )
   }
+
+  await incrementSendCount()
 
   await db.query(
     "UPDATE approvals SET status='sent', sent_at=NOW() WHERE id=$1",

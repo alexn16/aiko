@@ -55,6 +55,7 @@ Each provider is tested before being activated. Role assignments let you choose 
 - `/approval` — approval queue (the sending gate)
 - `/campaigns` — campaign tracking
 - `/reports` — generated performance summaries
+- `/mode` — Operating Mode settings and audit log
 - `/settings` — SMTP and legacy model configuration
 - `/functions` — in-app system documentation
 - `/projects` — multi-project overview
@@ -279,10 +280,47 @@ Before any external sending exists, AÏKO evaluates whether a campaign is ready 
 - **Realtime updates**: SSE from `/api/agents/stream`
 - **Persistence**: PostgreSQL tables for projects, agents, leads, approvals, logs
 
+## Operating Mode
+
+AÏKO has three operating modes that control what agents are allowed to do. Mode is set globally and enforced across all agent actions.
+
+### Read Only (default)
+AÏKO can think, plan, read internal project data, and prepare suggestions.
+- Generate outputs, tasks, reviews, reports, campaign plans
+- Cannot browse the web or research external sites
+- Cannot send emails or external messages
+
+### Auto / Approval Required
+AÏKO can browse the web, research leads, and prepare outreach drafts.
+- Everything in Read Only
+- Browse web, find leads, prepare email drafts
+- Cannot send emails without client approval
+- All outreach goes through the Approval Center first
+
+### Full Access
+AÏKO can send approved campaign emails and follow up within daily limits.
+- Everything in Auto mode
+- Send approved outreach automatically
+- Auto-follow-up within configured limits
+- Requires explicit confirmation to enable (`CONFIRM_FULL_ACCESS`)
+- Daily send limit enforced (configurable)
+- Full audit log of all actions
+- Global pause button available at all times
+
+### Safety controls
+- **Pause button** — immediately halts all agent actions from any mode
+- **Daily send limit** — caps outbound sends per day in Full Access
+- **Audit log** — every action attempt is logged with result
+- **Confirmation gate** — Full Access requires typing a confirmation token
+
+**UI:** `/mode` — Operating Mode settings and audit log
+**API:** `GET/PATCH /api/mode`, `GET /api/mode/log`
+
 ## Key safety invariant
 
 AÏKO does **not** send outreach directly from generation.
 Messages are generated into approvals and only sent after explicit approval through the send route.
+In Read Only mode, no external sends are possible at all. In Auto / Approval Required mode, all outreach requires explicit client approval before sending.
 
 ## Local development
 

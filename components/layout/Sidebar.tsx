@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { SidebarModeIndicator } from '@/components/mode/SidebarModeIndicator'
 
 const CEO_ITEMS = [
   { href: '/ceo',        label: 'CEO' },
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: '/campaigns',  label: 'Campaigns' },
   { href: '/reports',    label: 'Reports' },
   { href: '/functions',  label: 'Functions' },
+  { href: '/mode',       label: 'Operating Mode' },
   { href: '/settings',   label: 'Settings' },
 ]
 
@@ -101,9 +103,14 @@ export function Sidebar() {
         ))}
       </div>
 
+      {/* Mode indicator */}
+      <div style={{ borderTop: '1px solid #f1f5f9' }}>
+        <SidebarModeIndicator />
+      </div>
+
       {/* Footer */}
       <div style={{
-        padding: '12px 20px',
+        padding: '8px 20px 12px',
         fontFamily: 'DM Mono, monospace',
         fontSize: 9,
         color: '#e2e8f0',
