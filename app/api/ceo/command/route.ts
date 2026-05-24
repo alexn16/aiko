@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { getAllModelConfigs } from '@/lib/models/config'
-import { delegateSearch } from '@/lib/web-operator/delegation'
+import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail } from '@/lib/web-operator/delegation'
 import type { DelegationResult } from '@/lib/web-operator/delegation'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
@@ -46,10 +46,42 @@ export async function POST(request: NextRequest) {
         if (askMatch) operatorName = askMatch[1]
       }
 
+      // Detect Gmail workflow intents
+      const lcCommand = command.trim().toLowerCase()
+      const isOpenGmail = lcCommand.includes('open gmail') || (lcCommand.includes('gmail') && !lcCommand.includes('draft') && !lcCommand.includes('send') && !lcCommand.includes('email to'))
+      const isPrepareEmail = !!(command.trim().match(/prepare.*(email|mail)|write.*(email|mail)|draft.*(email|mail)/i))
+      const isSendEmail = !!(command.trim().match(/\bsend\s+(it|the email|the draft|that)\b/i)) && !lcCommand.includes('send email to')
+      const emailToMatch = command.trim().match(/to\s+([\w.+-]+@[\w-]+\.\w+)/)
+      const emailTo = emailToMatch?.[1]
+      const subjectMatch = command.trim().match(/(?:subject|about|re:)\s+([^,\n.]{3,80})/i)
+      const emailSubject = subjectMatch?.[1]
+
       // Auto-delegate web research if intent detected
       let delegationResult: DelegationResult | null = null
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
-      if (needsWebResearch) {
+
+      if (isOpenGmail && operatorName) {
+        delegationResult = await delegateOpenGmail({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+        }).catch(() => null)
+      } else if (isPrepareEmail && operatorName && emailTo) {
+        delegationResult = await delegateGmailDraft({
+          to: emailTo,
+          subject: emailSubject ?? 'No subject',
+          body: command.trim(),
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+        }).catch(() => null)
+      } else if (isSendEmail && operatorName) {
+        delegationResult = await delegateSendGmail({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+        }).catch(() => null)
+      } else if (needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({
           query,
@@ -104,9 +136,41 @@ export async function POST(request: NextRequest) {
         if (askMatchLegacy) operatorNameLegacy = askMatchLegacy[1]
       }
 
+      // Detect Gmail workflow intents (legacy path)
+      const lcCommandLegacy = command.trim().toLowerCase()
+      const isOpenGmailLegacy = lcCommandLegacy.includes('open gmail') || (lcCommandLegacy.includes('gmail') && !lcCommandLegacy.includes('draft') && !lcCommandLegacy.includes('send') && !lcCommandLegacy.includes('email to'))
+      const isPrepareEmailLegacy = !!(command.trim().match(/prepare.*(email|mail)|write.*(email|mail)|draft.*(email|mail)/i))
+      const isSendEmailLegacy = !!(command.trim().match(/\bsend\s+(it|the email|the draft|that)\b/i)) && !lcCommandLegacy.includes('send email to')
+      const emailToMatchLegacy = command.trim().match(/to\s+([\w.+-]+@[\w-]+\.\w+)/)
+      const emailToLegacy = emailToMatchLegacy?.[1]
+      const subjectMatchLegacy = command.trim().match(/(?:subject|about|re:)\s+([^,\n.]{3,80})/i)
+      const emailSubjectLegacy = subjectMatchLegacy?.[1]
+
       let delegationResult: DelegationResult | null = null
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
-      if (needsWebResearch) {
+
+      if (isOpenGmailLegacy && operatorNameLegacy) {
+        delegationResult = await delegateOpenGmail({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName: operatorNameLegacy,
+        }).catch(() => null)
+      } else if (isPrepareEmailLegacy && operatorNameLegacy && emailToLegacy) {
+        delegationResult = await delegateGmailDraft({
+          to: emailToLegacy,
+          subject: emailSubjectLegacy ?? 'No subject',
+          body: command.trim(),
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName: operatorNameLegacy,
+        }).catch(() => null)
+      } else if (isSendEmailLegacy && operatorNameLegacy) {
+        delegationResult = await delegateSendGmail({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName: operatorNameLegacy,
+        }).catch(() => null)
+      } else if (needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({
           query,

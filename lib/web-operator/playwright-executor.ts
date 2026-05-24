@@ -2,6 +2,7 @@
 // Handles actual browser actions via the existing lib/browser/controller utilities.
 
 import type { Page, BrowserContext, BrowserContextOptions } from 'playwright'
+type GmailFillToResult = { success: boolean; output: Record<string, unknown> }
 import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
 import type { WebOperatorAction, WebOperatorActionType } from './web-operator'
@@ -215,6 +216,152 @@ export async function executeAction(opts: {
   }
 }
 
+// ── Gmail browser actions ───────────────────────────────────────────────────────
+
+async function executeOpenGmail(opts: { profileKey?: string }): Promise<ExecuteResult> {
+  const page = await getOperatorPage(opts.profileKey ?? 'default')
+  await withRetry(async () => {
+    await page.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+  }, 'open_url')
+
+  const url = page.url()
+  if (url.includes('accounts.google.com') || url.includes('signin') || url.includes('ServiceLogin')) {
+    const state = await capturePageState(page)
+    return {
+      success: false,
+      output: { error: 'Gmail login required. Please log in manually in the operator browser window.', url: state.url, login_required: true },
+      _page: { ...state, screenshot_url: null, is_sensitive: true },
+    } as unknown as ExecuteResult
+  }
+
+  const state = await capturePageState(page)
+  return {
+    output: { url: state.url, title: state.title },
+    _page: state,
+  }
+}
+
+async function executeDetectGmailLogin(opts: { profileKey?: string }): Promise<ExecuteResult> {
+  const page = await getOperatorPage(opts.profileKey ?? 'default')
+  const url = page.url()
+  const title = await page.title().catch(() => '')
+  const isLoggedIn = url.includes('mail.google.com') && !url.includes('accounts.google.com')
+  return {
+    output: { is_logged_in: isLoggedIn, url, title },
+    _page: { url, title, preview: '', screenshot_url: null, is_sensitive: false },
+  }
+}
+
+async function executeGmailFillTo(opts: { profileKey?: string; to: string }, page?: Page): Promise<GmailFillToResult> {
+  const p = page ?? await getOperatorPage(opts.profileKey ?? 'default')
+  const toSelectors = [
+    '[aria-label="To recipients"]',
+    'input[aria-label="To"]',
+    'textarea[name="to"]',
+    '[data-hovercard-id]',
+  ]
+  for (const sel of toSelectors) {
+    const el = p.locator(sel).first()
+    if (await el.count() > 0) {
+      await el.click()
+      await el.type(opts.to, { delay: 50 })
+      await p.keyboard.press('Tab')
+      return { success: true, output: { to: opts.to } }
+    }
+  }
+  throw new Error('Could not find To field — selector_not_found')
+}
+
+async function executeGmailFillSubject(opts: { profileKey?: string; subject: string }, page?: Page): Promise<GmailFillToResult> {
+  const p = page ?? await getOperatorPage(opts.profileKey ?? 'default')
+  const subjectEl = p.locator('input[name="subjectbox"], [aria-label="Subject"]').first()
+  await subjectEl.click()
+  await subjectEl.fill(opts.subject)
+  return { success: true, output: { subject: opts.subject } }
+}
+
+async function executeGmailFillBody(opts: { profileKey?: string; body: string }, page?: Page): Promise<GmailFillToResult> {
+  const p = page ?? await getOperatorPage(opts.profileKey ?? 'default')
+  const bodySelectors = [
+    'div[aria-label="Message Body"]',
+    'div[role="textbox"][aria-multiline="true"]',
+    'div.Am.Al.editable',
+  ]
+  for (const sel of bodySelectors) {
+    const el = p.locator(sel).first()
+    if (await el.count() > 0) {
+      await el.click()
+      await el.type(opts.body, { delay: 20 })
+      return { success: true, output: { body_length: opts.body.length } }
+    }
+  }
+  throw new Error('Could not find message body — selector_not_found')
+}
+
+async function executeCreateGmailDraft(opts: { profileKey?: string; to?: string; subject?: string; body?: string }): Promise<ExecuteResult> {
+  const page = await getOperatorPage(opts.profileKey ?? 'default')
+
+  if (!page.url().includes('mail.google.com')) {
+    await page.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+  }
+
+  const composeSelectors = [
+    '[gh="cm"]',
+    'div[role="button"][data-tooltip*="Compose"]',
+    'div.T-I.T-I-KE',
+    '[aria-label="Compose"]',
+  ]
+  let composed = false
+  for (const sel of composeSelectors) {
+    const btn = page.locator(sel).first()
+    if (await btn.count() > 0) {
+      await btn.click()
+      composed = true
+      break
+    }
+  }
+  if (!composed) {
+    throw new Error('Could not find Gmail Compose button — selector_not_found')
+  }
+
+  await page.waitForTimeout(1000)
+
+  if (opts.to) {
+    await executeGmailFillTo({ profileKey: opts.profileKey, to: opts.to }, page)
+  }
+  if (opts.subject) {
+    await executeGmailFillSubject({ profileKey: opts.profileKey, subject: opts.subject }, page)
+  }
+  if (opts.body) {
+    await executeGmailFillBody({ profileKey: opts.profileKey, body: opts.body }, page)
+  }
+
+  const state = await capturePageState(page)
+  return {
+    output: { composed: true, to: opts.to, subject: opts.subject },
+    _page: state,
+  }
+}
+
+async function executeSendGmailDraft(opts: { profileKey?: string }): Promise<ExecuteResult> {
+  const p = await getOperatorPage(opts.profileKey ?? 'default')
+  const sendSelectors = [
+    '[aria-label="Send ‪(Ctrl-Enter)‬"]',
+    'div[aria-label^="Send"]',
+    '.T-I-atl',
+  ]
+  for (const sel of sendSelectors) {
+    const el = p.locator(sel).first()
+    if (await el.count() > 0) {
+      await el.click()
+      await p.waitForTimeout(1500)
+      const state = await capturePageState(p)
+      return { output: { sent: true }, _page: state }
+    }
+  }
+  throw new Error('Could not find Gmail Send button — selector_not_found')
+}
+
 // ── Main executor ───────────────────────────────────────────────────────────────
 
 export async function executeWebAction(
@@ -340,6 +487,61 @@ export async function executeWebAction(
           retry_count: retryCount,
           _page: pageState,
         }
+      }
+
+      case 'open_gmail': {
+        await cleanup()
+        return executeOpenGmail({ profileKey: opts.profileKey })
+      }
+
+      case 'detect_gmail_login': {
+        await cleanup()
+        return executeDetectGmailLogin({ profileKey: opts.profileKey })
+      }
+
+      case 'create_email_draft': {
+        await cleanup()
+        return executeCreateGmailDraft({
+          profileKey: opts.profileKey,
+          to: opts.input?.to as string | undefined,
+          subject: opts.input?.subject as string | undefined,
+          body: opts.input?.body as string | undefined,
+        })
+      }
+
+      case 'fill_gmail_to': {
+        const result = await executeGmailFillTo({
+          profileKey: opts.profileKey,
+          to: String(opts.input?.to ?? ''),
+        })
+        const ps = await capturePageState(page)
+        await cleanup()
+        return { output: result.output, _page: ps }
+      }
+
+      case 'fill_gmail_subject': {
+        const result = await executeGmailFillSubject({
+          profileKey: opts.profileKey,
+          subject: String(opts.input?.subject ?? ''),
+        })
+        const ps = await capturePageState(page)
+        await cleanup()
+        return { output: result.output, _page: ps }
+      }
+
+      case 'fill_gmail_body': {
+        const result = await executeGmailFillBody({
+          profileKey: opts.profileKey,
+          body: String(opts.input?.body ?? ''),
+        })
+        const ps = await capturePageState(page)
+        await cleanup()
+        return { output: result.output, _page: ps }
+      }
+
+      case 'send_gmail_draft': {
+        await cleanup()
+        return executeSendGmailDraft({ profileKey: opts.profileKey })
       }
 
       default:

@@ -214,6 +214,47 @@ export default function OperatorsPage() {
                 </div>
               )}
 
+              {/* Waiting for user input */}
+              {op.requires_user_input && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  background: '#fffbeb', border: '1px solid #fde68a',
+                  borderRadius: 5, padding: '3px 8px', marginBottom: 8,
+                }}>
+                  <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>
+                    Waiting for user input
+                  </span>
+                  {op.waiting_reason && (
+                    <span style={{ fontSize: 10, color: '#78350f' }}>— {truncate(op.waiting_reason, 50)}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Current workflow chip */}
+              {op.current_workflow && (
+                <div style={{
+                  display: 'inline-block', padding: '2px 7px', borderRadius: 4,
+                  fontSize: 10, fontWeight: 600, background: '#ede9fe', color: '#6d28d9',
+                  marginBottom: 7, marginRight: 6,
+                }}>
+                  {op.current_workflow}
+                </div>
+              )}
+
+              {/* Current goal */}
+              {op.current_goal && (
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 5 }}>
+                  Goal: {truncate(op.current_goal, 60)}
+                </div>
+              )}
+
+              {/* Memory summary */}
+              {op.memory_summary && (
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5, fontStyle: 'italic' }}>
+                  {truncate(op.memory_summary, 80)}
+                </div>
+              )}
+
               {/* Current task */}
               {op.current_task && (
                 <div style={{ fontSize: 12, color: '#374151', marginBottom: 4 }}>

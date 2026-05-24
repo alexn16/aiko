@@ -88,12 +88,26 @@ export function WebOperatorCard() {
                 <span style={{ fontSize: 10, color: color, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
                   {op.status.replace(/_/g, ' ')}
                 </span>
-                {op.current_task && (
+                {op.requires_user_input && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 600,
+                    background: '#fef9c3', color: '#92400e',
+                    borderRadius: 4, padding: '1px 5px', flexShrink: 0,
+                  }}>
+                    needs input
+                  </span>
+                )}
+                {op.current_goal && !op.requires_user_input && (
+                  <span style={{ fontSize: 10, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {truncate(op.current_goal, 40)}
+                  </span>
+                )}
+                {op.current_task && !op.current_goal && (
                   <span style={{ fontSize: 10, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {truncate(op.current_task, 32)}
                   </span>
                 )}
-                {op.current_url && !op.current_task && (
+                {op.current_url && !op.current_task && !op.current_goal && (
                   <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'DM Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                     {truncate(op.current_url, 28)}
                   </span>

@@ -10,6 +10,7 @@ const ACTION_TYPES = [
   'search', 'open_url', 'read_page', 'click', 'type',
   'fill_form', 'create_email_draft', 'send_email', 'submit_form',
   'download_file', 'copy_data', 'login_required', 'approval_required', 'blocked',
+  'open_gmail', 'detect_gmail_login', 'fill_gmail_to', 'fill_gmail_subject', 'fill_gmail_body', 'send_gmail_draft',
 ]
 
 const STATUS_BADGE_COLOR: Record<string, string> = {

@@ -17,6 +17,12 @@ export interface WebOperator {
   current_session_id: string | null
   current_url: string | null
   current_task: string | null
+  current_goal: string | null
+  current_workflow: string | null
+  last_instruction: string | null
+  memory_summary: string | null
+  requires_user_input: boolean
+  waiting_reason: string | null
   created_at: string
   updated_at: string
   // joined
@@ -37,6 +43,12 @@ function rowToOperator(row: Record<string, unknown>): WebOperator {
     current_session_id: row.current_session_id ? String(row.current_session_id) : null,
     current_url: row.current_url ? String(row.current_url) : null,
     current_task: row.current_task ? String(row.current_task) : null,
+    current_goal: row.current_goal ? String(row.current_goal) : null,
+    current_workflow: row.current_workflow ? String(row.current_workflow) : null,
+    last_instruction: row.last_instruction ? String(row.last_instruction) : null,
+    memory_summary: row.memory_summary ? String(row.memory_summary) : null,
+    requires_user_input: Boolean(row.requires_user_input),
+    waiting_reason: row.waiting_reason ? String(row.waiting_reason) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     project_name: row.project_name ? String(row.project_name) : undefined,
@@ -80,6 +92,12 @@ export async function getOrCreateOperatorByName(name: string): Promise<WebOperat
       current_session_id: null,
       current_url: null,
       current_task: null,
+      current_goal: null,
+      current_workflow: null,
+      last_instruction: null,
+      memory_summary: null,
+      requires_user_input: false,
+      waiting_reason: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }
@@ -282,5 +300,123 @@ export async function resolveOperatorFromText(text: string): Promise<WebOperator
     return null
   } catch {
     return null
+  }
+}
+
+// ── Operator memory ────────────────────────────────────────────────────────────
+
+export async function updateOperatorMemory(
+  operator_id: string,
+  opts: {
+    current_goal?: string | null
+    current_workflow?: string | null
+    last_instruction?: string | null
+    memory_summary?: string | null
+    requires_user_input?: boolean
+    waiting_reason?: string | null
+  }
+): Promise<void> {
+  try {
+    const sets: string[] = []
+    const vals: unknown[] = []
+    let i = 1
+
+    if (opts.current_goal !== undefined) { sets.push(`current_goal=$${i++}`); vals.push(opts.current_goal) }
+    if (opts.current_workflow !== undefined) { sets.push(`current_workflow=$${i++}`); vals.push(opts.current_workflow) }
+    if (opts.last_instruction !== undefined) { sets.push(`last_instruction=$${i++}`); vals.push(opts.last_instruction) }
+    if (opts.memory_summary !== undefined) { sets.push(`memory_summary=$${i++}`); vals.push(opts.memory_summary) }
+    if (opts.requires_user_input !== undefined) { sets.push(`requires_user_input=$${i++}`); vals.push(opts.requires_user_input) }
+    if (opts.waiting_reason !== undefined) { sets.push(`waiting_reason=$${i++}`); vals.push(opts.waiting_reason) }
+
+    if (sets.length === 0) return
+    sets.push(`updated_at=NOW()`)
+    vals.push(operator_id)
+    await db.query(
+      `UPDATE web_operators SET ${sets.join(', ')} WHERE id=$${i}`,
+      vals
+    )
+  } catch {
+    // non-fatal
+  }
+}
+
+export async function getOperatorMemory(operator_id: string): Promise<{
+  current_goal: string | null
+  current_workflow: string | null
+  last_instruction: string | null
+  memory_summary: string | null
+  requires_user_input: boolean
+  waiting_reason: string | null
+  current_url: string | null
+  current_task: string | null
+} | null> {
+  try {
+    const result = await db.query(
+      `SELECT current_goal, current_workflow, last_instruction, memory_summary,
+              requires_user_input, waiting_reason, current_url, current_task
+       FROM web_operators WHERE id=$1`,
+      [operator_id]
+    )
+    if (!result.rows[0]) return null
+    const row = result.rows[0]
+    return {
+      current_goal: row.current_goal ? String(row.current_goal) : null,
+      current_workflow: row.current_workflow ? String(row.current_workflow) : null,
+      last_instruction: row.last_instruction ? String(row.last_instruction) : null,
+      memory_summary: row.memory_summary ? String(row.memory_summary) : null,
+      requires_user_input: Boolean(row.requires_user_input),
+      waiting_reason: row.waiting_reason ? String(row.waiting_reason) : null,
+      current_url: row.current_url ? String(row.current_url) : null,
+      current_task: row.current_task ? String(row.current_task) : null,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function summarizeOperatorState(operator_id: string): Promise<string> {
+  try {
+    const result = await db.query(
+      `SELECT name, status, current_url, current_task, current_goal, last_instruction,
+              current_workflow, requires_user_input, waiting_reason
+       FROM web_operators WHERE id=$1`,
+      [operator_id]
+    )
+    if (!result.rows[0]) return 'Operator not found'
+    const row = result.rows[0]
+    const name = String(row.name ?? 'Unknown')
+    const status = String(row.status ?? 'idle')
+    const workflow = row.current_workflow ? String(row.current_workflow) : null
+    const goal = row.current_goal ? String(row.current_goal) : null
+    const lastInstr = row.last_instruction ? String(row.last_instruction) : null
+    const waiting = Boolean(row.requires_user_input)
+    const waitReason = row.waiting_reason ? String(row.waiting_reason) : null
+    const url = row.current_url ? String(row.current_url) : null
+
+    const parts = [name, status]
+    if (workflow) parts.push(workflow)
+    if (goal) parts.push(`Goal: ${goal}`)
+    if (lastInstr) parts.push(`Last: ${lastInstr}`)
+    if (url && !goal) parts.push(url)
+    parts.push(waiting ? `Waiting: ${waitReason ?? 'user input needed'}` : 'Waiting: no')
+
+    return parts.join(' | ')
+  } catch {
+    return 'Operator state unavailable'
+  }
+}
+
+export async function clearOperatorWorkflow(operator_id: string): Promise<void> {
+  try {
+    await db.query(
+      `UPDATE web_operators
+       SET current_goal=NULL, current_workflow=NULL, last_instruction=NULL,
+           requires_user_input=false, waiting_reason=NULL,
+           current_task=NULL, status='idle', updated_at=NOW()
+       WHERE id=$1`,
+      [operator_id]
+    )
+  } catch {
+    // non-fatal
   }
 }

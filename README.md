@@ -444,6 +444,30 @@ Name an operator in CEO Chat or PM Chat to route tasks to them:
 
 Each operator's browser profile is isolated — cookies and login sessions never mix between operators. Profiles are persisted in `.operator-profiles/` at the project root.
 
+### Operator memory
+
+Each operator maintains memory across instructions:
+- **current_goal** — what the operator is working toward
+- **current_workflow** — active context (gmail, research, etc.)
+- **last_instruction** — most recent task
+- **requires_user_input** — true when operator is waiting for login, CAPTCHA, or verification
+- **waiting_reason** — explanation of what the operator needs
+
+### Gmail browser workflow
+
+The Web Operator can operate Gmail through the browser — no Gmail API required.
+
+**Supported actions:** `open_gmail` → `detect_gmail_login` → `create_email_draft` → `fill_gmail_to` → `fill_gmail_subject` → `fill_gmail_body` → `send_gmail_draft`
+
+**Login:** If Gmail is not logged in, the operator stops and sets `requires_user_input = true`. The user must log in manually — the operator never bypasses login, CAPTCHA, or phone verification.
+
+**Sending:** `send_gmail_draft` requires Full Access mode. In Auto/Approval mode, sending stops and creates an approval item.
+
+**Example flow:**
+> "Kevin, open Gmail." → Kevin opens mail.google.com in his isolated browser
+> "Kevin, prepare an email to maria@company.com about ALB Parking." → Kevin composes the draft
+> "Kevin, send it." → (Full Access) Kevin clicks Send | (Auto mode) Approval item created
+
 **UI:** `/operators` — manage all operators, view their status, screenshots, and actions
 
 **API:**

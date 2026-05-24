@@ -13,6 +13,7 @@ import {
   getWebOperatorByName,
   createWebOperator,
   updateOperatorStatus,
+  updateOperatorMemory,
 } from '@/lib/web-operator/operators'
 import type { WebOperator } from '@/lib/web-operator/operators'
 
@@ -201,6 +202,34 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     }).catch(() => {})
   }
 
+  // Update operator memory after action
+  if (operator?.id) {
+    const actionOutput = result.action?.output ?? {}
+    const isGmailAction = req.actionType.startsWith('open_gmail') ||
+      req.actionType.startsWith('fill_gmail') ||
+      req.actionType === 'detect_gmail_login' ||
+      req.actionType === 'create_email_draft' ||
+      req.actionType === 'send_gmail_draft'
+
+    if (result.success) {
+      await updateOperatorMemory(operator.id, {
+        last_instruction: req.instruction,
+        current_workflow: isGmailAction ? 'gmail' : (req.actionType === 'search' ? 'research' : undefined),
+        current_goal: req.instruction,
+        requires_user_input: false,
+        waiting_reason: null,
+      }).catch(() => {})
+    }
+
+    // If login_required in result output
+    if (actionOutput.login_required) {
+      await updateOperatorMemory(operator.id, {
+        requires_user_input: true,
+        waiting_reason: String(actionOutput.error ?? 'Login required'),
+      }).catch(() => {})
+    }
+  }
+
   // Handle waiting_approval
   if (result.waiting_approval) {
     return {
@@ -374,5 +403,67 @@ export async function delegateExternalAction(opts: {
     payload: opts.payload,
     reason: 'Delegated external action',
     operatorName: opts.operatorName,
+  })
+}
+
+// ── Gmail delegation helpers ───────────────────────────────────────────────────
+
+export async function delegateOpenGmail(opts: {
+  projectId?: string
+  requestedByRole: string
+  operatorName?: string
+}): Promise<DelegationResult> {
+  return delegateToWebOperator({
+    operatorName: opts.operatorName,
+    projectId: opts.projectId,
+    requestedByRole: opts.requestedByRole,
+    actionType: 'open_gmail',
+    instruction: 'Open Gmail in browser',
+    reason: 'Email workflow',
+  })
+}
+
+export async function delegateGmailDraft(opts: {
+  to: string
+  subject: string
+  body: string
+  projectId?: string
+  requestedByRole: string
+  operatorName?: string
+}): Promise<DelegationResult> {
+  return delegateToWebOperator({
+    operatorName: opts.operatorName,
+    projectId: opts.projectId,
+    requestedByRole: opts.requestedByRole,
+    actionType: 'create_email_draft',
+    instruction: `Prepare Gmail draft to ${opts.to}`,
+    payload: { to: opts.to, subject: opts.subject, body: opts.body },
+    reason: 'Email draft preparation',
+  })
+}
+
+export async function delegateSendGmail(opts: {
+  projectId?: string
+  requestedByRole: string
+  operatorName?: string
+}): Promise<DelegationResult> {
+  const modeCheck = await canPerformAction('send_email')
+  if (!modeCheck.allowed) {
+    return { status: 'blocked', message: modeCheck.reason, error: modeCheck.reason }
+  }
+  if (modeCheck.mode === 'auto_approval') {
+    return {
+      status: 'approval_required',
+      message: 'Sending email requires approval. Go to the Approval Center to authorize this send.',
+    }
+  }
+  // full_access: proceed
+  return delegateToWebOperator({
+    operatorName: opts.operatorName,
+    projectId: opts.projectId,
+    requestedByRole: opts.requestedByRole,
+    actionType: 'send_gmail_draft',
+    instruction: 'Send Gmail draft',
+    reason: 'Approved email send',
   })
 }
