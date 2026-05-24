@@ -500,3 +500,11 @@ CEO/PM Chat
 2. **Web Operator Gmail/email workflow** — implement `create_email_draft` action type fully: Web Operator opens Gmail/Outlook in browser, fills recipient/subject/body from task output, saves draft, shows screenshot, creates approval item. If Full Access and approved: clicks send.
 
 3. **Lead extraction from research** — when Web Operator completes a search or read_page action, automatically extract company names, URLs, contacts from the output and create lead records. Closes the research → leads pipeline gap.
+
+### Web Operator reliability — 2026-05-24
+- Screenshots per action (non-sensitive)
+- Page state capture (URL, title, preview) after each action
+- Session recovery on browser crash
+- Safe retry for search/open_url/read_page/copy_data
+- Structured failure reasons
+- /operator page shows screenshots and page state

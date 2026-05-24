@@ -427,6 +427,13 @@ The CEO and PM chat automatically detect web research intent and delegate to the
 
 **`lib/web-operator/delegation.ts`:** `delegateToWebOperator`, `delegateSearch`, `delegateReadWebsite`, `delegateEmailDraft`, `delegateExternalAction`
 
+### Reliability features
+- **Screenshots** — captured after every action (open_url, search, read_page, click, fill_form). Stored in `/public/screenshots/`. Sensitive pages (login, auth) are flagged and not displayed.
+- **Session recovery** — if the browser crashes or closes, the Web Operator detects it and restarts the session automatically for safe actions.
+- **Safe retry** — non-risky actions (search, open_url, read_page, copy_data) are retried once on failure.
+- **Structured failure reasons** — `navigation_timeout`, `network_error`, `selector_not_found`, `browser_not_available`, `access_blocked`, `unknown_error`
+- **Page state capture** — after each action, the current URL, page title, and a text preview are saved.
+
 ## Tool Connections (`/tools`)
 
 AÏKO uses external tools to execute real research. Tools are only available in Auto/Approval Required or Full Access mode.

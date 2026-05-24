@@ -1,0 +1,10 @@
+ALTER TABLE web_operator_sessions
+  ADD COLUMN IF NOT EXISTS page_title TEXT,
+  ADD COLUMN IF NOT EXISTS recovery_count INT NOT NULL DEFAULT 0;
+
+ALTER TABLE web_operator_actions
+  ADD COLUMN IF NOT EXISTS page_title TEXT,
+  ADD COLUMN IF NOT EXISTS page_preview TEXT,
+  ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS failure_reason TEXT,
+  ADD COLUMN IF NOT EXISTS is_sensitive BOOLEAN NOT NULL DEFAULT false;

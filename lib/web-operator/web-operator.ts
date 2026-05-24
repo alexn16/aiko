@@ -16,12 +16,14 @@ export interface WebOperatorSession {
   id: string
   status: string
   current_url: string | null
+  page_title: string | null
   project_id: string | null
   agent_role: string
   permission_mode: string
   started_at: string
   ended_at: string | null
   last_error: string | null
+  recovery_count: number
 }
 
 export interface WebOperatorAction {
@@ -36,6 +38,11 @@ export interface WebOperatorAction {
   input: Record<string, unknown>
   output: Record<string, unknown>
   screenshot_url: string | null
+  page_title: string | null
+  page_preview: string | null
+  retry_count: number
+  failure_reason: string | null
+  is_sensitive: boolean
   requires_approval: boolean
   approval_item_id: string | null
   source_task_id: string | null
@@ -173,6 +180,11 @@ export async function updateWebOperatorAction(
     status: string
     output: Record<string, unknown>
     screenshot_url: string | null
+    page_title: string | null
+    page_preview: string | null
+    retry_count: number
+    failure_reason: string | null
+    is_sensitive: boolean
     completed_at: string
     approval_item_id: string | null
   }>
@@ -184,6 +196,11 @@ export async function updateWebOperatorAction(
   if (fields.status !== undefined) { sets.push(`status=$${idx++}`); values.push(fields.status) }
   if (fields.output !== undefined) { sets.push(`output=$${idx++}`); values.push(JSON.stringify(fields.output)) }
   if (fields.screenshot_url !== undefined) { sets.push(`screenshot_url=$${idx++}`); values.push(fields.screenshot_url) }
+  if (fields.page_title !== undefined) { sets.push(`page_title=$${idx++}`); values.push(fields.page_title) }
+  if (fields.page_preview !== undefined) { sets.push(`page_preview=$${idx++}`); values.push(fields.page_preview) }
+  if (fields.retry_count !== undefined) { sets.push(`retry_count=$${idx++}`); values.push(fields.retry_count) }
+  if (fields.failure_reason !== undefined) { sets.push(`failure_reason=$${idx++}`); values.push(fields.failure_reason) }
+  if (fields.is_sensitive !== undefined) { sets.push(`is_sensitive=$${idx++}`); values.push(fields.is_sensitive) }
   if (fields.completed_at !== undefined) { sets.push(`completed_at=$${idx++}`); values.push(fields.completed_at) }
   if (fields.approval_item_id !== undefined) { sets.push(`approval_item_id=$${idx++}`); values.push(fields.approval_item_id) }
 
@@ -291,6 +308,7 @@ export async function runWebOperatorAction(opts: {
     await updateWebOperatorAction(action.id, {
       status: 'failed',
       output: { error: 'Browser runtime not configured. Install and configure Playwright to enable web automation.' },
+      failure_reason: 'browser_not_available',
       completed_at: new Date().toISOString(),
     })
     return { success: false, action, error: 'Browser runtime not configured.' }
@@ -299,22 +317,63 @@ export async function runWebOperatorAction(opts: {
   // 5. Execute via browser runtime
   // Playwright is available — route to executor
   try {
-    const { executeWebAction } = await import('./playwright-executor')
-    const result = await executeWebAction(action, opts)
+    const { executeWebAction, recoverSession } = await import('./playwright-executor')
+    let result
+    try {
+      result = await executeWebAction(action, opts)
+    } catch (execErr) {
+      // If browser crashed, attempt session recovery and retry once
+      const reason = (execErr as { failure_reason?: string }).failure_reason ?? 'unknown_error'
+      if (reason === 'browser_not_available' && opts.session_id) {
+        const recovery = await recoverSession()
+        if (recovery.success) {
+          // Increment session recovery_count
+          await db.query(
+            `UPDATE web_operator_sessions SET recovery_count = recovery_count + 1 WHERE id=$1`,
+            [opts.session_id]
+          ).catch(() => {})
+          result = await executeWebAction(action, opts)
+        } else {
+          throw execErr
+        }
+      } else {
+        throw execErr
+      }
+    }
+
+    // Extract page state from result, strip _page from stored output
+    const pageState = result._page
+    const cleanOutput = { ...result.output }
+
     await updateWebOperatorAction(action.id, {
       status: 'completed',
-      output: result.output,
-      screenshot_url: result.screenshot_url ?? null,
+      output: cleanOutput,
+      screenshot_url: pageState?.screenshot_url ?? result.screenshot_url ?? null,
+      page_title: pageState?.title ?? null,
+      page_preview: pageState?.preview ?? null,
+      is_sensitive: pageState?.is_sensitive ?? false,
+      retry_count: result.retry_count ?? 0,
       completed_at: new Date().toISOString(),
     })
+
+    // Update session current_url and page_title if we have page state
+    if (pageState?.url && opts.session_id) {
+      await db.query(
+        `UPDATE web_operator_sessions SET current_url=$1, page_title=$2 WHERE id=$3`,
+        [pageState.url, pageState.title ?? null, opts.session_id]
+      ).catch(() => {})
+    }
+
     // Refresh and return updated action
     const updated = await db.query(`SELECT * FROM web_operator_actions WHERE id=$1`, [action.id])
     return { success: true, action: updated.rows[0] ? rowToAction(updated.rows[0]) : action }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
+    const failure_reason = (err as { failure_reason?: string }).failure_reason ?? 'unknown_error'
     await updateWebOperatorAction(action.id, {
       status: 'failed',
       output: { error: errMsg },
+      failure_reason,
       completed_at: new Date().toISOString(),
     })
     return { success: false, action, error: errMsg }
@@ -363,12 +422,14 @@ function rowToSession(row: Record<string, unknown>): WebOperatorSession {
     id: String(row.id),
     status: String(row.status),
     current_url: row.current_url ? String(row.current_url) : null,
+    page_title: row.page_title ? String(row.page_title) : null,
     project_id: row.project_id ? String(row.project_id) : null,
     agent_role: String(row.agent_role),
     permission_mode: String(row.permission_mode),
     started_at: String(row.started_at),
     ended_at: row.ended_at ? String(row.ended_at) : null,
     last_error: row.last_error ? String(row.last_error) : null,
+    recovery_count: typeof row.recovery_count === 'number' ? row.recovery_count : parseInt(String(row.recovery_count ?? '0'), 10),
   }
 }
 
@@ -385,6 +446,11 @@ function rowToAction(row: Record<string, unknown>): WebOperatorAction {
     input: typeof row.input === 'object' && row.input !== null ? row.input as Record<string, unknown> : {},
     output: typeof row.output === 'object' && row.output !== null ? row.output as Record<string, unknown> : {},
     screenshot_url: row.screenshot_url ? String(row.screenshot_url) : null,
+    page_title: row.page_title ? String(row.page_title) : null,
+    page_preview: row.page_preview ? String(row.page_preview) : null,
+    retry_count: typeof row.retry_count === 'number' ? row.retry_count : parseInt(String(row.retry_count ?? '0'), 10),
+    failure_reason: row.failure_reason ? String(row.failure_reason) : null,
+    is_sensitive: Boolean(row.is_sensitive),
     requires_approval: Boolean(row.requires_approval),
     approval_item_id: row.approval_item_id ? String(row.approval_item_id) : null,
     source_task_id: row.source_task_id ? String(row.source_task_id) : null,

@@ -271,6 +271,15 @@ export default function OperatorPage() {
             {activeSession.current_url && (
               <> · <span style={{ color: '#6366f1' }}>{truncate(activeSession.current_url, 40)}</span></>
             )}
+            {(activeSession as { recovery_count?: number }).recovery_count && (activeSession as { recovery_count?: number }).recovery_count! > 0 ? (
+              <span style={{
+                marginLeft: 8, fontSize: 9, fontWeight: 600,
+                background: '#fef3c7', color: '#92400e',
+                borderRadius: 4, padding: '1px 5px',
+              }}>
+                Recovered {(activeSession as { recovery_count?: number }).recovery_count}x
+              </span>
+            ) : null}
           </div>
         )}
 
@@ -286,6 +295,42 @@ export default function OperatorPage() {
           PAUSE
         </button>
       </div>
+
+      {/* Current State card — shows when there's an active session with page state */}
+      {activeSession && (activeSession.current_url || (activeSession as { page_title?: string | null }).page_title) && (() => {
+        const lastScreenshot = recentActions.find(a => a.screenshot_url && !(a as { is_sensitive?: boolean }).is_sensitive)?.screenshot_url ?? null
+        return (
+          <div style={{ ...CARD, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            {lastScreenshot && (
+              <img
+                src={lastScreenshot}
+                alt="Last page screenshot"
+                style={{ width: 120, height: 75, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0', flexShrink: 0 }}
+              />
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 }}>
+                Current State
+              </div>
+              {activeSession.current_url && (
+                <div style={{ fontSize: 12, color: '#6366f1', fontFamily: 'DM Mono, monospace', marginBottom: 2 }}>
+                  {truncate(activeSession.current_url, 60)}
+                </div>
+              )}
+              {(activeSession as { page_title?: string | null }).page_title && (
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+                  {truncate((activeSession as { page_title?: string | null }).page_title, 70)}
+                </div>
+              )}
+              {(activeSession as { recovery_count?: number }).recovery_count && (activeSession as { recovery_count?: number }).recovery_count! > 0 ? (
+                <div style={{ fontSize: 10, color: '#92400e' }}>
+                  Session recovered {(activeSession as { recovery_count?: number }).recovery_count} time(s)
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Browser runtime notice */}
       {!browserAvailable && (
@@ -457,7 +502,7 @@ export default function OperatorPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr style={{ background: '#fafafa' }}>
-                  {['Time', 'Type', 'Role', 'URL', 'Status', 'Description'].map(h => (
+                  {['Time', 'Type', 'Role', 'URL / Page', 'Status', 'Description', 'Preview'].map(h => (
                     <th key={h} style={{
                       padding: '7px 10px', textAlign: 'left', fontWeight: 600,
                       color: '#94a3b8', borderBottom: '1px solid #f1f5f9',
@@ -480,14 +525,40 @@ export default function OperatorPage() {
                     <td style={{ padding: '8px 10px', color: '#64748b' }}>
                       {action.agent_role}
                     </td>
-                    <td style={{ padding: '8px 10px', color: '#6366f1', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {truncate(action.target_url, 32)}
+                    <td style={{ padding: '8px 10px', color: '#6366f1', maxWidth: 180 }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                        {truncate(action.target_url, 32)}
+                      </div>
+                      {(action as { page_title?: string | null }).page_title && (
+                        <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                          {truncate((action as { page_title?: string | null }).page_title, 36)}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '8px 10px' }}>
                       <StatusBadge status={action.status} />
+                      {(action as { failure_reason?: string | null }).failure_reason && (
+                        <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>
+                          {(action as { failure_reason?: string | null }).failure_reason}
+                        </div>
+                      )}
+                      {(action as { is_sensitive?: boolean }).is_sensitive && (
+                        <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, background: '#f1f5f9', borderRadius: 3, padding: '1px 4px', display: 'inline-block' }}>
+                          Sensitive
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '8px 10px', color: '#374151', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {action.description}
+                    </td>
+                    <td style={{ padding: '8px 10px' }}>
+                      {action.screenshot_url && !(action as { is_sensitive?: boolean }).is_sensitive && (
+                        <img
+                          src={action.screenshot_url}
+                          alt="Page screenshot"
+                          style={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 4, border: '1px solid #e2e8f0' }}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))}

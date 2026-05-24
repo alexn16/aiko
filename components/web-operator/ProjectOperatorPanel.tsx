@@ -317,8 +317,20 @@ export function ProjectOperatorPanel({ projectId }: Props) {
                 <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#6366f1', flexShrink: 0 }}>
                   {action.action_type}
                 </div>
-                <div style={{ flex: 1, fontSize: 11, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {action.description}
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 11, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {action.description}
+                  </div>
+                  {(action as { page_title?: string | null }).page_title && (
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {truncate((action as { page_title?: string | null }).page_title, 44)}
+                    </div>
+                  )}
+                  {(action as { failure_reason?: string | null }).failure_reason && (
+                    <div style={{ fontSize: 9, color: '#ef4444', marginTop: 1 }}>
+                      {(action as { failure_reason?: string | null }).failure_reason}
+                    </div>
+                  )}
                 </div>
                 {action.target_url && (
                   <div style={{ fontSize: 9, color: '#94a3b8', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>
@@ -326,6 +338,13 @@ export function ProjectOperatorPanel({ projectId }: Props) {
                   </div>
                 )}
                 <StatusBadge status={action.status} />
+                {action.screenshot_url && !(action as { is_sensitive?: boolean }).is_sensitive && (
+                  <img
+                    src={action.screenshot_url}
+                    alt="Page screenshot"
+                    style={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 4, border: '1px solid #e2e8f0', flexShrink: 0 }}
+                  />
+                )}
               </div>
             ))}
           </div>

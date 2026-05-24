@@ -110,22 +110,43 @@ export function WebOperatorCard() {
           <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
             Latest action
           </div>
-          <div style={{ fontSize: 12, color: '#374151' }}>
-            <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#6366f1', marginRight: 6 }}>
-              {latestAction.action_type}
-            </span>
-            {truncate(latestAction.description)}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            {latestAction.screenshot_url && !(latestAction as { is_sensitive?: boolean }).is_sensitive && (
+              <img
+                src={latestAction.screenshot_url}
+                alt="Page screenshot"
+                style={{ width: 60, height: 40, objectFit: 'cover', borderRadius: 4, border: '1px solid #e2e8f0', flexShrink: 0 }}
+              />
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, color: '#374151' }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#6366f1', marginRight: 6 }}>
+                  {latestAction.action_type}
+                </span>
+                {truncate(latestAction.description)}
+              </div>
+              {latestAction.requested_by_role && (
+                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                  Requested by: <span style={{ color: '#475569', fontWeight: 500 }}>{latestAction.requested_by_role}</span>
+                </div>
+              )}
+              {latestAction.target_url && (
+                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, fontFamily: 'DM Mono, monospace' }}>
+                  {truncate(latestAction.target_url, 40)}
+                </div>
+              )}
+              {(latestAction as { page_title?: string | null }).page_title && (
+                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                  {truncate((latestAction as { page_title?: string | null }).page_title, 30)}
+                </div>
+              )}
+              {(latestAction as { failure_reason?: string | null }).failure_reason && (
+                <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>
+                  {(latestAction as { failure_reason?: string | null }).failure_reason}
+                </div>
+              )}
+            </div>
           </div>
-          {latestAction.requested_by_role && (
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
-              Requested by: <span style={{ color: '#475569', fontWeight: 500 }}>{latestAction.requested_by_role}</span>
-            </div>
-          )}
-          {latestAction.target_url && (
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2, fontFamily: 'DM Mono, monospace' }}>
-              {truncate(latestAction.target_url)}
-            </div>
-          )}
         </div>
       )}
 
@@ -137,6 +158,18 @@ export function WebOperatorCard() {
           {session.current_url && (
             <> · <span style={{ color: '#475569' }}>{truncate(session.current_url, 36)}</span></>
           )}
+          {(session as { page_title?: string | null }).page_title && (
+            <> · <span style={{ color: '#64748b' }}>{truncate((session as { page_title?: string | null }).page_title, 30)}</span></>
+          )}
+          {(session as { recovery_count?: number }).recovery_count && (session as { recovery_count?: number }).recovery_count! > 0 ? (
+            <span style={{
+              marginLeft: 6, fontSize: 9, fontWeight: 600,
+              background: '#fef3c7', color: '#92400e',
+              borderRadius: 3, padding: '1px 4px',
+            }}>
+              Recovered
+            </span>
+          ) : null}
         </div>
       )}
 
