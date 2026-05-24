@@ -62,14 +62,137 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// ── AddToCampaignButton ────────────────────────────────────────────────────────
+
+function AddToCampaignButton({ item, projects }: { item: ApprovalItem; projects: Project[] }) {
+  const [open, setOpen] = useState(false)
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([])
+  const [selectedCampaign, setSelectedCampaign] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+  const [added, setAdded] = useState(false)
+
+  async function loadCampaigns() {
+    if (!item.project_id) return
+    try {
+      const res = await fetch(`/api/campaigns?project_id=${item.project_id}`)
+      const data = await res.json()
+      if (data.campaigns) {
+        setCampaigns(data.campaigns)
+        if (data.campaigns[0]?.id) setSelectedCampaign(data.campaigns[0].id)
+      }
+    } catch {
+      // silently fail
+    }
+  }
+
+  function handleOpen() {
+    if (!open) loadCampaigns()
+    setOpen(v => !v)
+  }
+
+  async function handleAdd() {
+    if (!selectedCampaign) return
+    setLoading(true)
+    try {
+      await fetch(`/api/campaigns/${selectedCampaign}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approval_item_id: item.id }),
+      })
+      setAdded(true)
+      setOpen(false)
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (item.status !== 'approved') return null
+
+  return (
+    <div style={{ display: 'inline-block' }}>
+      {added ? (
+        <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 500 }}>Added to campaign</span>
+      ) : (
+        <>
+          <button
+            onClick={handleOpen}
+            style={{
+              fontSize: 11, fontWeight: 500, padding: '4px 10px', borderRadius: 5,
+              border: '1px solid #d1fae5', background: '#f0fdf4', color: '#15803d',
+              cursor: 'pointer',
+            }}
+          >
+            Add to campaign
+          </button>
+          {open && campaigns.length > 0 && (
+            <div style={{
+              position: 'absolute', zIndex: 50, background: '#ffffff',
+              border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.08)', marginTop: 4, minWidth: 200,
+            }}>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>Select campaign:</div>
+              <select
+                value={selectedCampaign}
+                onChange={e => setSelectedCampaign(e.target.value)}
+                style={{
+                  width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 5,
+                  border: '1px solid #e2e8f0', outline: 'none', marginBottom: 8,
+                }}
+              >
+                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  onClick={handleAdd}
+                  disabled={loading}
+                  style={{
+                    fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5,
+                    border: 'none', background: '#16a34a', color: '#ffffff', cursor: 'pointer',
+                    opacity: loading ? 0.6 : 1,
+                  }}
+                >
+                  {loading ? 'Adding…' : 'Add'}
+                </button>
+                <button
+                  onClick={() => setOpen(false)}
+                  style={{
+                    fontSize: 11, padding: '4px 8px', borderRadius: 5,
+                    border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {open && campaigns.length === 0 && (
+            <div style={{
+              position: 'absolute', zIndex: 50, background: '#ffffff',
+              border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.08)', marginTop: 4, minWidth: 200,
+              fontSize: 11, color: '#94a3b8',
+            }}>
+              No campaigns for this project yet.
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── ApprovalCard ───────────────────────────────────────────────────────────────
 
 function ApprovalCard({
   item,
   onStatusUpdate,
+  projects,
 }: {
   item: ApprovalItem
   onStatusUpdate: (id: string, status: string, opts?: { review_note?: string; content?: string }) => Promise<void>
+  projects: Project[]
 }) {
   const [expanded, setExpanded] = useState(false)
   const [editedContent, setEditedContent] = useState(item.content)
@@ -197,6 +320,13 @@ function ApprovalCard({
         }}>
           {item.status.replace(/_/g, ' ')} on {formatDate(item.reviewed_at)}
           {item.review_note && <span> — "{item.review_note}"</span>}
+        </div>
+      )}
+
+      {/* Add to campaign — for approved items */}
+      {item.status === 'approved' && (
+        <div style={{ marginBottom: 8, position: 'relative' }}>
+          <AddToCampaignButton item={item} projects={projects} />
         </div>
       )}
 
@@ -434,6 +564,7 @@ export default function ApprovalsPage() {
               key={item.id}
               item={item}
               onStatusUpdate={handleStatusUpdate}
+              projects={projects}
             />
           ))}
         </div>

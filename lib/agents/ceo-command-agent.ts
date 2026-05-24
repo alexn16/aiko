@@ -4,6 +4,7 @@ import { createInstruction } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForCompany } from '@/lib/approvals'
+import { getCampaignSummaryForCompany } from '@/lib/campaigns'
 
 export interface CEOCommandResult {
   response: string
@@ -64,7 +65,7 @@ Rules:
 - response must always be natural language — never raw JSON, never bullet points, never technical field names`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -87,6 +88,7 @@ async function buildCompanyContext(): Promise<string> {
     getTaskSummaryForCompany(),
     getOutputSummaryForCompany(),
     getApprovalSummaryForCompany(),
+    getCampaignSummaryForCompany(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -124,6 +126,13 @@ async function buildCompanyContext(): Promise<string> {
       pending: approvalSummary.pending,
       approved: approvalSummary.approved,
       changes_requested: approvalSummary.changes_requested,
+    },
+    campaign_summary: {
+      total: campaignSummary.total,
+      draft: campaignSummary.by_status['draft'] ?? 0,
+      ready_for_review: campaignSummary.by_status['ready_for_review'] ?? 0,
+      approved: campaignSummary.by_status['approved'] ?? 0,
+      active: campaignSummary.by_status['active'] ?? 0,
     },
   }
 

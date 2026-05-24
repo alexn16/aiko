@@ -208,6 +208,39 @@ External-facing outputs (outreach drafts, campaign proposals, approval items) au
 
 **Safety:** Approving an item is internal permission only. It does not send any external emails or messages. External sends remain a separate explicit action.
 
+## Campaign Builder (`/campaigns`)
+
+Approved outputs and approval items can be organized into structured marketing campaigns.
+
+**Flow:**
+1. Outputs and approval items are approved in the Approval Center
+2. PM builds a campaign manually or generates one via AI from all approved assets
+3. Campaign items are sequenced and reviewed
+4. Campaign is approved internally
+5. Launching/sending remains a future explicit action
+
+**Campaign statuses:** draft → ready_for_review → approved → active → paused → completed → archived
+
+**Channels:** email, linkedin, instagram, content, mixed, manual
+
+**AI generation:** `POST /api/campaigns/generate` — builds a full campaign plan from all approved project outputs
+
+**UI:**
+- `/campaigns` — campaign list with filters and status controls
+- `/campaigns/[id]` — campaign detail with sequenced items
+- **Project workspace → Campaigns tab** — project-scoped campaign management
+
+**API:**
+- `GET /api/campaigns` — list campaigns
+- `POST /api/campaigns` — create campaign
+- `GET /api/campaigns/[id]` — campaign detail with items
+- `PATCH /api/campaigns/[id]` — update campaign
+- `POST /api/campaigns/[id]/items` — add approved output/approval item
+- `PATCH /api/campaigns/[id]/items/[itemId]` — update item
+- `POST /api/campaigns/generate` — AI-generate campaign from approved assets
+
+**Safety:** Campaign approval is internal only. No emails or messages are sent. Launching externally requires a separate, future explicit action.
+
 ## Core architecture
 
 - **Frontend**: Next.js App Router (`app/`)

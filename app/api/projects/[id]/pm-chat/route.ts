@@ -3,6 +3,7 @@ import { db } from '@/lib/db/client'
 import { callAI, getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { getTaskSummaryForProject } from '@/lib/agents/tasks'
 import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
+import { getCampaignSummaryForProject } from '@/lib/campaigns'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 
@@ -24,8 +25,13 @@ async function buildProjectContext(projectId: string): Promise<{
     pending_approval_count: number
     recent_titles: string[]
   }
+  campaign_summary: {
+    total: number
+    by_status: Record<string, number>
+    active_names: string[]
+  }
 }> {
-  const [projectRes, memRes, agentRes, activityRes, reportRes, approvalRes, taskSummary, outputSummary] = await Promise.all([
+  const [projectRes, memRes, agentRes, activityRes, reportRes, approvalRes, taskSummary, outputSummary, campaignSummary] = await Promise.all([
     db.query(`
       SELECT p.*, pm.id AS pm_id, pm.name AS pm_name,
              pm.specialty AS pm_specialty, pm.current_focus AS pm_focus
@@ -53,6 +59,7 @@ async function buildProjectContext(projectId: string): Promise<{
     `, [projectId]),
     getTaskSummaryForProject(projectId),
     getOutputSummaryForProject(projectId),
+    getCampaignSummaryForProject(projectId),
   ])
 
   const project = projectRes.rows[0] ?? null
@@ -73,6 +80,11 @@ async function buildProjectContext(projectId: string): Promise<{
       total: outputSummary.total,
       pending_approval_count: outputSummary.pending_approval.length,
       recent_titles: outputSummary.recent.slice(0, 3).map(o => o.title),
+    },
+    campaign_summary: {
+      total: campaignSummary.total,
+      by_status: campaignSummary.by_status,
+      active_names: campaignSummary.active.map(c => c.name),
     },
   }
 }
@@ -99,6 +111,9 @@ function buildSystemPrompt(ctx: Awaited<ReturnType<typeof buildProjectContext>>)
   const outputStr = ctx.output_summary.total > 0
     ? `${ctx.output_summary.total} total outputs, ${ctx.output_summary.pending_approval_count} pending approval${ctx.output_summary.recent_titles.length > 0 ? `; recent: ${ctx.output_summary.recent_titles.join(', ')}` : ''}`
     : 'no outputs yet'
+  const campaignStr = ctx.campaign_summary.total > 0
+    ? `${ctx.campaign_summary.total} campaigns — ${JSON.stringify(ctx.campaign_summary.by_status)}${ctx.campaign_summary.active_names.length > 0 ? `; active: ${ctx.campaign_summary.active_names.join(', ')}` : ''}`
+    : 'no campaigns yet'
 
   return `You are ${pm}, Project Manager for ${projectName} at AÏKO, an AI marketing company.
 
@@ -120,6 +135,7 @@ Agents available: ${agentList || 'None assigned yet'}
 Approvals: ${pendingStr}
 Tasks: ${taskStr}
 Outputs: ${outputStr}
+Campaigns: ${campaignStr}
 
 Your responsibilities:
 - Manage marketing execution for ${projectName} only

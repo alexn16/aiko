@@ -6,6 +6,7 @@ import { InternalCommsPanel } from '@/components/agents/InternalCommsPanel'
 import { TasksPanel } from '@/components/agents/TasksPanel'
 import { OutputsPanel } from '@/components/agents/OutputsPanel'
 import { ProjectApprovalsPanel } from '@/components/approvals/ProjectApprovalsPanel'
+import { ProjectCampaignsPanel } from '@/components/campaigns/ProjectCampaignsPanel'
 import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -59,7 +60,7 @@ interface Props {
   hasProvider: boolean
 }
 
-type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals'
+type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns'
 
 const STATUS_DOT: Record<string, string> = {
   active: '#10b981', browsing: '#3b82f6', writing: '#f59e0b',
@@ -101,6 +102,7 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
     { id: 'tasks',     label: 'Tasks' },
     { id: 'outputs',   label: 'Outputs' },
     { id: 'approvals', label: 'Approvals' },
+    { id: 'campaigns', label: 'Campaigns' },
   ]
 
   return (
@@ -429,6 +431,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
             <div style={{ maxWidth: 760 }}>
               <ProjectApprovalsPanel projectId={project.id} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Campaigns ───────────────────────────────────────────────────── */}
+        {tab === 'campaigns' && (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
+            <div style={{ maxWidth: 760 }}>
+              <ProjectCampaignsPanel projectId={project.id} />
             </div>
           </div>
         )}

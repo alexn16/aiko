@@ -6,6 +6,7 @@ import { createInstruction } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForCompany } from '@/lib/approvals'
+import { getCampaignSummaryForCompany } from '@/lib/campaigns'
 
 export async function GET() {
   try {
@@ -36,10 +37,11 @@ export async function POST() {
     // Fetch task summary and output summary for enriched review context
     let taskContext: string | undefined
     try {
-      const [ts, os, as_] = await Promise.all([
+      const [ts, os, as_, cs] = await Promise.all([
         getTaskSummaryForCompany(),
         getOutputSummaryForCompany(),
         getApprovalSummaryForCompany(),
+        getCampaignSummaryForCompany(),
       ])
       const staleThreshold = Date.now() - 24 * 60 * 60 * 1000
       const staleTasks = [...ts.active, ...ts.blocked].filter(
@@ -64,6 +66,12 @@ export async function POST() {
             title: i.title,
             project_name: i.project_name ?? null,
           })),
+        },
+        campaigns: {
+          total: cs.total,
+          draft: cs.draft.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
+          ready_for_review: cs.ready.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
+          active: cs.active.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
         },
       })
     } catch {

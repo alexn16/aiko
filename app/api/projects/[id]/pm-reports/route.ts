@@ -6,6 +6,7 @@ import { createManagerReport } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForProject } from '@/lib/agents/tasks'
 import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForProject } from '@/lib/approvals'
+import { getCampaignSummaryForProject } from '@/lib/campaigns'
 
 export async function GET(
   _req: NextRequest,
@@ -49,10 +50,11 @@ export async function POST(
     // Fetch task summary and output summary for context
     let taskSummaryData: Record<string, unknown> | undefined
     try {
-      const [ts, os, approvalSummary] = await Promise.all([
+      const [ts, os, approvalSummary, campaignSummary] = await Promise.all([
         getTaskSummaryForProject(params.id),
         getOutputSummaryForProject(params.id),
         getApprovalSummaryForProject(params.id),
+        getCampaignSummaryForProject(params.id),
       ])
 
       // Calculate this week's outputs
@@ -78,6 +80,11 @@ export async function POST(
           pending: approvalSummary.pending,
           approved: approvalSummary.approved,
           changes_requested: approvalSummary.changes_requested,
+        },
+        campaigns: {
+          total: campaignSummary.total,
+          by_status: campaignSummary.by_status,
+          active_names: campaignSummary.active.map(c => c.name),
         },
       }
     } catch {
