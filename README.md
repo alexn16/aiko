@@ -55,6 +55,8 @@ Each provider is tested before being activated. Role assignments let you choose 
 - `/approval` — approval queue (the sending gate)
 - `/campaigns` — campaign tracking
 - `/reports` — generated performance summaries
+- `/tools` — Tool Connections (configure web search, website reader, email)
+- `/tool-runs` — Tool execution log
 - `/mode` — Operating Mode settings and audit log
 - `/settings` — SMTP and legacy model configuration
 - `/functions` — in-app system documentation
@@ -315,6 +317,33 @@ AÏKO can send approved campaign emails and follow up within daily limits.
 
 **UI:** `/mode` — Operating Mode settings and audit log
 **API:** `GET/PATCH /api/mode`, `GET /api/mode/log`
+
+## Tool Connections (`/tools`)
+
+AÏKO uses external tools to execute real research. Tools are only available in Auto/Approval Required or Full Access mode.
+
+### Web Search
+Search the internet for companies, leads, and market data. Supports:
+- **Tavily** — recommended for structured search results
+- **Brave Search API** — privacy-focused web search
+- **SerpAPI** — Google search results via API
+
+Configure at `/tools`. Add your API key — it is stored server-side only.
+
+### Website Reader
+Read and extract text content from public web pages. No API key required — uses plain fetch with a reasonable timeout and user agent. Available as long as Auto/Approval or Full Access mode is active.
+
+### Tool Runs Log (`/tool-runs`)
+Every tool execution is logged: agent role, project, tool, input, output, status, and the operating mode at time of execution. Blocked attempts are also logged.
+
+**API:**
+- `POST /api/tools/web-search` — run web search
+- `POST /api/tools/read-website` — read a URL
+- `GET /api/tool-runs` — list tool executions
+- `GET /api/tool-connections` — list configured tools
+- `POST /api/tool-connections/test` — test a connection
+
+**Safety:** All tool executions check operating mode first. Read Only mode blocks all external tool use. Tool API keys are stored server-side and never returned to the client.
 
 ## Key safety invariant
 

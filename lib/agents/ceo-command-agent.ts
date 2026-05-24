@@ -7,6 +7,7 @@ import { getApprovalSummaryForCompany } from '@/lib/approvals'
 import { getCampaignSummaryForCompany } from '@/lib/campaigns'
 import { getLaunchReadinessSummaryForCompany } from '@/lib/campaign-launch-readiness'
 import { getModeState } from '@/lib/operating-mode'
+import { listToolConnections } from '@/lib/tools/tool-router'
 
 export interface CEOCommandResult {
   response: string
@@ -67,7 +68,7 @@ Rules:
 - response must always be natural language — never raw JSON, never bullet points, never technical field names`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -93,6 +94,7 @@ async function buildCompanyContext(): Promise<string> {
     getCampaignSummaryForCompany(),
     getLaunchReadinessSummaryForCompany(),
     getModeState(),
+    listToolConnections(),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -150,6 +152,11 @@ async function buildCompanyContext(): Promise<string> {
       sends_today: modeState.sends_today,
       daily_send_limit: modeState.daily_send_limit,
     },
+    tool_connections: toolConnectionsList.map(t => ({
+      tool_type: t.tool_type,
+      name: t.name,
+      status: t.status,
+    })),
   }
 
   return JSON.stringify(ctx, null, 2)
