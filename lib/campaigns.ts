@@ -19,6 +19,8 @@ export interface Campaign {
   // joined
   project_name?: string
   item_count?: number
+  latest_check_status?: string
+  latest_check_score?: number
 }
 
 export interface CampaignItem {
@@ -96,7 +98,8 @@ export async function listCampaigns(filters: {
 
   try {
     const result = await db.query(
-      `SELECT c.*, p.name AS project_name, COALESCE(ci.item_count, 0) AS item_count
+      `SELECT c.*, p.name AS project_name, COALESCE(ci.item_count, 0) AS item_count,
+              lc.check_status AS latest_check_status, lc.check_score AS latest_check_score
        FROM campaigns c
        LEFT JOIN projects p ON p.id = c.project_id
        LEFT JOIN (
@@ -104,6 +107,12 @@ export async function listCampaigns(filters: {
          FROM campaign_items
          GROUP BY campaign_id
        ) ci ON ci.campaign_id = c.id
+       LEFT JOIN LATERAL (
+         SELECT status AS check_status, readiness_score AS check_score
+         FROM campaign_launch_checks
+         WHERE campaign_id = c.id
+         ORDER BY created_at DESC LIMIT 1
+       ) lc ON true
        ${where}
        ORDER BY c.created_at DESC
        LIMIT ${limit}`,

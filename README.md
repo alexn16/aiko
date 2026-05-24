@@ -241,6 +241,33 @@ Approved outputs and approval items can be organized into structured marketing c
 
 **Safety:** Campaign approval is internal only. No emails or messages are sent. Launching externally requires a separate, future explicit action.
 
+## Campaign Launch Readiness
+
+Before any external sending exists, AÏKO evaluates whether a campaign is ready to launch.
+
+**This is not sending.** It is a safety and readiness checklist.
+
+**Checks performed:**
+- Campaign has objective, audience, channel, strategy, success metric
+- Campaign has at least one item
+- No campaign items are rejected
+- All external-facing items linked to the campaign are approved
+- Campaign is not archived
+- Project has an assigned PM
+- Project has memory and map available
+
+**Readiness score:** 0–100 (required checks = 70%, optional = 30%)
+
+**Statuses:** not_ready | needs_attention | ready | blocked
+
+**UI:** Launch Readiness panel on campaign detail page (`/campaigns/[id]`)
+
+**API:**
+- `GET /api/campaigns/[id]/launch-checks` — list recent checks
+- `POST /api/campaigns/[id]/launch-checks` — run a new check
+
+**Safety:** Running a readiness check does not launch or send anything externally. A future explicit launch/send step will be added separately.
+
 ## Core architecture
 
 - **Frontend**: Next.js App Router (`app/`)

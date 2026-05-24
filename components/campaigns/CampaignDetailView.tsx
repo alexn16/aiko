@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Campaign {
   id: string
@@ -49,6 +49,227 @@ const CHANNEL_BADGE: Record<string, { background: string; color: string }> = {
   content:   { background: '#dcfce7', color: '#15803d' },
   mixed:     { background: '#f3e8ff', color: '#7c3aed' },
   manual:    { background: '#f1f5f9', color: '#64748b' },
+}
+
+interface LaunchCheck {
+  key: string
+  label: string
+  passed: boolean
+  required: boolean
+  note?: string
+}
+
+interface CampaignLaunchCheckResult {
+  id: string
+  campaign_id: string
+  project_id: string | null
+  status: string
+  readiness_score: number
+  checks: LaunchCheck[]
+  blockers: string[]
+  warnings: string[]
+  recommended_actions: string[]
+  summary: string
+  created_at: string
+}
+
+const READINESS_BADGE: Record<string, { background: string; color: string; label: string }> = {
+  ready:           { background: '#dcfce7', color: '#15803d', label: 'Ready' },
+  needs_attention: { background: '#fef3c7', color: '#b45309', label: 'Needs attention' },
+  not_ready:       { background: '#fee2e2', color: '#dc2626', label: 'Not ready' },
+  blocked:         { background: '#fecaca', color: '#991b1b', label: 'Blocked' },
+}
+
+function LaunchReadinessPanel({ campaignId }: { campaignId: string }) {
+  const [latestCheck, setLatestCheck] = useState<CampaignLaunchCheckResult | null>(null)
+  const [running, setRunning] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/campaigns/${campaignId}/launch-checks`)
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.checks) && d.checks.length > 0) {
+          setLatestCheck(d.checks[0])
+        }
+      })
+      .catch(() => {})
+  }, [campaignId])
+
+  async function runCheck() {
+    setRunning(true)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/launch-checks`, { method: 'POST' })
+      const data = await res.json()
+      if (data.check) setLatestCheck(data.check)
+    } catch {
+      // silently fail
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const badge = latestCheck ? (READINESS_BADGE[latestCheck.status] ?? READINESS_BADGE.not_ready) : null
+
+  return (
+    <div style={{
+      background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: 10,
+      padding: '16px 18px', marginBottom: 24,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', letterSpacing: '-0.01em' }}>
+          Launch Readiness
+        </div>
+        <button
+          onClick={runCheck}
+          disabled={running}
+          style={{
+            fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 6,
+            border: 'none', background: '#6366f1', color: '#ffffff', cursor: 'pointer',
+            opacity: running ? 0.6 : 1,
+          }}
+        >
+          {running ? 'Checking…' : latestCheck ? 'Run again' : 'Run readiness check'}
+        </button>
+      </div>
+
+      {!latestCheck ? (
+        <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+          No readiness check has been run yet. Click &ldquo;Run readiness check&rdquo; to evaluate this campaign.
+        </div>
+      ) : (
+        <div>
+          {/* Status badge + score */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+            <span style={{
+              ...badge,
+              fontSize: 12, fontWeight: 700, borderRadius: 6, padding: '4px 10px',
+            }}>
+              {badge?.label}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.03em' }}>
+                {latestCheck.readiness_score}
+              </span>
+              <span style={{ fontSize: 14, color: '#94a3b8' }}>/100</span>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{
+            height: 6, borderRadius: 4, background: '#f1f5f9', marginBottom: 14, overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%', borderRadius: 4,
+              width: `${latestCheck.readiness_score}%`,
+              background: latestCheck.readiness_score >= 80 ? '#16a34a'
+                : latestCheck.readiness_score >= 50 ? '#d97706' : '#dc2626',
+              transition: 'width 0.4s ease',
+            }} />
+          </div>
+
+          {/* Summary */}
+          {latestCheck.summary && (
+            <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, marginBottom: 12 }}>
+              {latestCheck.summary}
+            </div>
+          )}
+
+          {/* Safety microcopy */}
+          <div style={{
+            fontSize: 11, color: '#94a3b8', background: '#f8fafc', border: '1px solid #e2e8f0',
+            borderRadius: 6, padding: '7px 10px', marginBottom: 14, fontStyle: 'italic',
+          }}>
+            Readiness does not launch or send this campaign. It only verifies whether the campaign is safe and prepared for a future explicit launch step.
+          </div>
+
+          {/* Blockers */}
+          {latestCheck.blockers.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Blockers ({latestCheck.blockers.length})
+              </div>
+              <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 7, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {latestCheck.blockers.map((b, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12, color: '#991b1b' }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}>✗</span>
+                    <span>{b}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Warnings */}
+          {latestCheck.warnings.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#b45309', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Warnings ({latestCheck.warnings.length})
+              </div>
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {latestCheck.warnings.map((w, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12, color: '#92400e' }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recommended actions */}
+          {latestCheck.recommended_actions.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#4338ca', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Recommended actions
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {latestCheck.recommended_actions.map((a, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#374151' }}>
+                    <span style={{ flexShrink: 0, fontWeight: 700, color: '#6366f1' }}>{i + 1}.</span>
+                    <span>{a}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Checklist */}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Checklist
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {latestCheck.checks.map(check => (
+                <div key={check.key} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12,
+                  padding: '5px 8px', borderRadius: 5,
+                  background: check.passed ? '#f0fdf4' : check.required ? '#fff1f2' : '#fafafa',
+                }}>
+                  <span style={{
+                    flexShrink: 0, fontWeight: 700, fontSize: 13, marginTop: -1,
+                    color: check.passed ? '#16a34a' : check.required ? '#dc2626' : '#94a3b8',
+                  }}>
+                    {check.passed ? '✓' : '✗'}
+                  </span>
+                  <div>
+                    <span style={{ color: check.passed ? '#15803d' : check.required ? '#991b1b' : '#64748b', fontWeight: 500 }}>
+                      {check.label}
+                    </span>
+                    {!check.required && (
+                      <span style={{ marginLeft: 6, fontSize: 10, color: '#94a3b8' }}>(optional)</span>
+                    )}
+                    {check.note && (
+                      <div style={{ fontSize: 11, color: '#92400e', marginTop: 2 }}>{check.note}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 const ITEM_TYPE_BADGE: Record<string, { background: string; color: string }> = {
@@ -308,6 +529,9 @@ export function CampaignDetailView({
           ))
         )}
       </div>
+
+      {/* Launch Readiness */}
+      <LaunchReadinessPanel campaignId={campaign.id} />
 
       {/* Add item section */}
       <div style={{ ...CARD, marginBottom: 24 }}>

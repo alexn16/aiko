@@ -7,6 +7,7 @@ import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForCompany } from '@/lib/approvals'
 import { getCampaignSummaryForCompany } from '@/lib/campaigns'
+import { getLaunchReadinessSummaryForCompany } from '@/lib/campaign-launch-readiness'
 
 export async function GET() {
   try {
@@ -37,11 +38,12 @@ export async function POST() {
     // Fetch task summary and output summary for enriched review context
     let taskContext: string | undefined
     try {
-      const [ts, os, as_, cs] = await Promise.all([
+      const [ts, os, as_, cs, launchReadiness] = await Promise.all([
         getTaskSummaryForCompany(),
         getOutputSummaryForCompany(),
         getApprovalSummaryForCompany(),
         getCampaignSummaryForCompany(),
+        getLaunchReadinessSummaryForCompany(),
       ])
       const staleThreshold = Date.now() - 24 * 60 * 60 * 1000
       const staleTasks = [...ts.active, ...ts.blocked].filter(
@@ -72,6 +74,19 @@ export async function POST() {
           draft: cs.draft.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
           ready_for_review: cs.ready.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
           active: cs.active.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
+        },
+        campaign_launch_readiness: {
+          campaigns_checked: launchReadiness.campaigns_checked,
+          ready: launchReadiness.ready,
+          needs_attention: launchReadiness.needs_attention,
+          not_ready: launchReadiness.not_ready,
+          blocked: launchReadiness.blocked,
+          ready_campaigns: launchReadiness.latest_checks
+            .filter(lc => lc.status === 'ready')
+            .map(lc => ({ name: lc.campaign_name, score: lc.readiness_score })),
+          blocked_or_not_ready: launchReadiness.latest_checks
+            .filter(lc => lc.status === 'blocked' || lc.status === 'not_ready')
+            .map(lc => ({ name: lc.campaign_name, status: lc.status, score: lc.readiness_score })),
         },
       })
     } catch {

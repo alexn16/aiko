@@ -10,6 +10,8 @@ interface Campaign {
   objective: string | null
   item_count?: number
   created_at: string
+  latest_check_status?: string
+  latest_check_score?: number
 }
 
 const STATUS_BADGE: Record<string, { background: string; color: string }> = {
@@ -29,6 +31,14 @@ const CHANNEL_BADGE: Record<string, { background: string; color: string }> = {
   content:   { background: '#dcfce7', color: '#15803d' },
   mixed:     { background: '#f3e8ff', color: '#7c3aed' },
   manual:    { background: '#f1f5f9', color: '#64748b' },
+}
+
+const READINESS_CHIP: Record<string, { background: string; color: string; label: string }> = {
+  ready:           { background: '#dcfce7', color: '#15803d', label: 'Ready' },
+  needs_attention: { background: '#fef3c7', color: '#b45309', label: 'Needs attention' },
+  not_ready:       { background: '#fee2e2', color: '#dc2626', label: 'Not ready' },
+  blocked:         { background: '#fecaca', color: '#991b1b', label: 'Blocked' },
+  not_checked:     { background: '#f1f5f9', color: '#94a3b8', label: 'Not checked' },
 }
 
 export function ProjectCampaignsPanel({ projectId }: { projectId: string }) {
@@ -140,8 +150,18 @@ export function ProjectCampaignsPanel({ projectId }: { projectId: string }) {
                 padding: '10px 12px', borderLeft: `3px solid ${statusBadge.background}`,
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {c.name}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.name}
+                    </div>
+                    {(() => {
+                      const chip = READINESS_CHIP[c.latest_check_status ?? 'not_checked'] ?? READINESS_CHIP.not_checked
+                      return (
+                        <span style={{ ...chip, fontSize: 9, fontWeight: 600, borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+                          {chip.label}
+                        </span>
+                      )
+                    })()}
                   </div>
                   <span style={{ fontSize: 10, color: '#cbd5e1', flexShrink: 0, marginLeft: 8 }}>
                     {c.item_count ?? 0} items

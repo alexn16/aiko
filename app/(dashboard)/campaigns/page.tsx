@@ -18,6 +18,8 @@ interface Campaign {
   updated_at: string
   project_name?: string
   item_count?: number
+  latest_check_status?: string
+  latest_check_score?: number
 }
 
 interface Project {
@@ -54,6 +56,14 @@ const CHANNEL_BADGE: Record<string, { background: string; color: string }> = {
   mixed:     { background: '#f3e8ff', color: '#7c3aed' },
   manual:    { background: '#f1f5f9', color: '#64748b' },
   multi:     { background: '#f3e8ff', color: '#7c3aed' },
+}
+
+const READINESS_CHIP: Record<string, { background: string; color: string; label: string }> = {
+  ready:           { background: '#dcfce7', color: '#15803d', label: 'Ready' },
+  needs_attention: { background: '#fef3c7', color: '#b45309', label: 'Needs attention' },
+  not_ready:       { background: '#fee2e2', color: '#dc2626', label: 'Not ready' },
+  blocked:         { background: '#fecaca', color: '#991b1b', label: 'Blocked' },
+  not_checked:     { background: '#f1f5f9', color: '#94a3b8', label: 'Not checked' },
 }
 
 function timeAgo(iso: string): string {
@@ -101,6 +111,14 @@ function CampaignCard({
             <span style={{ ...channelBadge, fontSize: 10, fontWeight: 500, borderRadius: 4, padding: '2px 7px' }}>
               {campaign.channel}
             </span>
+            {(() => {
+              const chip = READINESS_CHIP[campaign.latest_check_status ?? 'not_checked'] ?? READINESS_CHIP.not_checked
+              return (
+                <span style={{ ...chip, fontSize: 10, fontWeight: 500, borderRadius: 4, padding: '2px 7px' }}>
+                  {chip.label}{campaign.latest_check_score != null && campaign.latest_check_status ? ` · ${campaign.latest_check_score}` : ''}
+                </span>
+              )
+            })()}
           </div>
         </div>
         <span style={{ fontSize: 10, color: '#cbd5e1', flexShrink: 0, marginLeft: 8 }}>

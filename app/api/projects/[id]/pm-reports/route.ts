@@ -7,6 +7,7 @@ import { getTaskSummaryForProject } from '@/lib/agents/tasks'
 import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForProject } from '@/lib/approvals'
 import { getCampaignSummaryForProject } from '@/lib/campaigns'
+import { getLaunchReadinessSummaryForProject } from '@/lib/campaign-launch-readiness'
 
 export async function GET(
   _req: NextRequest,
@@ -50,11 +51,12 @@ export async function POST(
     // Fetch task summary and output summary for context
     let taskSummaryData: Record<string, unknown> | undefined
     try {
-      const [ts, os, approvalSummary, campaignSummary] = await Promise.all([
+      const [ts, os, approvalSummary, campaignSummary, launchReadiness] = await Promise.all([
         getTaskSummaryForProject(params.id),
         getOutputSummaryForProject(params.id),
         getApprovalSummaryForProject(params.id),
         getCampaignSummaryForProject(params.id),
+        getLaunchReadinessSummaryForProject(params.id),
       ])
 
       // Calculate this week's outputs
@@ -86,6 +88,11 @@ export async function POST(
           by_status: campaignSummary.by_status,
           active_names: campaignSummary.active.map(c => c.name),
         },
+        campaign_launch_readiness: launchReadiness.latest_checks.map(lc => ({
+          name: lc.campaign_name,
+          status: lc.status,
+          score: lc.readiness_score,
+        })),
       }
     } catch {
       // non-fatal
