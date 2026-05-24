@@ -71,7 +71,8 @@ Each provider is tested before being activated. Role assignments let you choose 
 - `/reports` — generated performance summaries
 - `/tools` — Tool Connections (configure web search, website reader, email)
 - `/tool-runs` — Tool execution log
-- `/operator` — Web Operator control room
+- `/operator` — Web Operator control room (single-session view, filter by operator)
+- `/operators` — Web Operator fleet management (all named operators)
 - `/mode` — Operating Mode settings and audit log
 - `/settings` — SMTP and legacy model configuration
 - `/functions` — in-app system documentation
@@ -427,12 +428,37 @@ The CEO and PM chat automatically detect web research intent and delegate to the
 
 **`lib/web-operator/delegation.ts`:** `delegateToWebOperator`, `delegateSearch`, `delegateReadWebsite`, `delegateEmailDraft`, `delegateExternalAction`
 
+### Multiple operators
+
+AÏKO supports multiple named Web Operators running in parallel, each with an isolated browser context (separate cookies, sessions, and storage state).
+
+**Examples:**
+- Kevin — dedicated to Gmail and email outreach
+- Hana — researching companies and reading websites
+- Default — general-purpose browser tasks
+
+Name an operator in CEO Chat or PM Chat to route tasks to them:
+> "Kevin, open Gmail."
+> "Hana, research parking management companies in Coruña."
+> "Ask Kevin to search for leads."
+
+Each operator's browser profile is isolated — cookies and login sessions never mix between operators. Profiles are persisted in `.operator-profiles/` at the project root.
+
+**UI:** `/operators` — manage all operators, view their status, screenshots, and actions
+
+**API:**
+- `GET /api/web-operators` — list all operators
+- `POST /api/web-operators` — create a new operator `{ name, role?, project_id? }`
+- `GET /api/web-operators/[id]` — get operator status + recent actions
+- `PATCH /api/web-operators/[id]` — update status, assign project
+
 ### Reliability features
 - **Screenshots** — captured after every action (open_url, search, read_page, click, fill_form). Stored in `/public/screenshots/`. Sensitive pages (login, auth) are flagged and not displayed.
 - **Session recovery** — if the browser crashes or closes, the Web Operator detects it and restarts the session automatically for safe actions.
 - **Safe retry** — non-risky actions (search, open_url, read_page, copy_data) are retried once on failure.
 - **Structured failure reasons** — `navigation_timeout`, `network_error`, `selector_not_found`, `browser_not_available`, `access_blocked`, `unknown_error`
 - **Page state capture** — after each action, the current URL, page title, and a text preview are saved.
+- **Operator isolation** — each named operator gets a dedicated `BrowserContext` with separate cookies, storage, and session state.
 
 ## Tool Connections (`/tools`)
 

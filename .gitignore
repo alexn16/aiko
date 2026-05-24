@@ -34,3 +34,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# web operator browser profiles (isolated cookies/sessions per operator)
+/.operator-profiles/

@@ -2,10 +2,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { WebOperatorSession, WebOperatorAction } from '@/lib/web-operator/web-operator'
+import type { WebOperator } from '@/lib/web-operator/operators'
 
 const STATUS_COLOR: Record<string, string> = {
   idle: '#94a3b8',
   active: '#10b981',
+  working: '#3b82f6',
   waiting_approval: '#f59e0b',
   blocked: '#ef4444',
   error: '#ef4444',
@@ -26,12 +28,19 @@ interface StatusPayload {
 
 export function WebOperatorCard() {
   const [data, setData] = useState<StatusPayload | null>(null)
+  const [operators, setOperators] = useState<WebOperator[]>([])
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/web-operator/status')
-      if (!res.ok) return
-      setData(await res.json())
+      const [statusRes, opsRes] = await Promise.all([
+        fetch('/api/web-operator/status'),
+        fetch('/api/web-operators'),
+      ])
+      if (statusRes.ok) setData(await statusRes.json())
+      if (opsRes.ok) {
+        const d = await opsRes.json()
+        setOperators(d.operators ?? [])
+      }
     } catch {
       // non-fatal
     }
@@ -43,10 +52,90 @@ export function WebOperatorCard() {
     return () => clearInterval(id)
   }, [load])
 
+  // If multiple operators, show compact fleet view
+  if (operators.length > 1) {
+    return (
+      <div style={{
+        background: '#ffffff',
+        border: '1px solid #f1f5f9',
+        borderRadius: 10,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        padding: '16px 18px',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>
+            Web Operators
+            <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 500, color: '#94a3b8' }}>
+              {operators.length} agents
+            </span>
+          </span>
+          <Link href="/operators" style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none' }}>
+            Manage fleet →
+          </Link>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {operators.slice(0, 3).map(op => {
+            const color = STATUS_COLOR[op.status] ?? '#94a3b8'
+            return (
+              <div key={op.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 10px', borderRadius: 6, background: '#fafafa',
+                border: '1px solid #f1f5f9',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', flexShrink: 0 }}>{op.name}</span>
+                <span style={{ fontSize: 10, color: color, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+                  {op.status.replace(/_/g, ' ')}
+                </span>
+                {op.current_task && (
+                  <span style={{ fontSize: 10, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {truncate(op.current_task, 32)}
+                  </span>
+                )}
+                {op.current_url && !op.current_task && (
+                  <span style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'DM Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {truncate(op.current_url, 28)}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+          {operators.length > 3 && (
+            <div style={{ fontSize: 10, color: '#94a3b8', paddingLeft: 4 }}>
+              +{operators.length - 3} more…
+            </div>
+          )}
+        </div>
+
+        {/* Runtime indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 10 }}>
+          <span style={{
+            width: 5, height: 5, borderRadius: '50%',
+            background: data?.browser_available ? '#10b981' : '#f59e0b',
+            flexShrink: 0,
+          }} />
+          <span style={{ fontSize: 10, color: '#64748b' }}>
+            {data?.browser_available ? 'Playwright ready' : 'Runtime not configured'}
+          </span>
+          {(data?.pending_approvals ?? 0) > 0 && (
+            <span style={{
+              marginLeft: 8, fontSize: 10, fontWeight: 600,
+              background: '#fef9c3', color: '#92400e',
+              borderRadius: 4, padding: '1px 6px',
+            }}>
+              {data?.pending_approvals} pending
+            </span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Single operator (legacy) view
   const latestAction = data?.recent_actions?.[0] ?? null
   const session = data?.active_session ?? null
 
-  // Derive display status
   let displayStatus = 'idle'
   if (session) {
     if (data?.pending_approvals && data.pending_approvals > 0) displayStatus = 'waiting_approval'
@@ -78,8 +167,8 @@ export function WebOperatorCard() {
             {displayStatus.replace(/_/g, ' ')}
           </span>
         </div>
-        <Link href="/operator" style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none' }}>
-          Open Operator →
+        <Link href="/operators" style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none' }}>
+          Operators →
         </Link>
       </div>
 

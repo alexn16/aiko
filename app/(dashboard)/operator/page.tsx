@@ -1,8 +1,10 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ModeGateBadge } from '@/components/mode/ModeGateBadge'
 import type { WebOperatorAction, WebOperatorSession } from '@/lib/web-operator/web-operator'
 import type { ApprovalItem } from '@/lib/approvals'
+import type { WebOperator } from '@/lib/web-operator/operators'
 
 const ACTION_TYPES = [
   'search', 'open_url', 'read_page', 'click', 'type',
@@ -52,6 +54,11 @@ function truncate(str: string | null | undefined, n = 48): string {
 }
 
 export default function OperatorPage() {
+  const searchParams = useSearchParams()
+  const initialOperatorId = searchParams.get('operator_id') ?? ''
+
+  const [operators, setOperators] = useState<WebOperator[]>([])
+  const [selectedOperatorId, setSelectedOperatorId] = useState(initialOperatorId)
   const [browserAvailable, setBrowserAvailable] = useState(false)
   const [activeSession, setActiveSession] = useState<WebOperatorSession | null>(null)
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalItem[]>([])
@@ -91,21 +98,34 @@ export default function OperatorPage() {
     }
   }, [])
 
+  const loadOperators = useCallback(async () => {
+    try {
+      const res = await fetch('/api/web-operators')
+      if (!res.ok) return
+      const data = await res.json()
+      setOperators(data.operators ?? [])
+    } catch {
+      // non-fatal
+    }
+  }, [])
+
   const loadActions = useCallback(async () => {
     try {
-      const res = await fetch('/api/web-operator/actions?limit=20')
+      const params = new URLSearchParams({ limit: '20' })
+      if (selectedOperatorId) params.set('operator_id', selectedOperatorId)
+      const res = await fetch(`/api/web-operator/actions?${params}`)
       if (!res.ok) return
       const data = await res.json()
       setRecentActions(data.actions ?? [])
     } catch {
       // non-fatal
     }
-  }, [])
+  }, [selectedOperatorId])
 
   useEffect(() => {
     async function init() {
       setLoading(true)
-      await Promise.all([loadStatus(), loadPendingApprovals(), loadActions()])
+      await Promise.all([loadStatus(), loadPendingApprovals(), loadActions(), loadOperators()])
       setLoading(false)
     }
     init()
@@ -115,7 +135,7 @@ export default function OperatorPage() {
       loadActions()
     }, 15000)
     return () => clearInterval(interval)
-  }, [loadStatus, loadPendingApprovals, loadActions])
+  }, [loadStatus, loadPendingApprovals, loadActions, loadOperators])
 
   async function handleRunAction() {
     if (!description.trim()) return
@@ -237,7 +257,7 @@ export default function OperatorPage() {
     <div style={{ padding: '40px 32px', maxWidth: 860 }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
+      <div style={{ marginBottom: 20 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: '0 0 4px' }}>
           Web Operator
         </h1>
@@ -245,6 +265,34 @@ export default function OperatorPage() {
           The Web Operator is AÏKO&apos;s only external execution layer. All browser actions — search, email drafts, form filling, LinkedIn — run here.
         </p>
       </div>
+
+      {/* Operator selector */}
+      {operators.length > 0 && (
+        <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Viewing operator:</div>
+          <select
+            value={selectedOperatorId}
+            onChange={e => setSelectedOperatorId(e.target.value)}
+            style={{
+              background: '#fafafa', border: '1px solid #e2e8f0', borderRadius: 6,
+              padding: '7px 10px', fontSize: 12, color: '#0f172a', cursor: 'pointer',
+            }}
+          >
+            <option value="">All operators</option>
+            {operators.map(op => (
+              <option key={op.id} value={op.id}>{op.name} ({op.status})</option>
+            ))}
+          </select>
+          {selectedOperatorId && operators.find(o => o.id === selectedOperatorId) && (() => {
+            const op = operators.find(o => o.id === selectedOperatorId)!
+            return (
+              <span style={{ fontSize: 11, color: '#64748b', fontFamily: 'DM Mono, monospace' }}>
+                profile: {op.browser_profile_key}
+              </span>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Status bar */}
       <div style={{ ...CARD, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16 }}>

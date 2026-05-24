@@ -83,6 +83,8 @@ export async function startWebOperatorSession(opts: {
   project_id?: string | null
   agent_role?: string
   permission_mode?: string
+  operator_id?: string | null
+  browser_profile_key?: string | null
 }): Promise<WebOperatorSession> {
   let permission_mode = opts.permission_mode
   if (!permission_mode) {
@@ -95,10 +97,16 @@ export async function startWebOperatorSession(opts: {
   }
 
   const result = await db.query(
-    `INSERT INTO web_operator_sessions (project_id, agent_role, permission_mode, status)
-     VALUES ($1, $2, $3, 'active')
+    `INSERT INTO web_operator_sessions (project_id, agent_role, permission_mode, status, operator_id, browser_profile_key)
+     VALUES ($1, $2, $3, 'active', $4, $5)
      RETURNING *`,
-    [opts.project_id ?? null, opts.agent_role ?? 'Web Operator', permission_mode]
+    [
+      opts.project_id ?? null,
+      opts.agent_role ?? 'Web Operator',
+      permission_mode,
+      opts.operator_id ?? null,
+      opts.browser_profile_key ?? null,
+    ]
   )
   return rowToSession(result.rows[0])
 }
@@ -149,13 +157,14 @@ export async function logWebOperatorAction(params: {
   requires_approval?: boolean
   source_task_id?: string | null
   requested_by_role?: string | null
+  operator_id?: string | null
 }): Promise<WebOperatorAction> {
   const result = await db.query(
     `INSERT INTO web_operator_actions
        (session_id, project_id, agent_role, action_type, target_url,
         description, input, status, requires_approval,
-        source_task_id, requested_by_role)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        source_task_id, requested_by_role, operator_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING *`,
     [
       params.session_id ?? null,
@@ -169,6 +178,7 @@ export async function logWebOperatorAction(params: {
       params.requires_approval ?? false,
       params.source_task_id ?? null,
       params.requested_by_role ?? null,
+      params.operator_id ?? null,
     ]
   )
   return rowToAction(result.rows[0])
@@ -214,6 +224,7 @@ export async function listWebOperatorActions(filters: {
   session_id?: string
   status?: string
   agent_role?: string
+  operator_id?: string
   limit?: number
 } = {}): Promise<WebOperatorAction[]> {
   const conditions: string[] = []
@@ -224,6 +235,7 @@ export async function listWebOperatorActions(filters: {
   if (filters.session_id) { conditions.push(`session_id=$${idx++}`); values.push(filters.session_id) }
   if (filters.status) { conditions.push(`status=$${idx++}`); values.push(filters.status) }
   if (filters.agent_role) { conditions.push(`agent_role=$${idx++}`); values.push(filters.agent_role) }
+  if (filters.operator_id) { conditions.push(`operator_id=$${idx++}`); values.push(filters.operator_id) }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const limit = filters.limit ?? 50
@@ -267,6 +279,8 @@ export async function runWebOperatorAction(opts: {
   input?: Record<string, unknown>
   source_task_id?: string | null
   requested_by_role?: string | null
+  operator_id?: string | null
+  profileKey?: string | null
 }): Promise<{
   success: boolean
   action: WebOperatorAction
@@ -281,7 +295,7 @@ export async function runWebOperatorAction(opts: {
   )
 
   if (!modeCheck.allowed) {
-    const action = await logWebOperatorAction({ ...opts, status: 'blocked', requires_approval: false })
+    const action = await logWebOperatorAction({ ...opts, status: 'blocked', requires_approval: false, operator_id: opts.operator_id ?? null })
     await updateWebOperatorAction(action.id, { output: { error: modeCheck.reason } })
     return { success: false, action, error: modeCheck.reason }
   }
@@ -289,7 +303,7 @@ export async function runWebOperatorAction(opts: {
   // 2. Check if action requires approval
   const needsApproval = requiresApproval(opts.action_type, modeCheck.mode)
   if (needsApproval) {
-    const action = await logWebOperatorAction({ ...opts, status: 'waiting_approval', requires_approval: true })
+    const action = await logWebOperatorAction({ ...opts, status: 'waiting_approval', requires_approval: true, operator_id: opts.operator_id ?? null })
     const approval = await requireOperatorApproval(action.id, {
       project_id: opts.project_id,
       title: opts.description,
@@ -300,7 +314,7 @@ export async function runWebOperatorAction(opts: {
   }
 
   // 3. Log as running
-  const action = await logWebOperatorAction({ ...opts, status: 'running' })
+  const action = await logWebOperatorAction({ ...opts, status: 'running', operator_id: opts.operator_id ?? null })
 
   // 4. Check browser runtime
   const browserAvailable = await checkBrowserRuntime()
@@ -319,8 +333,15 @@ export async function runWebOperatorAction(opts: {
   try {
     const { executeWebAction, recoverSession } = await import('./playwright-executor')
     let result
+    const execOpts = {
+      action_type: opts.action_type,
+      target_url: opts.target_url ?? undefined,
+      description: opts.description,
+      input: opts.input,
+      profileKey: opts.profileKey ?? undefined,
+    }
     try {
-      result = await executeWebAction(action, opts)
+      result = await executeWebAction(action, execOpts)
     } catch (execErr) {
       // If browser crashed, attempt session recovery and retry once
       const reason = (execErr as { failure_reason?: string }).failure_reason ?? 'unknown_error'
@@ -332,7 +353,7 @@ export async function runWebOperatorAction(opts: {
             `UPDATE web_operator_sessions SET recovery_count = recovery_count + 1 WHERE id=$1`,
             [opts.session_id]
           ).catch(() => {})
-          result = await executeWebAction(action, opts)
+          result = await executeWebAction(action, execOpts)
         } else {
           throw execErr
         }
@@ -361,6 +382,14 @@ export async function runWebOperatorAction(opts: {
       await db.query(
         `UPDATE web_operator_sessions SET current_url=$1, page_title=$2 WHERE id=$3`,
         [pageState.url, pageState.title ?? null, opts.session_id]
+      ).catch(() => {})
+    }
+
+    // Update operator current_url if operator_id is present (direct db.query to avoid circular imports)
+    if (opts.operator_id && pageState?.url) {
+      await db.query(
+        `UPDATE web_operators SET current_url=$1, updated_at=NOW() WHERE id=$2`,
+        [pageState.url, opts.operator_id]
       ).catch(() => {})
     }
 

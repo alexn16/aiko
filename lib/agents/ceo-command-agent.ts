@@ -10,6 +10,7 @@ import { getModeState } from '@/lib/operating-mode'
 import { listToolConnections } from '@/lib/tools/tool-router'
 import { getWebOperatorStatus } from '@/lib/web-operator/web-operator'
 import { getMissingCapabilities } from '@/lib/system-capabilities'
+import { listWebOperators } from '@/lib/web-operator/operators'
 
 export interface CEOCommandResult {
   response: string
@@ -77,10 +78,12 @@ Rules:
 - When asked to "execute" a strategy fully (including email sending, reply tracking, etc.), check missing_capabilities first and if blockers exist, explain what needs to be built.
 - AÏKO does not use native SMTP, Gmail API, Resend, CRM API, LinkedIn API, or any direct platform integrations. All external work is performed by the Web Operator through a real browser. When referring to external actions (email, LinkedIn, search, web forms), always say "I will ask the Web Operator to..." and never mention APIs, SMTP, or direct integrations.
 - When a user asks to "send an email", respond: "I will ask the Web Operator to open Gmail in the browser, prepare the draft, and request your approval before sending."
-- When a user asks to "search the internet" or "find companies", respond that you will delegate this to the Web Operator for browser-based search.`
+- When a user asks to "search the internet" or "find companies", respond that you will delegate this to the Web Operator for browser-based search.
+- When a user mentions a person's name followed by an action (e.g. "Kevin, open Gmail"), treat the name as a Web Operator. Route the task to that named operator. Each operator has their own isolated browser session. Say "I'll ask [Name] to [action] in their dedicated browser session."
+- Named operators can be anyone: Kevin, Hana, Kenji (as operator, distinct from PM role), or any name the user provides. Check web_operators in context to see who already exists.`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus, missingCaps] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus, missingCaps, webOperatorsList] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -109,6 +112,7 @@ async function buildCompanyContext(): Promise<string> {
     listToolConnections(),
     getWebOperatorStatus(),
     getMissingCapabilities(),
+    listWebOperators().catch(() => []),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -176,6 +180,12 @@ async function buildCompanyContext(): Promise<string> {
       active_session_id: webOperatorStatus.active_session?.id ?? null,
       pending_approvals: webOperatorStatus.pending_approvals,
     },
+    web_operators: webOperatorsList.map(op => ({
+      name: op.name,
+      status: op.status,
+      current_url: op.current_url,
+      current_task: op.current_task,
+    })),
     missing_capabilities: missingCaps.map(c => ({ key: c.key, name: c.name })),
   }
 

@@ -10,10 +10,11 @@ export async function GET(req: NextRequest) {
     const session_id = searchParams.get('session_id') ?? undefined
     const status = searchParams.get('status') ?? undefined
     const agent_role = searchParams.get('agent_role') ?? undefined
+    const operator_id = searchParams.get('operator_id') ?? undefined
     const limitStr = searchParams.get('limit')
     const limit = limitStr ? parseInt(limitStr, 10) : 50
 
-    const actions = await listWebOperatorActions({ project_id, session_id, status, agent_role, limit })
+    const actions = await listWebOperatorActions({ project_id, session_id, status, agent_role, operator_id, limit })
     return NextResponse.json({ actions })
   } catch (err) {
     console.error('[web-operator/actions GET]', err)

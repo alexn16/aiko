@@ -37,6 +37,15 @@ export async function POST(request: NextRequest) {
       }
       const result = await runCeoCommandAgent(command.trim(), modelConfig)
 
+      // Extract operator name from command
+      let operatorName: string | undefined
+      const operatorMatch = command.trim().match(/^([A-Z][a-z]+),\s+/i)
+      if (operatorMatch) operatorName = operatorMatch[1]
+      if (!operatorName) {
+        const askMatch = command.trim().match(/(?:ask|have|get|tell)\s+([A-Z][a-z]+)\s+to/i)
+        if (askMatch) operatorName = askMatch[1]
+      }
+
       // Auto-delegate web research if intent detected
       let delegationResult: DelegationResult | null = null
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
@@ -46,6 +55,7 @@ export async function POST(request: NextRequest) {
           query,
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
+          operatorName,
         }).catch(() => null)
       }
 
@@ -85,6 +95,15 @@ export async function POST(request: NextRequest) {
     if (legacyConfig) {
       const result = await runCeoCommandAgent(command.trim(), legacyConfig)
 
+      // Extract operator name (legacy path)
+      let operatorNameLegacy: string | undefined
+      const operatorMatchLegacy = command.trim().match(/^([A-Z][a-z]+),\s+/i)
+      if (operatorMatchLegacy) operatorNameLegacy = operatorMatchLegacy[1]
+      if (!operatorNameLegacy) {
+        const askMatchLegacy = command.trim().match(/(?:ask|have|get|tell)\s+([A-Z][a-z]+)\s+to/i)
+        if (askMatchLegacy) operatorNameLegacy = askMatchLegacy[1]
+      }
+
       let delegationResult: DelegationResult | null = null
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
       if (needsWebResearch) {
@@ -93,6 +112,7 @@ export async function POST(request: NextRequest) {
           query,
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
+          operatorName: operatorNameLegacy,
         }).catch(() => null)
       }
 

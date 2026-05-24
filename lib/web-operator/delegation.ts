@@ -8,10 +8,18 @@ import {
   runWebOperatorAction,
 } from '@/lib/web-operator/web-operator'
 import type { WebOperatorActionType } from '@/lib/web-operator/web-operator'
+import {
+  getOrCreateOperatorByName,
+  getWebOperatorByName,
+  createWebOperator,
+  updateOperatorStatus,
+} from '@/lib/web-operator/operators'
+import type { WebOperator } from '@/lib/web-operator/operators'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface DelegationRequest {
+  operatorName?: string    // optional named operator
   projectId?: string
   requestedByRole: string
   actionType: string
@@ -34,6 +42,7 @@ export interface DelegationResult {
   taskOutputId?: string
   error?: string
   message: string
+  operatorName?: string
 }
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
@@ -94,14 +103,15 @@ function formatOutputContent(actionType: string, output: Record<string, unknown>
   return JSON.stringify(output, null, 2).slice(0, 2000)
 }
 
-function buildCompletionMessage(actionType: string, output: Record<string, unknown>): string {
+function buildCompletionMessage(actionType: string, output: Record<string, unknown>, operatorName?: string): string {
+  const opStr = operatorName ? `${operatorName} ` : 'Web Operator '
   if (actionType === 'search') {
     const count = Array.isArray(output.results) ? output.results.length : 0
-    return `Web Operator completed search — ${count} result${count !== 1 ? 's' : ''} found and saved.`
+    return `${opStr}completed search — ${count} result${count !== 1 ? 's' : ''} found and saved.`
   }
-  if (actionType === 'read_page') return `Web Operator read the page and saved the content.`
-  if (actionType === 'create_email_draft') return `Web Operator prepared the email draft.`
-  return `Web Operator completed the action successfully.`
+  if (actionType === 'read_page') return `${opStr}read the page and saved the content.`
+  if (actionType === 'create_email_draft') return `${opStr}prepared the email draft.`
+  return `${opStr}completed the action successfully.`
 }
 
 // ── Core delegation function ───────────────────────────────────────────────────
@@ -116,12 +126,27 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     return { status: 'blocked', message: modeCheck.reason, error: modeCheck.reason }
   }
 
-  // 2. Send internal message: requestedByRole → Web Operator
+  // 2. Resolve operator
+  let operator: WebOperator | null = null
+  let profileKey = 'default'
+
+  if (req.operatorName) {
+    operator = await getOrCreateOperatorByName(req.operatorName).catch(() => null)
+    profileKey = operator?.browser_profile_key ?? req.operatorName.toLowerCase().replace(/\s+/g, '-')
+  } else {
+    operator = await getWebOperatorByName('Default').catch(() => null)
+    if (!operator) {
+      operator = await createWebOperator({ name: 'Default' }).catch(() => null)
+    }
+    profileKey = operator?.browser_profile_key ?? 'default'
+  }
+
+  // 3. Send internal message: requestedByRole → Web Operator
   try {
     await sendAgentMessage({
       project_id: req.projectId,
       from_role: req.requestedByRole,
-      to_role: 'Web Operator',
+      to_role: req.operatorName ? `Web Operator (${req.operatorName})` : 'Web Operator',
       message_type: 'instruction',
       subject: req.instruction,
       content: `Action: ${req.actionType}\n${req.targetUrl ? `URL: ${req.targetUrl}\n` : ''}${req.query ? `Query: ${req.query}\n` : ''}Reason: ${req.reason ?? 'Delegated action'}`,
@@ -130,21 +155,30 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     // non-fatal
   }
 
-  // 3. Get or start session
+  // 4. Mark operator working
+  if (operator?.id) {
+    await updateOperatorStatus(operator.id, 'working', {
+      current_task: req.instruction.slice(0, 200),
+    }).catch(() => {})
+  }
+
+  // 5. Get or start session
   const activeSession = await getActiveSession()
   const session = activeSession ?? await startWebOperatorSession({
     project_id: req.projectId,
     agent_role: req.requestedByRole,
     permission_mode: modeCheck.mode,
+    operator_id: operator?.id ?? null,
+    browser_profile_key: profileKey,
   })
 
-  // 4. Build action input
+  // 6. Build action input
   const input: Record<string, unknown> = {}
   if (req.query) input.query = req.query
   if (req.targetUrl) input.url = req.targetUrl
   if (req.payload) Object.assign(input, req.payload)
 
-  // 5. Run Web Operator action
+  // 7. Run Web Operator action
   const result = await runWebOperatorAction({
     session_id: session.id,
     project_id: req.projectId,
@@ -155,7 +189,17 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     input,
     source_task_id: req.taskId,
     requested_by_role: req.requestedByRole,
+    operator_id: operator?.id ?? null,
+    profileKey,
   })
+
+  // Mark operator idle after action
+  if (operator?.id) {
+    const newStatus = result.waiting_approval ? 'waiting_approval' : result.success ? 'idle' : 'idle'
+    await updateOperatorStatus(operator.id, newStatus, {
+      current_task: result.success ? null : undefined,
+    }).catch(() => {})
+  }
 
   // Handle waiting_approval
   if (result.waiting_approval) {
@@ -164,6 +208,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       actionId: result.action?.id,
       sessionId: session.id,
       approvalId: result.approval?.id,
+      operatorName: operator?.name,
       message: `${req.requestedByRole} requested a browser action that needs your approval before proceeding.`,
     }
   }
@@ -173,11 +218,12 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       status: 'failed',
       actionId: result.action?.id,
       error: result.error,
+      operatorName: operator?.name,
       message: result.error ?? 'Web Operator action failed.',
     }
   }
 
-  // 6. Save result as task output if useful
+  // 8. Save result as task output if useful
   const actionOutput = result.action?.output ?? {}
   let taskOutputId: string | undefined
   if (Object.keys(actionOutput).length > 0 && req.projectId && shouldSaveOutput(req.actionType)) {
@@ -203,7 +249,8 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     sessionId: session.id,
     output: actionOutput,
     taskOutputId,
-    message: buildCompletionMessage(req.actionType, actionOutput),
+    operatorName: operator?.name,
+    message: buildCompletionMessage(req.actionType, actionOutput, operator?.name),
   }
 }
 
@@ -240,6 +287,7 @@ export async function delegateSearch(opts: {
   projectId?: string
   requestedByRole: string
   taskId?: string
+  operatorName?: string
 }): Promise<DelegationResult> {
   return delegateToWebOperator({
     projectId: opts.projectId,
@@ -249,6 +297,7 @@ export async function delegateSearch(opts: {
     query: opts.query,
     reason: 'Web search requested',
     taskId: opts.taskId,
+    operatorName: opts.operatorName,
   })
 }
 
@@ -257,6 +306,7 @@ export async function delegateReadWebsite(opts: {
   projectId?: string
   requestedByRole: string
   taskId?: string
+  operatorName?: string
 }): Promise<DelegationResult> {
   return delegateToWebOperator({
     projectId: opts.projectId,
@@ -266,6 +316,7 @@ export async function delegateReadWebsite(opts: {
     targetUrl: opts.url,
     reason: 'Page read requested',
     taskId: opts.taskId,
+    operatorName: opts.operatorName,
   })
 }
 
@@ -273,6 +324,7 @@ export async function delegateOpenUrl(opts: {
   url: string
   projectId?: string
   requestedByRole: string
+  operatorName?: string
 }): Promise<DelegationResult> {
   return delegateToWebOperator({
     projectId: opts.projectId,
@@ -281,6 +333,7 @@ export async function delegateOpenUrl(opts: {
     instruction: `Open URL: ${opts.url}`,
     targetUrl: opts.url,
     reason: 'URL navigation requested',
+    operatorName: opts.operatorName,
   })
 }
 
@@ -290,6 +343,7 @@ export async function delegateEmailDraft(opts: {
   body?: string
   projectId?: string
   requestedByRole: string
+  operatorName?: string
 }): Promise<DelegationResult> {
   return delegateToWebOperator({
     projectId: opts.projectId,
@@ -298,6 +352,7 @@ export async function delegateEmailDraft(opts: {
     instruction: `Prepare email draft${opts.subject ? `: ${opts.subject}` : ''}`,
     payload: { to: opts.to, subject: opts.subject, body: opts.body },
     reason: 'Email draft preparation',
+    operatorName: opts.operatorName,
   })
 }
 
@@ -308,6 +363,7 @@ export async function delegateExternalAction(opts: {
   requestedByRole: string
   targetUrl?: string
   payload?: Record<string, unknown>
+  operatorName?: string
 }): Promise<DelegationResult> {
   return delegateToWebOperator({
     projectId: opts.projectId,
@@ -317,5 +373,6 @@ export async function delegateExternalAction(opts: {
     targetUrl: opts.targetUrl,
     payload: opts.payload,
     reason: 'Delegated external action',
+    operatorName: opts.operatorName,
   })
 }
