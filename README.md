@@ -403,6 +403,26 @@ send_email, submit_form, post_publicly, download_file (in auto mode)
 
 **Safety:** Every action is logged. Risky actions create approval items. The global pause button stops all operator actions immediately.
 
+### Lead extraction
+
+When a Web Operator completes a search or reads a website, AÏKO automatically extracts structured lead candidates using AI analysis.
+
+**What is extracted:** company name, website, location, category, contact details (only if visible in source), relevance reason, confidence score
+
+**What is never invented:** email addresses, phone numbers, LinkedIn URLs — these are only included if found in the actual source text
+
+**Lead status flow:** discovered → needs_review → approved / rejected → contacted → replied → interested / not_interested
+
+**Auto-extraction:** Search and read_page actions with a project context automatically trigger lead extraction in the background.
+
+**Manual extraction:** "Extract leads" button on operator action cards, or via `POST /api/leads/extract`
+
+**UI:**
+- `/leads` — company-wide lead management with status filters and approval workflow
+- **Project workspace → Leads tab** — project-scoped lead list with extract and manual add
+
+**Safety:** Leads must be reviewed before any outreach. Contact is never automated without explicit approval.
+
 ### Agent delegation
 
 Agents do not browse directly — they delegate to the Web Operator:

@@ -110,7 +110,7 @@ function buildCompletionMessage(actionType: string, output: Record<string, unkno
   const opStr = operatorName ? `${operatorName} ` : 'Web Operator '
   if (actionType === 'search') {
     const count = Array.isArray(output.results) ? output.results.length : 0
-    return `${opStr}completed search — ${count} result${count !== 1 ? 's' : ''} found and saved.`
+    return `${opStr}completed search — ${count} result${count !== 1 ? 's' : ''} found. Lead extraction is running in the background.`
   }
   if (actionType === 'read_page') return `${opStr}read the page and saved the content.`
   if (actionType === 'create_email_draft') return `${opStr}prepared the email draft.`
@@ -287,6 +287,13 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     } catch {
       // non-fatal
     }
+  }
+
+  // Auto-extract leads after research (non-blocking, fire-and-forget)
+  if (result.action?.id && req.projectId && ['search', 'read_page'].includes(req.actionType)) {
+    import('@/lib/leads').then(({ extractLeadsFromWebOperatorAction }) => {
+      extractLeadsFromWebOperatorAction(result.action!.id, req.projectId).catch(() => {})
+    }).catch(() => {})
   }
 
   return {

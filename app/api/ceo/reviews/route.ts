@@ -8,6 +8,7 @@ import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForCompany } from '@/lib/approvals'
 import { getCampaignSummaryForCompany } from '@/lib/campaigns'
 import { getLaunchReadinessSummaryForCompany } from '@/lib/campaign-launch-readiness'
+import { getLeadSummaryForCompany } from '@/lib/leads'
 
 export async function GET() {
   try {
@@ -38,12 +39,13 @@ export async function POST() {
     // Fetch task summary and output summary for enriched review context
     let taskContext: string | undefined
     try {
-      const [ts, os, as_, cs, launchReadiness] = await Promise.all([
+      const [ts, os, as_, cs, launchReadiness, leadSummary] = await Promise.all([
         getTaskSummaryForCompany(),
         getOutputSummaryForCompany(),
         getApprovalSummaryForCompany(),
         getCampaignSummaryForCompany(),
         getLaunchReadinessSummaryForCompany(),
+        getLeadSummaryForCompany().catch(() => ({ total: 0, needs_review: 0, approved: 0 })),
       ])
       const staleThreshold = Date.now() - 24 * 60 * 60 * 1000
       const staleTasks = [...ts.active, ...ts.blocked].filter(
@@ -74,6 +76,11 @@ export async function POST() {
           draft: cs.draft.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
           ready_for_review: cs.ready.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
           active: cs.active.map(c => ({ name: c.name, project_name: c.project_name ?? null })),
+        },
+        leads: {
+          total: leadSummary.total,
+          needs_review: leadSummary.needs_review,
+          approved: leadSummary.approved,
         },
         campaign_launch_readiness: {
           campaigns_checked: launchReadiness.campaigns_checked,

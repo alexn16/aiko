@@ -92,6 +92,8 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [extractingLeads, setExtractingLeads] = useState<Record<string, boolean>>({})
+  const [extractResult, setExtractResult] = useState<Record<string, number | null>>({})
 
   const load = useCallback(async () => {
     try {
@@ -184,6 +186,26 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   }
 
   const showResume = operator.status === 'ready_to_resume' || !!operator.pending_action_type
+
+  const handleExtractLeads = async (actionId: string) => {
+    setExtractingLeads(prev => ({ ...prev, [actionId]: true }))
+    try {
+      const res = await fetch('/api/leads/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          web_operator_action_id: actionId,
+          project_id: (operator as WebOperator & { project_id?: string }).project_id ?? undefined,
+        }),
+      })
+      const data = await res.json()
+      const count = data.count ?? 0
+      setExtractResult(prev => ({ ...prev, [actionId]: count }))
+      setTimeout(() => setExtractResult(prev => ({ ...prev, [actionId]: null })), 3000)
+    } finally {
+      setExtractingLeads(prev => ({ ...prev, [actionId]: false }))
+    }
+  }
 
   return (
     <div style={{ padding: '40px 32px', maxWidth: 900 }}>
@@ -412,7 +434,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr>
-                  {['Time', 'Type', 'Status', 'URL / Title', 'Screenshot', 'Failure'].map(h => (
+                  {['Time', 'Type', 'Status', 'URL / Title', 'Screenshot', 'Failure', ''].map(h => (
                     <th key={h} style={{
                       textAlign: 'left', padding: '4px 8px',
                       color: '#94a3b8', fontWeight: 600, fontSize: 9,
@@ -464,6 +486,30 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                     </td>
                     <td style={{ padding: '6px 8px', color: '#ef4444', fontSize: 9 }}>
                       {a.failure_reason ?? ''}
+                    </td>
+                    <td style={{ padding: '6px 8px' }}>
+                      {a.status === 'completed' && ['search', 'read_page'].includes(a.action_type) && (
+                        extractResult[a.id] !== null && extractResult[a.id] !== undefined ? (
+                          <span style={{ fontSize: 9, color: '#15803d', fontWeight: 600 }}>
+                            {extractResult[a.id]} leads found
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleExtractLeads(a.id)}
+                            disabled={!!extractingLeads[a.id]}
+                            style={{
+                              background: '#f8fafc', color: '#374151',
+                              border: '1px solid #e2e8f0', borderRadius: 4,
+                              padding: '3px 8px', fontSize: 9, fontWeight: 600,
+                              cursor: extractingLeads[a.id] ? 'not-allowed' : 'pointer',
+                              opacity: extractingLeads[a.id] ? 0.6 : 1,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {extractingLeads[a.id] ? 'Extracting…' : 'Extract leads'}
+                          </button>
+                        )
+                      )}
                     </td>
                   </tr>
                 ))}

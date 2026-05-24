@@ -11,6 +11,7 @@ import { listToolConnections } from '@/lib/tools/tool-router'
 import { getWebOperatorStatus } from '@/lib/web-operator/web-operator'
 import { getMissingCapabilities } from '@/lib/system-capabilities'
 import { listWebOperators } from '@/lib/web-operator/operators'
+import { getLeadSummaryForCompany } from '@/lib/leads'
 
 export interface CEOCommandResult {
   response: string
@@ -83,7 +84,7 @@ Rules:
 - Named operators can be anyone: Kevin, Hana, Kenji (as operator, distinct from PM role), or any name the user provides. Check web_operators in context to see who already exists.`
 
 async function buildCompanyContext(): Promise<string> {
-  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus, missingCaps, webOperatorsList] = await Promise.all([
+  const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus, missingCaps, webOperatorsList, leadSummary] = await Promise.all([
     db.query('SELECT * FROM company_memory LIMIT 1'),
     db.query(`
       SELECT p.id, p.name, p.active, p.goal, p.strategy,
@@ -113,6 +114,7 @@ async function buildCompanyContext(): Promise<string> {
     getWebOperatorStatus(),
     getMissingCapabilities(),
     listWebOperators().catch(() => []),
+    getLeadSummaryForCompany().catch(() => ({ total: 0, needs_review: 0, approved: 0 })),
   ])
 
   const mem = memRow.rows[0] ?? {}
@@ -187,6 +189,11 @@ async function buildCompanyContext(): Promise<string> {
       current_task: op.current_task,
     })),
     missing_capabilities: missingCaps.map(c => ({ key: c.key, name: c.name })),
+    lead_summary: {
+      total: leadSummary.total,
+      needs_review: leadSummary.needs_review,
+      approved: leadSummary.approved,
+    },
   }
 
   return JSON.stringify(ctx, null, 2)

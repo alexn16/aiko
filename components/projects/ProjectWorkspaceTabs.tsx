@@ -9,6 +9,7 @@ import { ProjectApprovalsPanel } from '@/components/approvals/ProjectApprovalsPa
 import { ProjectCampaignsPanel } from '@/components/campaigns/ProjectCampaignsPanel'
 import { ProjectResearchPanel } from '@/components/tools/ProjectResearchPanel'
 import { ProjectOperatorPanel } from '@/components/web-operator/ProjectOperatorPanel'
+import { ProjectLeadsPanel } from '@/components/leads/ProjectLeadsPanel'
 import Link from 'next/link'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -62,7 +63,7 @@ interface Props {
   hasProvider: boolean
 }
 
-type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'operator'
+type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'leads' | 'operator'
 
 const STATUS_DOT: Record<string, string> = {
   active: '#10b981', browsing: '#3b82f6', writing: '#f59e0b',
@@ -106,6 +107,7 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
     { id: 'approvals', label: 'Approvals' },
     { id: 'campaigns', label: 'Campaigns' },
     { id: 'research',  label: 'Research' },
+    { id: 'leads',     label: 'Leads' },
     { id: 'operator',  label: 'Operator' },
   ]
 
@@ -453,6 +455,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
             <div style={{ maxWidth: 720 }}>
               <ProjectResearchPanel projectId={project.id} projectName={project.name} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Leads ───────────────────────────────────────────────────────── */}
+        {tab === 'leads' && (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
+            <div style={{ maxWidth: 760 }}>
+              <ProjectLeadsPanel projectId={project.id} />
             </div>
           </div>
         )}

@@ -8,6 +8,7 @@ import { getOutputSummaryForProject } from '@/lib/agents/task-outputs'
 import { getApprovalSummaryForProject } from '@/lib/approvals'
 import { getCampaignSummaryForProject } from '@/lib/campaigns'
 import { getLaunchReadinessSummaryForProject } from '@/lib/campaign-launch-readiness'
+import { getLeadSummaryForProject } from '@/lib/leads'
 
 export async function GET(
   _req: NextRequest,
@@ -51,12 +52,13 @@ export async function POST(
     // Fetch task summary and output summary for context
     let taskSummaryData: Record<string, unknown> | undefined
     try {
-      const [ts, os, approvalSummary, campaignSummary, launchReadiness] = await Promise.all([
+      const [ts, os, approvalSummary, campaignSummary, launchReadiness, leadSummary] = await Promise.all([
         getTaskSummaryForProject(params.id),
         getOutputSummaryForProject(params.id),
         getApprovalSummaryForProject(params.id),
         getCampaignSummaryForProject(params.id),
         getLaunchReadinessSummaryForProject(params.id),
+        getLeadSummaryForProject(params.id).catch(() => ({ total: 0, needs_review: 0, approved: 0 })),
       ])
 
       // Calculate this week's outputs
@@ -87,6 +89,11 @@ export async function POST(
           total: campaignSummary.total,
           by_status: campaignSummary.by_status,
           active_names: campaignSummary.active.map(c => c.name),
+        },
+        leads: {
+          total: leadSummary.total,
+          needs_review: leadSummary.needs_review,
+          approved: leadSummary.approved,
         },
         campaign_launch_readiness: launchReadiness.latest_checks.map(lc => ({
           name: lc.campaign_name,

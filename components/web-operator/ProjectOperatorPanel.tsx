@@ -63,6 +63,10 @@ export function ProjectOperatorPanel({ projectId }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [actionResult, setActionResult] = useState<Record<string, unknown> | null>(null)
 
+  // Lead extraction state
+  const [extractingLeads, setExtractingLeads] = useState<Record<string, boolean>>({})
+  const [extractResult, setExtractResult] = useState<Record<string, number | null>>({})
+
   const loadData = useCallback(async () => {
     try {
       const [statusRes, actionsRes, approvalsRes] = await Promise.all([
@@ -121,6 +125,25 @@ export function ProjectOperatorPanel({ projectId }: Props) {
       setActionResult({ error: String(err) })
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function handleExtractLeads(actionId: string) {
+    setExtractingLeads(prev => ({ ...prev, [actionId]: true }))
+    try {
+      const res = await fetch('/api/leads/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ web_operator_action_id: actionId, project_id: projectId }),
+      })
+      const data = await res.json()
+      const count = data.count ?? 0
+      setExtractResult(prev => ({ ...prev, [actionId]: count }))
+      setTimeout(() => setExtractResult(prev => ({ ...prev, [actionId]: null })), 3000)
+    } catch {
+      // non-fatal
+    } finally {
+      setExtractingLeads(prev => ({ ...prev, [actionId]: false }))
     }
   }
 
@@ -344,6 +367,28 @@ export function ProjectOperatorPanel({ projectId }: Props) {
                     alt="Page screenshot"
                     style={{ width: 80, height: 50, objectFit: 'cover', borderRadius: 4, border: '1px solid #e2e8f0', flexShrink: 0 }}
                   />
+                )}
+                {action.status === 'completed' && ['search', 'read_page'].includes(action.action_type) && (
+                  extractResult[action.id] !== null && extractResult[action.id] !== undefined ? (
+                    <span style={{ fontSize: 9, color: '#15803d', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {extractResult[action.id]} leads
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleExtractLeads(action.id)}
+                      disabled={!!extractingLeads[action.id]}
+                      style={{
+                        background: '#f8fafc', color: '#374151',
+                        border: '1px solid #e2e8f0', borderRadius: 4,
+                        padding: '3px 8px', fontSize: 9, fontWeight: 600,
+                        cursor: extractingLeads[action.id] ? 'not-allowed' : 'pointer',
+                        opacity: extractingLeads[action.id] ? 0.6 : 1,
+                        whiteSpace: 'nowrap', flexShrink: 0,
+                      }}
+                    >
+                      {extractingLeads[action.id] ? 'Extracting…' : 'Extract leads'}
+                    </button>
+                  )
                 )}
               </div>
             ))}
