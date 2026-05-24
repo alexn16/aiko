@@ -174,6 +174,24 @@ export default function ToolsPage() {
 
   return (
     <div style={{ padding: '40px 32px', maxWidth: 720 }}>
+
+      {/* Secondary-tool notice */}
+      <div style={{
+        background: '#fffbeb',
+        border: '1px solid #fde68a',
+        borderRadius: 8,
+        padding: '10px 14px',
+        marginBottom: 24,
+        fontSize: 12,
+        color: '#92400e',
+        lineHeight: 1.6,
+      }}>
+        <strong>Note:</strong> The Tools page connects optional API-key-based search providers (Tavily, Brave, SerpAPI).
+        These are secondary to the Web Operator. AÏKO&apos;s primary external execution runs through the Web Operator at{' '}
+        <a href="/operator" style={{ color: '#92400e', textDecoration: 'underline' }}>/operator</a>.
+        Configure search providers here only as a supplementary acceleration — they are not required.
+      </div>
+
       <div style={{ marginBottom: 28 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
           Tool Connections

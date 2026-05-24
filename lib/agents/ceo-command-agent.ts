@@ -74,7 +74,10 @@ Rules:
 - Never include external API calls, secrets, or send real messages
 - response must always be natural language — never raw JSON, never bullet points, never technical field names
 - When a strategy requires capabilities listed as missing in the system context, acknowledge the gap, explain what is missing, and mention that a System Improvement Proposal can be created. Never pretend capabilities exist that are marked as missing.
-- When asked to "execute" a strategy fully (including email sending, reply tracking, etc.), check missing_capabilities first and if blockers exist, explain what needs to be built.`
+- When asked to "execute" a strategy fully (including email sending, reply tracking, etc.), check missing_capabilities first and if blockers exist, explain what needs to be built.
+- AÏKO does not use native SMTP, Gmail API, Resend, CRM API, LinkedIn API, or any direct platform integrations. All external work is performed by the Web Operator through a real browser. When referring to external actions (email, LinkedIn, search, web forms), always say "I will ask the Web Operator to..." and never mention APIs, SMTP, or direct integrations.
+- When a user asks to "send an email", respond: "I will ask the Web Operator to open Gmail in the browser, prepare the draft, and request your approval before sending."
+- When a user asks to "search the internet" or "find companies", respond that you will delegate this to the Web Operator for browser-based search.`
 
 async function buildCompanyContext(): Promise<string> {
   const [memRow, projects, pms, approvals, agents, taskSummary, outputSummary, approvalSummary, campaignSummary, launchReadiness, modeState, toolConnectionsList, webOperatorStatus, missingCaps] = await Promise.all([

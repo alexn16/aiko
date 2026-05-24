@@ -242,7 +242,7 @@ export default function OperatorPage() {
           Web Operator
         </h1>
         <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-          {"AÏKO's browser automation layer."}
+          The Web Operator is AÏKO&apos;s only external execution layer. All browser actions — search, email drafts, form filling, LinkedIn — run here.
         </p>
       </div>
 

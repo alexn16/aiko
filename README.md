@@ -19,6 +19,20 @@ Example exchange:
 >
 > **AÏKO CEO:** Understood. I'll open Foreman as a dedicated marketing project. I'm assigning Kenji as Project Manager — Foreman is a B2B industrial product and needs a structured outbound strategy. Kenji will coordinate Research, Lead Generation, Copywriting, and Outreach. The first step is to define Foreman's target buyer profile and campaign angles. I'll prepare the workspace now.
 
+## Architecture principle: Web Operator first
+
+AÏKO does not build separate native integrations for every platform. All external work is performed by the **Web Operator** — a browser automation layer powered by Playwright. Agents think and plan internally, then delegate real-world actions to the Web Operator, which operates websites like a human.
+
+Native APIs (SMTP, Gmail API, LinkedIn API, CRM APIs) are not part of the core architecture. The Web Operator handles:
+- Web search (via browser)
+- Reading websites
+- Preparing email drafts in Gmail/Outlook web
+- LinkedIn interaction
+- Form filling and submission
+- Any web-based tool or platform
+
+This means AÏKO can work with any platform that has a web interface — without requiring a separate API integration for each one.
+
 ## What AÏKO is
 
 - **Chat-first**: the CEO Chat is the home screen, not a dashboard.

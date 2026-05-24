@@ -18,8 +18,8 @@ const NAV_ITEMS = [
   { href: '/approvals',  label: 'Approvals' },
   { href: '/campaigns',  label: 'Campaigns' },
   { href: '/reports',    label: 'Reports' },
-  { href: '/tools',      label: 'Tools' },
-  { href: '/tool-runs',  label: 'Tool Runs' },
+  // { href: '/tools',      label: 'Tools' },      // hidden from nav — available at /tools for debugging
+  // { href: '/tool-runs',  label: 'Tool Runs' },  // hidden from nav — available at /tool-runs for debugging
   { href: '/operator',   label: 'Operator' },
   { href: '/functions',  label: 'Functions' },
   { href: '/mode',       label: 'Operating Mode' },

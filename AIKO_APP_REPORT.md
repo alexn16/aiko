@@ -460,3 +460,43 @@ Use existing className conventions found in other route handlers and page compon
 ```
 
 ---
+
+## Architecture simplification — 2026-05-24
+
+### Decision: Web Operator as single external execution layer
+
+AÏKO's architecture has been simplified. The Web Operator is now the only external execution path. Native API integrations (SMTP, Gmail API, LinkedIn API, CRM APIs, Resend, etc.) are not part of the core product.
+
+**What this means:**
+- `lib/tools/web-search.ts` and `lib/tools/website-reader.ts` remain as utility functions but are secondary to browser-based execution
+- `/tools` and `/tool-runs` pages remain available but are removed from the main sidebar navigation
+- All CEO and PM agent prompts now direct external actions through Web Operator delegation
+- Email = Web Operator opens Gmail/Outlook web, prepares draft, requests approval, sends only if Full Access allows
+- LinkedIn = Web Operator opens LinkedIn web, prepares message, requests approval
+- Search = Web Operator searches via browser (or API-key provider as secondary acceleration)
+
+**What was de-emphasized:**
+- Native SMTP/email send routes
+- API-key search provider configuration as primary flow
+- `/tools` and `/tool-runs` from main navigation
+
+**What remains the main flow:**
+```
+CEO/PM Chat
+→ Agent tasks and internal messages
+→ Web Operator delegation (lib/web-operator/delegation.ts)
+→ Playwright browser execution (lib/web-operator/playwright-executor.ts)
+→ Web operator action log (web_operator_actions table)
+→ Outputs / Leads / Approval items
+→ Campaign assembly
+→ Launch readiness check
+→ Client approval
+```
+
+### Updated next 3 steps
+
+1. **Improve Web Operator reliability** — screenshots on every action, better error messages, session recovery after Playwright crash. This makes the operator actually usable in practice.
+
+2. **Web Operator Gmail/email workflow** — implement `create_email_draft` action type fully: Web Operator opens Gmail/Outlook in browser, fills recipient/subject/body from task output, saves draft, shows screenshot, creates approval item. If Full Access and approved: clicks send.
+
+3. **Lead extraction from research** — when Web Operator completes a search or read_page action, automatically extract company names, URLs, contacts from the output and create lead records. Closes the research → leads pipeline gap.
