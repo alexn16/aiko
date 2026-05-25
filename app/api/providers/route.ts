@@ -15,7 +15,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, type, base_url, model, api_key } = body
+    const { name, type, base_url, model, api_key, provider_catalog_id, compatibility, auth_type } = body
 
     if (!name || !type) {
       return NextResponse.json({ error: 'name and type are required' }, { status: 400 })
@@ -23,10 +23,20 @@ export async function POST(req: NextRequest) {
 
     const res = await db.query(
       `INSERT INTO provider_connections
-         (name, type, status, base_url, model, api_key_encrypted, supports_streaming)
-       VALUES ($1, $2, 'disconnected', $3, $4, $5, true)
+         (name, type, status, base_url, model, api_key_encrypted, supports_streaming,
+          provider_catalog_id, compatibility, auth_type)
+       VALUES ($1, $2, 'disconnected', $3, $4, $5, true, $6, $7, $8)
        RETURNING id`,
-      [name, type, base_url ?? null, model ?? null, api_key ?? null]
+      [
+        name,
+        type,
+        base_url ?? null,
+        model ?? null,
+        api_key ?? null,
+        provider_catalog_id ?? null,
+        compatibility ?? null,
+        auth_type ?? null,
+      ]
     )
 
     return NextResponse.json({ id: res.rows[0].id })

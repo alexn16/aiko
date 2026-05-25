@@ -43,21 +43,25 @@ This means AÏKO can work with any platform that has a web interface — without
 - **Provider-agnostic**: connects to OpenAI, Anthropic, Ollama, or any compatible endpoint.
 - **Self-hostable**: Next.js + PostgreSQL + Playwright via Docker Compose.
 
-## AI Provider system
+## AÏKO Brain — Provider Catalog
 
-AÏKO requires at least one connected AI provider to operate. Providers are managed at `/connect-ai`.
+AÏKO uses an OpenClaw-style provider catalog (`lib/ai/provider-catalog.ts`) to manage AI brains:
 
-**Supported providers:**
-- OpenAI API (GPT-4o, GPT-4 Turbo, etc.)
-- Anthropic API (Claude 3.5 Sonnet, Claude Opus, etc.)
-- Local AI / Ollama (runs on your machine, no API key)
-- Custom / OpenAI-compatible endpoint (OpenRouter, Groq, Together AI, etc.)
+- **AÏKO Brain** = selectable AI provider (any catalog entry)
+- **AÏKO Hands** = Web Operators (Playwright browser automation)
+- **AÏKO Permissions** = Operating Mode (research / full-access / locked)
 
-**Not yet supported (shown as unavailable):**
-- Direct ChatGPT account connection (requires OAuth/MCP — not implemented in this build)
-- Direct Claude account connection (requires OAuth/MCP — not implemented in this build)
+The catalog covers 26 providers across 6 categories:
+- **Subscription / OAuth**: ChatGPT, Claude direct (OAuth flow not yet built)
+- **Direct API**: OpenAI, Anthropic, Gemini, Mistral, OpenRouter, Qwen, Moonshot, MiniMax, StepFun, BytePlus, DeepInfra, Fireworks, Chutes, Synthetic
+- **Gateway**: OpenRouter, Vercel AI Gateway, Cloudflare AI Gateway, Amazon Bedrock (planned), Alibaba Model Studio (planned), Qianfan (planned)
+- **Local**: Ollama
+- **Custom**: OpenAI-compatible endpoint, Anthropic-compatible endpoint
+- **Future / Specialized**: ComfyUI, fal, Runway (not yet integrated)
 
-Each provider is tested before being activated. Role assignments let you choose which AI brain powers each agent role (CEO, Research, Copywriting, Review, QA, Local Fallback).
+The router dispatches based on `compatibility` field (openai_compatible → openai-compat adapter, anthropic_messages → Anthropic SDK). Not every catalog entry has a fully implemented adapter; unsupported entries show as "planned" or "not available in this build".
+
+Each provider is tested before being activated. Role assignments let you choose which AI brain powers each agent role (CEO, Research, Copywriting, Review, QA, Project Manager, Local Fallback).
 
 ## Product surfaces
 

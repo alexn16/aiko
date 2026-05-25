@@ -1,5 +1,10 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import {
+  CATALOG,
+  getCatalogByCategory,
+  type ProviderCatalogEntry,
+} from '@/lib/ai/provider-catalog'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -12,102 +17,17 @@ interface Provider {
   model: string | null
   last_tested_at: string | null
   last_error: string | null
+  compatibility?: string | null
 }
-
-interface ProviderCardDef {
-  type: string
-  label: string
-  description: string
-  icon: string
-  available: boolean
-  unavailableReason?: string
-  defaultBaseUrl?: string
-  needsKey: boolean
-  modelSuggestions?: string[]
-  powersLabel: string
-  primaryGroup: boolean
-}
-
-const PROVIDER_DEFS: ProviderCardDef[] = [
-  {
-    type: 'chatgpt_direct',
-    label: 'ChatGPT',
-    description: 'Connect directly to your ChatGPT account.',
-    icon: '🟢',
-    available: false,
-    unavailableReason: 'Direct ChatGPT connection not available in this build. Use OpenAI API instead.',
-    needsKey: false,
-    powersLabel: 'Direct ChatGPT account',
-    primaryGroup: true,
-  },
-  {
-    type: 'claude_direct',
-    label: 'Claude',
-    description: 'Connect directly to your Claude account.',
-    icon: '🟠',
-    available: false,
-    unavailableReason: 'Direct Claude connection not available in this build. Use Anthropic API instead.',
-    needsKey: false,
-    powersLabel: 'Direct Claude account',
-    primaryGroup: true,
-  },
-  {
-    type: 'openai_api',
-    label: 'OpenAI API',
-    description: 'GPT-4o, GPT-4 Turbo via OpenAI API key.',
-    icon: '⚡',
-    available: true,
-    defaultBaseUrl: 'https://api.openai.com/v1',
-    needsKey: true,
-    modelSuggestions: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-    powersLabel: 'OpenAI API key',
-    primaryGroup: false,
-  },
-  {
-    type: 'anthropic_api',
-    label: 'Anthropic API',
-    description: 'Claude 3.5 Sonnet, Claude 3 Opus via Anthropic API key.',
-    icon: '🔶',
-    available: true,
-    defaultBaseUrl: '',
-    needsKey: true,
-    modelSuggestions: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-3-5-sonnet-20241022'],
-    powersLabel: 'Anthropic API key',
-    primaryGroup: false,
-  },
-  {
-    type: 'ollama',
-    label: 'Local AI / Ollama',
-    description: 'Run models locally. No API key needed.',
-    icon: '🖥',
-    available: true,
-    defaultBaseUrl: 'http://localhost:11434/v1',
-    needsKey: false,
-    modelSuggestions: ['llama3.2', 'llama3.1', 'qwen2.5', 'mistral', 'gemma3'],
-    powersLabel: 'Local model (your machine)',
-    primaryGroup: false,
-  },
-  {
-    type: 'openai_compatible',
-    label: 'Custom Endpoint',
-    description: 'Any OpenAI-compatible API. Works with OpenRouter, Together AI, etc.',
-    icon: '🔧',
-    available: true,
-    defaultBaseUrl: '',
-    needsKey: true,
-    modelSuggestions: [],
-    powersLabel: 'Custom / compatible endpoint',
-    primaryGroup: false,
-  },
-]
 
 const ROLES = [
-  { id: 'ceo',           label: 'CEO Chat' },
-  { id: 'research',      label: 'Research Agent' },
-  { id: 'copywriting',   label: 'Copywriting Agent' },
-  { id: 'review',        label: 'Review Agent' },
-  { id: 'qa',            label: 'QA Agent' },
-  { id: 'local_fallback',label: 'Local Fallback' },
+  { id: 'ceo',            label: 'CEO Chat' },
+  { id: 'research',       label: 'Research Agent' },
+  { id: 'copywriting',    label: 'Copywriting Agent' },
+  { id: 'review',         label: 'Review Agent' },
+  { id: 'qa',             label: 'QA Agent' },
+  { id: 'local_fallback', label: 'Local Fallback' },
+  { id: 'project_manager',label: 'Project Manager' },
 ]
 
 const INPUT: React.CSSProperties = {
@@ -116,12 +36,17 @@ const INPUT: React.CSSProperties = {
   boxSizing: 'border-box', outline: 'none', fontFamily: 'Inter, sans-serif',
 }
 
+const SECTION_LABEL: React.CSSProperties = {
+  fontSize: 11, fontWeight: 600, color: '#cbd5e1',
+  textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12,
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConnectAIPage() {
   const [providers, setProviders] = useState<Provider[]>([])
   const [roles, setRoles] = useState<Record<string, string | null>>({})
-  const [configuring, setConfiguring] = useState<string | null>(null) // type being configured
+  const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -142,15 +67,29 @@ export default function ConnectAIPage() {
 
   const connectedCount = providers.filter(p => p.status === 'connected').length
 
+  // Helper: providers belonging to a catalog entry
+  function instancesFor(entry: ProviderCatalogEntry): Provider[] {
+    return providers.filter(p => p.type === entry.id || p.type === entry.id)
+  }
+
+  // Available entries by category
+  const recommendedEntries  = getCatalogByCategory('subscription_oauth')
+  const directApiAvailable  = getCatalogByCategory('direct_api').filter(e => e.status === 'available')
+  const localEntries        = getCatalogByCategory('local').filter(e => e.status === 'available')
+  const gatewayAvailable    = getCatalogByCategory('gateway').filter(e => e.status === 'available')
+  const gatewayPlanned      = getCatalogByCategory('gateway').filter(e => e.status === 'planned')
+  const customEntries       = getCatalogByCategory('custom').filter(e => e.status === 'available')
+  const mediaEntries        = getCatalogByCategory('media_special')
+
   return (
-    <div style={{ padding: '40px 40px', maxWidth: 860 }} className="page-enter">
+    <div style={{ padding: '40px 40px', maxWidth: 1000 }} className="page-enter">
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 6px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           AI Brain
         </p>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em', margin: '0 0 8px' }}>
-          Choose AÏKO's brain
+          Choose AÏKO&apos;s brain
         </h1>
         <p style={{ fontSize: 14, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
           AÏKO needs an AI brain before the company can operate.
@@ -181,32 +120,28 @@ export default function ConnectAIPage() {
         )
       )}
 
-      {/* Primary providers (ChatGPT / Claude direct) */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-          Direct connections
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
-          {PROVIDER_DEFS.filter(d => d.primaryGroup).map(def => (
-            <UnavailableCard key={def.type} def={def} />
+      {/* ── Recommended (subscription / OAuth) ────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={SECTION_LABEL}>Recommended</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {recommendedEntries.map(entry => (
+            <UnavailableCard key={entry.id} entry={entry} />
           ))}
         </div>
       </div>
 
-      {/* Secondary providers (API / local) */}
-      <div style={{ marginBottom: 36 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
-          API &amp; local providers
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {PROVIDER_DEFS.filter(d => !d.primaryGroup).map(def => {
-            const existing = providers.filter(p => p.type === def.type)
+      {/* ── API providers ─────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={SECTION_LABEL}>API providers</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          {directApiAvailable.map(entry => {
+            const existing = instancesFor(entry)
             return (
               <ProviderCard
-                key={def.type}
-                def={def}
+                key={entry.id}
+                entry={entry}
                 existing={existing}
-                onConfigure={() => setConfiguring(def.type)}
+                onConfigure={() => setConfiguring(entry)}
                 onRefresh={load}
               />
             )
@@ -214,7 +149,86 @@ export default function ConnectAIPage() {
         </div>
       </div>
 
-      {/* Role assignments */}
+      {/* ── Local ─────────────────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={SECTION_LABEL}>Local</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {localEntries.map(entry => {
+            const existing = instancesFor(entry)
+            return (
+              <ProviderCard
+                key={entry.id}
+                entry={entry}
+                existing={existing}
+                onConfigure={() => setConfiguring(entry)}
+                onRefresh={load}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Gateway & routing ─────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={SECTION_LABEL}>Gateway &amp; routing</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: gatewayPlanned.length > 0 ? 16 : 0 }}>
+          {gatewayAvailable.map(entry => {
+            const existing = instancesFor(entry)
+            return (
+              <ProviderCard
+                key={entry.id}
+                entry={entry}
+                existing={existing}
+                onConfigure={() => setConfiguring(entry)}
+                onRefresh={load}
+              />
+            )
+          })}
+        </div>
+        {gatewayPlanned.length > 0 && (
+          <>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#e2e8f0', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+              Coming soon
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {gatewayPlanned.map(entry => (
+                <PlannedCard key={entry.id} entry={entry} />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Custom endpoints ──────────────────────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={SECTION_LABEL}>Custom endpoints</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {customEntries.map(entry => {
+            const existing = instancesFor(entry)
+            return (
+              <ProviderCard
+                key={entry.id}
+                entry={entry}
+                existing={existing}
+                onConfigure={() => setConfiguring(entry)}
+                onRefresh={load}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Future / Specialized ──────────────────────────────────────────── */}
+      <div style={{ marginBottom: 36 }}>
+        <div style={SECTION_LABEL}>Future / Specialized</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {mediaEntries.map(entry => (
+            <UnavailableCard key={entry.id} entry={entry} />
+          ))}
+        </div>
+      </div>
+
+      {/* ── Role assignments ──────────────────────────────────────────────── */}
       {providers.filter(p => p.status === 'connected').length > 0 && (
         <RoleAssignments
           providers={providers.filter(p => p.status === 'connected')}
@@ -223,10 +237,10 @@ export default function ConnectAIPage() {
         />
       )}
 
-      {/* Setup drawer */}
+      {/* ── Setup drawer ──────────────────────────────────────────────────── */}
       {configuring && (
         <SetupDrawer
-          def={PROVIDER_DEFS.find(d => d.type === configuring)!}
+          entry={configuring}
           onClose={() => setConfiguring(null)}
           onSaved={() => { setConfiguring(null); load() }}
         />
@@ -237,16 +251,16 @@ export default function ConnectAIPage() {
 
 // ── Unavailable card ───────────────────────────────────────────────────────────
 
-function UnavailableCard({ def }: { def: ProviderCardDef }) {
+function UnavailableCard({ entry }: { entry: ProviderCatalogEntry }) {
   return (
     <div style={{
       background: '#fafafa', border: '1px solid #f1f5f9', borderRadius: 12,
       padding: '18px 20px', opacity: 0.7,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 20 }}>{def.icon}</span>
+        <span style={{ fontSize: 20 }}>{entry.icon}</span>
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{def.label}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{entry.display_name}</div>
           <div style={{
             display: 'inline-block', fontSize: 10, fontWeight: 500,
             color: '#94a3b8', background: '#f1f5f9',
@@ -256,8 +270,43 @@ function UnavailableCard({ def }: { def: ProviderCardDef }) {
           </div>
         </div>
       </div>
-      <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
-        {def.unavailableReason}
+      {entry.notes && (
+        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+          {entry.notes}
+        </p>
+      )}
+      {!entry.notes && (
+        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+          {entry.short_description}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── Planned card ───────────────────────────────────────────────────────────────
+
+function PlannedCard({ entry }: { entry: ProviderCatalogEntry }) {
+  return (
+    <div style={{
+      background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 12,
+      padding: '18px 20px', opacity: 0.85,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ fontSize: 20 }}>{entry.icon}</span>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>{entry.display_name}</div>
+          <div style={{
+            display: 'inline-block', fontSize: 10, fontWeight: 500,
+            color: '#d97706', background: '#fef9c3',
+            borderRadius: 4, padding: '1px 6px', marginTop: 2,
+          }}>
+            Coming soon
+          </div>
+        </div>
+      </div>
+      <p style={{ fontSize: 12, color: '#92400e', margin: 0, lineHeight: 1.5 }}>
+        {entry.notes ?? entry.short_description}
       </p>
     </div>
   )
@@ -266,9 +315,9 @@ function UnavailableCard({ def }: { def: ProviderCardDef }) {
 // ── Provider card ──────────────────────────────────────────────────────────────
 
 function ProviderCard({
-  def, existing, onConfigure, onRefresh,
+  entry, existing, onConfigure, onRefresh,
 }: {
-  def: ProviderCardDef
+  entry: ProviderCatalogEntry
   existing: Provider[]
   onConfigure: () => void
   onRefresh: () => void
@@ -287,9 +336,9 @@ function ProviderCard({
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20 }}>{def.icon}</span>
+          <span style={{ fontSize: 20 }}>{entry.icon}</span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{def.label}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{entry.display_name}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }} />
               <span style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
@@ -299,7 +348,7 @@ function ProviderCard({
       </div>
 
       <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 12px', lineHeight: 1.5 }}>
-        {def.description}
+        {entry.short_description}
       </p>
 
       {/* Connected instances */}
@@ -492,16 +541,16 @@ function RoleAssignments({
 // ── Setup drawer ──────────────────────────────────────────────────────────────
 
 function SetupDrawer({
-  def, onClose, onSaved,
+  entry, onClose, onSaved,
 }: {
-  def: ProviderCardDef
+  entry: ProviderCatalogEntry
   onClose: () => void
   onSaved: () => void
 }) {
-  const [name, setName] = useState(def.label)
-  const [baseUrl, setBaseUrl] = useState(def.defaultBaseUrl ?? '')
+  const [name, setName] = useState(entry.display_name)
+  const [baseUrl, setBaseUrl] = useState(entry.default_base_url ?? '')
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState(def.modelSuggestions?.[0] ?? '')
+  const [model, setModel] = useState(entry.model_suggestions?.[0] ?? '')
   const [customModel, setCustomModel] = useState('')
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -510,9 +559,13 @@ function SetupDrawer({
 
   const effectiveModel = customModel.trim() || model
 
+  // Show base URL field if entry requires it, or if it has a default URL (and isn't pure Anthropic)
+  const showBaseUrl = entry.requires_base_url || (!!entry.default_base_url && entry.compatibility !== 'anthropic_messages')
+  const showApiKey = entry.requires_api_key
+
   async function save() {
     if (!effectiveModel.trim()) { setError('Enter a model name.'); return }
-    if (def.needsKey && !apiKey.trim()) { setError('API key is required for this provider.'); return }
+    if (showApiKey && !apiKey.trim()) { setError('API key is required for this provider.'); return }
     setSaving(true); setError(null)
     try {
       const res = await fetch('/api/providers', {
@@ -520,7 +573,10 @@ function SetupDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          type: def.type,
+          type: entry.id,
+          provider_catalog_id: entry.id,
+          compatibility: entry.compatibility,
+          auth_type: entry.auth_type,
           base_url: baseUrl || null,
           model: effectiveModel,
           api_key: apiKey || null,
@@ -546,17 +602,18 @@ function SetupDrawer({
   }
 
   async function testExisting() {
-    // For testing before saving — validate inline
     if (!effectiveModel.trim()) { setTestResult({ ok: false, msg: 'Enter a model name first.' }); return }
     setTesting(true); setTestResult(null)
     try {
-      // Create temp, test, delete
       const res = await fetch('/api/providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: `__test__${Date.now()}`,
-          type: def.type,
+          type: entry.id,
+          provider_catalog_id: entry.id,
+          compatibility: entry.compatibility,
+          auth_type: entry.auth_type,
           base_url: baseUrl || null,
           model: effectiveModel,
           api_key: apiKey || null,
@@ -593,9 +650,9 @@ function SetupDrawer({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                {def.icon} {def.label}
+                {entry.icon} {entry.display_name}
               </div>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{def.powersLabel}</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{entry.short_description}</div>
             </div>
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#94a3b8' }}>✕</button>
           </div>
@@ -603,6 +660,17 @@ function SetupDrawer({
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+          {/* Notes */}
+          {entry.notes && (
+            <div style={{
+              marginBottom: 14, padding: '9px 12px', borderRadius: 8,
+              background: '#f8fafc', border: '1px solid #e2e8f0',
+              fontSize: 12, color: '#64748b', lineHeight: 1.5,
+            }}>
+              {entry.notes}
+            </div>
+          )}
+
           {/* Name */}
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
@@ -615,13 +683,13 @@ function SetupDrawer({
           </div>
 
           {/* Base URL */}
-          {(def.type !== 'anthropic_api') && (
+          {showBaseUrl && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
                 Base URL
               </label>
               <input value={baseUrl} onChange={e => setBaseUrl(e.target.value)}
-                placeholder="https://api.openai.com/v1" style={INPUT}
+                placeholder="https://api.example.com/v1" style={INPUT}
                 onFocus={e => { e.target.style.borderColor = '#6366f1' }}
                 onBlur={e => { e.target.style.borderColor = '#e2e8f0' }}
               />
@@ -629,7 +697,7 @@ function SetupDrawer({
           )}
 
           {/* API Key */}
-          {def.needsKey && (
+          {showApiKey && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
                 API key
@@ -643,13 +711,13 @@ function SetupDrawer({
           )}
 
           {/* Model chips */}
-          {def.modelSuggestions && def.modelSuggestions.length > 0 && (
+          {entry.model_suggestions && entry.model_suggestions.length > 0 && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 6 }}>
                 Model
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 7 }}>
-                {def.modelSuggestions.map(m => (
+                {entry.model_suggestions.map(m => (
                   <button key={m} onClick={() => { setModel(m); setCustomModel('') }} type="button"
                     style={{
                       padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
@@ -670,7 +738,7 @@ function SetupDrawer({
               />
             </div>
           )}
-          {(!def.modelSuggestions || def.modelSuggestions.length === 0) && (
+          {(!entry.model_suggestions || entry.model_suggestions.length === 0) && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 5 }}>
                 Model

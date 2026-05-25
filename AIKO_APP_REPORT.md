@@ -26,8 +26,8 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Tables:** `projects`, `company_memory`, `project_memory`, `project_map`, `project_managers`, `ceo_commands`, `ceo_reviews`, `agents`, `approval_items`, `campaigns`, `campaign_launch_checks`, `agent_tasks`, `agent_task_outputs`, `operating_mode`, `tool_connections`, `web_operator_sessions`, `system_capabilities`
 
 ### /connect-ai — AI Provider Setup
-- **Purpose:** Connect AI providers (OpenAI, Anthropic, Ollama, custom endpoint), test connections, assign providers to agent roles (CEO, Research, Copywriting, Review, QA, Project Manager, Local Fallback).
-- **Key components:** `components/setup/`
+- **Purpose:** Connect AI providers from a 26-entry OpenClaw-style catalog across 6 sections (Recommended, API providers, Local, Gateway & routing, Custom endpoints, Future/Specialized). Test connections, assign providers to agent roles (CEO, Research, Copywriting, Review, QA, Project Manager, Local Fallback). Available providers open a SetupDrawer driven by `ProviderCatalogEntry`; planned entries show amber "Coming soon" cards; unavailable entries show dimmed grey cards.
+- **Key components:** `lib/ai/provider-catalog.ts`, `app/(dashboard)/connect-ai/page.tsx`
 - **APIs used:** `GET/POST /api/providers`, `GET/PATCH /api/providers/[id]`, `POST /api/providers/[id]/test`, `GET/PATCH /api/providers/roles`
 - **Tables:** `provider_connections`, `ai_role_assignments`
 
@@ -129,10 +129,12 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ## 3. Backend module map
 
 ### AI Provider / Router
-- **What it does:** Universal entry point for all AI calls. Resolves the correct provider for a given agent role via `ai_role_assignments`, falls back to any connected provider, and dispatches to the appropriate SDK adapter (OpenAI-compatible or Anthropic).
+- **What it does:** Universal entry point for all AI calls. Resolves the correct provider for a given agent role via `ai_role_assignments`, falls back to any connected provider, and dispatches to the appropriate SDK adapter based on the `compatibility` field (openai_compatible / ollama_native → OpenAI-compat adapter; anthropic_messages → Anthropic SDK). Old rows without `compatibility` fall back to type-based mapping for backward compatibility.
 - **Main files:** `lib/ai/router.ts`, `lib/ai/providers/openai-compat.ts`, `lib/ai/providers/anthropic.ts`
+- **Catalog:** `lib/ai/provider-catalog.ts` — OpenClaw-style catalog of 26 providers across 6 categories (subscription_oauth, direct_api, gateway, local, custom, media_special). Drives the `/connect-ai` UI. Providers with `status: available` are fully connectable; `planned` entries show as coming-soon; `not_available_in_this_build` entries are greyed out.
 - **Tables:** `provider_connections`, `ai_role_assignments`
-- **Status:** complete
+- **Migration:** `lib/db/migrations/025_provider_catalog.sql` — adds `provider_catalog_id`, `compatibility`, `auth_type`, `account_email`, `subscription_label`, `capabilities` columns; back-fills `compatibility` from type for existing rows.
+- **Status:** complete (catalog upgrade 2026-05-25)
 
 ### CEO Command Agent
 - **What it does:** Builds a full company context snapshot (projects, PMs, tasks, outputs, approvals, campaigns, launch readiness, operating mode, tool connections, web operator status, missing capabilities), sends it to the CEO LLM with a structured JSON prompt, and executes returned actions (create project, assign PM, update company/project memory, generate project map). Logs every command to `ceo_commands`.

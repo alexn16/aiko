@@ -25,6 +25,7 @@ export interface ProviderRow {
   model: string | null
   api_key_encrypted: string | null
   supports_streaming: boolean
+  compatibility?: string | null
 }
 
 // ── Provider lookup ────────────────────────────────────────────────────────────
@@ -116,12 +117,16 @@ export async function streamAI(opts: StreamAIOptions): Promise<void> {
 
 // ── Dispatch helpers ───────────────────────────────────────────────────────────
 
-function isOpenAICompat(type: string) {
-  return ['openai_api', 'ollama', 'openai_compatible', 'custom', 'chatgpt_direct'].includes(type)
-}
-
-function isAnthropicCompat(type: string) {
-  return ['anthropic_api', 'anthropic_compatible', 'claude_direct'].includes(type)
+/**
+ * Resolve compatibility for a provider row.
+ * New rows have a `compatibility` column set by the catalog.
+ * Old rows fall back to type-based mapping for backward compatibility.
+ */
+function getCompatibility(p: ProviderRow): string {
+  if (p.compatibility) return p.compatibility
+  if (['openai_api', 'ollama', 'openai_compatible', 'custom', 'chatgpt_direct'].includes(p.type)) return 'openai_compatible'
+  if (['anthropic_api', 'anthropic_compatible', 'claude_direct'].includes(p.type)) return 'anthropic_messages'
+  return p.type
 }
 
 async function dispatchCall(
@@ -132,8 +137,9 @@ async function dispatchCall(
   const key = p.api_key_encrypted ?? ''
   const model = p.model ?? ''
   const baseURL = p.base_url ?? ''
+  const compat = getCompatibility(p)
 
-  if (isAnthropicCompat(p.type)) {
+  if (compat === 'anthropic_messages') {
     return callAnthropic(key, model, messages, {
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
@@ -141,7 +147,7 @@ async function dispatchCall(
     })
   }
 
-  if (isOpenAICompat(p.type)) {
+  if (compat === 'openai_compatible' || compat === 'ollama_native') {
     return callOpenAICompat(baseURL, key, model, messages, {
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
@@ -149,7 +155,7 @@ async function dispatchCall(
     })
   }
 
-  throw new Error(`Unknown provider type: ${p.type}`)
+  throw new Error(`Unknown provider compatibility: ${compat} (type: ${p.type})`)
 }
 
 async function dispatchStream(
@@ -160,8 +166,9 @@ async function dispatchStream(
   const key = p.api_key_encrypted ?? ''
   const model = p.model ?? ''
   const baseURL = p.base_url ?? ''
+  const compat = getCompatibility(p)
 
-  if (isAnthropicCompat(p.type)) {
+  if (compat === 'anthropic_messages') {
     return streamAnthropic(key, model, messages, {
       maxTokens: opts.maxTokens,
       temperature: opts.temperature,
@@ -170,7 +177,7 @@ async function dispatchStream(
     })
   }
 
-  if (isOpenAICompat(p.type)) {
+  if (compat === 'openai_compatible' || compat === 'ollama_native') {
     return streamOpenAICompat(baseURL, key, model, messages, {
       stream: true,
       maxTokens: opts.maxTokens,
@@ -179,7 +186,7 @@ async function dispatchStream(
     })
   }
 
-  throw new Error(`Unknown provider type: ${p.type}`)
+  throw new Error(`Unknown provider compatibility: ${compat} (type: ${p.type})`)
 }
 
 // ── Test connection ─────────────────────────────────────────────────────────────
@@ -195,13 +202,14 @@ export async function testProvider(id: string): Promise<{ ok: boolean; error?: s
     const key = p.api_key_encrypted ?? ''
     const model = p.model ?? ''
     const baseURL = p.base_url ?? ''
+    const compat = getCompatibility(p)
 
-    if (isAnthropicCompat(p.type)) {
+    if (compat === 'anthropic_messages') {
       await testAnthropic(key, model, baseURL || undefined)
-    } else if (isOpenAICompat(p.type)) {
+    } else if (compat === 'openai_compatible' || compat === 'ollama_native') {
       await testOpenAICompat(baseURL, key, model)
     } else {
-      return { ok: false, error: `Unknown provider type: ${p.type}` }
+      return { ok: false, error: `Unknown provider compatibility: ${compat} (type: ${p.type})` }
     }
 
     await db.query(
