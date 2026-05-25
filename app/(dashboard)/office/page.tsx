@@ -17,6 +17,8 @@ import type { JobEvaluation } from '@/lib/agents/evaluator-agent'
 
 interface ModelRow { base_url: string; model: string }
 
+interface BrainRow { provider_name: string | null; model: string | null; status: string | null }
+
 const AGENT_NAME_TO_SLOT: Record<string, string> = {
   'Browser Agent': 'browserAgent',
   'Research Agent': 'researchAgent',
@@ -30,6 +32,15 @@ const AGENT_NAME_TO_SLOT: Record<string, string> = {
   'CEO Agent': 'ceoAgent',
   'Project Manager Agent': 'projectManagerAgent',
   'Social Media Agent': 'socialMediaAgent',
+}
+
+const AGENT_NAME_TO_ROLE: Record<string, string> = {
+  'CEO Agent': 'ceo',
+  'Project Manager Agent': 'project_manager',
+  'Research Agent': 'research',
+  'Copywriting Agent': 'copywriting',
+  'Quality Agent': 'qa',
+  'Reporting Agent': 'review',
 }
 
 const REPORTS_TO: Record<string, string> = {
@@ -71,6 +82,7 @@ export default function OfficePage() {
   const [selectedAgentId, setSelectedAgentId] = useState('')
   const [browsingAgent, setBrowsingAgent] = useState<Agent | null>(null)
   const [modelConfigs, setModelConfigs] = useState<Record<string, ModelRow>>({})
+  const [brainByRole, setBrainByRole] = useState<Record<string, BrainRow>>({})
   const [evaluating, setEvaluating] = useState(false)
   const [pendingEval, setPendingEval] = useState<{ jobId: string; evaluation: JobEvaluation } | null>(null)
 
@@ -78,6 +90,11 @@ export default function OfficePage() {
     fetch('/api/model-configs').then(r => r.json()).then(d => setModelConfigs(d.configs ?? {})).catch(() => {})
     fetch('/api/projects').then(r => r.json()).then(d => {
       if (d.projects?.[0]?.id) setProjectId(d.projects[0].id)
+    }).catch(() => {})
+    fetch('/api/providers/brain').then(r => r.json()).then(d => {
+      const map: Record<string, BrainRow> = {}
+      for (const row of (d.roles ?? [])) map[row.role] = row
+      setBrainByRole(map)
     }).catch(() => {})
   }, [])
 
@@ -101,11 +118,21 @@ export default function OfficePage() {
 
   const selectedAgent = useMemo(() => agents.find(a => a.id === selectedAgentId) ?? null, [agents, selectedAgentId])
 
-  function modelInfo(name: string) {
+  function modelInfo(name: string): { provider: string; model: string; source: 'brain' | 'legacy' | 'none' } {
+    // Try new brain assignment first
+    const role = AGENT_NAME_TO_ROLE[name]
+    if (role && brainByRole[role]?.model) {
+      return {
+        provider: brainByRole[role].provider_name ?? '—',
+        model: brainByRole[role].model ?? 'not configured',
+        source: 'brain',
+      }
+    }
+    // Fall back to legacy model_configs
     const slot = AGENT_NAME_TO_SLOT[name]
     const cfg = slot ? modelConfigs[slot] : undefined
-    if (!cfg?.model) return { provider: '—', model: 'not configured' }
-    return { provider: providerLabel(cfg.base_url), model: cfg.model }
+    if (cfg?.model) return { provider: providerLabel(cfg.base_url), model: cfg.model, source: 'legacy' }
+    return { provider: '—', model: 'not configured', source: 'none' }
   }
 
   async function sendInstruction() {
@@ -177,7 +204,7 @@ export default function OfficePage() {
           </thead>
           <tbody>
             {agents.map(agent => {
-              const { provider, model } = modelInfo(agent.name)
+              const { provider, model, source } = modelInfo(agent.name)
               const statusColor = STATUS_COLOR[agent.status] ?? '#cbd5e1'
               return (
                 <tr key={agent.id} style={{ borderBottom: '1px solid #f8fafc' }}>
@@ -192,7 +219,12 @@ export default function OfficePage() {
                     {REPORTS_TO[agent.name] ?? 'CEO Agent'}
                   </td>
                   <td style={{ padding: '10px 14px', minWidth: 130 }}>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#64748b' }}>{model}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#64748b' }}>{model}</span>
+                      {source === 'legacy' && (
+                        <span style={{ fontSize: 9, color: '#94a3b8', background: '#f1f5f9', borderRadius: 3, padding: '1px 4px' }}>legacy</span>
+                      )}
+                    </div>
                     <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{provider}</div>
                   </td>
                   <td style={{ padding: '10px 14px', maxWidth: 220 }}>

@@ -26,6 +26,8 @@ export type AuthType = 'api_key' | 'oauth' | 'none' | 'aws_credentials'
 
 export type CatalogStatus = 'available' | 'planned' | 'not_available_in_this_build'
 
+export type CapabilityTag = 'reasoning' | 'research' | 'writing' | 'coding' | 'vision' | 'local' | 'low_cost' | 'fast' | 'fallback'
+
 export interface ProviderCatalogEntry {
   id: string
   display_name: string
@@ -44,6 +46,7 @@ export interface ProviderCatalogEntry {
   model_suggestions?: string[]
   icon: string
   notes?: string
+  capabilities?: CapabilityTag[]
 }
 
 export const CATALOG: ProviderCatalogEntry[] = [
@@ -101,6 +104,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     icon: '⚡',
+    capabilities: ['reasoning', 'research', 'writing', 'coding', 'vision'],
   },
   {
     id: 'mistral',
@@ -119,6 +123,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
     icon: '🌊',
+    capabilities: ['reasoning', 'writing', 'coding', 'fast'],
   },
   {
     id: 'moonshot',
@@ -137,6 +142,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
     icon: '🌙',
+    capabilities: ['reasoning', 'research'],
   },
   {
     id: 'minimax',
@@ -155,6 +161,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['abab6.5s-chat', 'abab5.5-chat'],
     icon: '✦',
+    capabilities: ['writing'],
   },
   {
     id: 'stepfun',
@@ -173,6 +180,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['step-1-8k', 'step-1-32k', 'step-2-16k'],
     icon: '◎',
+    capabilities: ['reasoning'],
   },
   {
     id: 'qwen',
@@ -191,6 +199,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen2.5-72b-instruct'],
     icon: '🔷',
+    capabilities: ['reasoning', 'coding', 'fast'],
   },
   {
     id: 'byteplus',
@@ -209,6 +218,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['doubao-pro-32k', 'doubao-lite-32k'],
     icon: '🔵',
+    capabilities: ['fast', 'low_cost'],
   },
   {
     id: 'deepinfra',
@@ -230,6 +240,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
       'mistralai/Mixtral-8x7B-Instruct-v0.1',
     ],
     icon: '🔻',
+    capabilities: ['low_cost', 'fast'],
   },
   {
     id: 'fireworks',
@@ -251,6 +262,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
       'accounts/fireworks/models/mixtral-8x7b-instruct',
     ],
     icon: '🎆',
+    capabilities: ['fast', 'low_cost'],
   },
   {
     id: 'chutes',
@@ -269,6 +281,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['deepseek-ai/DeepSeek-V3-0324', 'Qwen/Qwen3-235B-A22B'],
     icon: '🔗',
+    capabilities: ['low_cost'],
   },
 
   // ── Direct API — Anthropic Messages ─────────────────────────────────────────
@@ -295,6 +308,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
       'claude-3-5-sonnet-20241022',
     ],
     icon: '🔶',
+    capabilities: ['reasoning', 'research', 'writing', 'coding'],
   },
 
   // ── Direct API — Google Gemini (planned) ────────────────────────────────────
@@ -316,6 +330,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     model_suggestions: ['gemini-1.5-pro', 'gemini-1.5-flash'],
     icon: '♦',
     notes: 'Gemini adapter coming soon. API key required.',
+    capabilities: ['reasoning', 'research', 'vision'],
   },
 
   // ── Gateway — available ──────────────────────────────────────────────────────
@@ -343,6 +358,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     ],
     icon: '🔀',
     notes: 'OpenRouter is a gateway, not a model company. Supports any compatible model via one key.',
+    capabilities: ['reasoning', 'research', 'writing', 'coding', 'vision'],
   },
   {
     id: 'synthetic',
@@ -360,6 +376,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: [],
     icon: '🧬',
+    capabilities: ['fast'],
   },
   {
     id: 'vercel_ai_gateway',
@@ -379,6 +396,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     model_suggestions: [],
     icon: '▲',
     notes: 'Requires Vercel project with AI Gateway enabled.',
+    capabilities: ['fast'],
   },
 
   // ── Gateway — planned ────────────────────────────────────────────────────────
@@ -471,6 +489,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_chat: true,
     model_suggestions: ['llama3.2', 'llama3.1', 'qwen2.5', 'mistral', 'gemma3', 'deepseek-r1'],
     icon: '🖥',
+    capabilities: ['local', 'fallback'],
   },
 
   // ── Custom endpoints ─────────────────────────────────────────────────────────
@@ -491,6 +510,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     model_suggestions: [],
     icon: '🔧',
     notes: 'Works with any server that speaks the OpenAI chat completions API.',
+    capabilities: ['fallback'],
   },
   {
     id: 'custom_anthropic',
@@ -508,6 +528,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     model_suggestions: [],
     icon: '🔩',
     notes: 'Works with any server that speaks the Anthropic Messages API.',
+    capabilities: ['fallback'],
   },
 
   // ── Media / Specialized (not available in this build) ───────────────────────
@@ -568,4 +589,10 @@ export function getCatalogEntry(id: string): ProviderCatalogEntry | undefined {
 
 export function getCatalogByCategory(category: ProviderCategory): ProviderCatalogEntry[] {
   return CATALOG.filter(e => e.category === category)
+}
+
+export function getRecommendedProviderIds(tag: CapabilityTag): string[] {
+  return CATALOG
+    .filter(e => e.status === 'available' && e.capabilities?.includes(tag))
+    .map(e => e.id)
 }

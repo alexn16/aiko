@@ -7,7 +7,13 @@ _This is a read-only audit. No code was changed._
 
 ## 1. Product summary
 
-AÏKO is a self-hosted, agent-based AI marketing operating system built on Next.js 14 + PostgreSQL. Its primary interface is a CEO Chat (`/ceo`) where users speak conversationally to an AI executive persona that coordinates multiple projects, assigns Project Managers (Kenji, Mara, Sven), and orchestrates specialized AI agents. The system is provider-agnostic: it connects to OpenAI, Anthropic, Ollama, or any OpenAI-compatible endpoint, with per-role assignments (CEO, Research, Copywriting, Review, QA, Project Manager).
+AÏKO is a self-hosted, agent-based AI marketing operating system built on Next.js 14 + PostgreSQL. Its primary interface is a CEO Chat (`/ceo`) where users speak conversationally to an AI executive persona that coordinates multiple projects, assigns Project Managers (Kenji, Mara, Sven), and orchestrates specialized AI agents. The system is provider-agnostic: it connects to OpenAI, Anthropic, Ollama, or any OpenAI-compatible endpoint, with per-role assignments (CEO, Project Manager, Research, Copywriting, Review, QA, Local Fallback).
+
+### Role assignment system
+
+Each AÏKO agent role is assigned a specific AI brain via `ai_role_assignments`. The new system in `lib/ai/router.ts` exposes `getLLMConfigForRole(role)` to bridge legacy `callLLM` agents without migrating them. The `GET/POST /api/providers/brain` endpoint returns all role-provider mappings and supports auto-assignment via capability tags (reasoning, research, writing, coding, vision, local, low_cost, fast, fallback) defined in `lib/ai/provider-catalog.ts`.
+
+**Legacy note**: Agents using `callLLM` from `lib/models/provider` still rely on `model_configs`. Do not remove it — it is the fallback for agents not yet migrated to the new router.
 
 The core workflow is: research leads → enrich → draft outreach → human approval gate → campaign assembly → readiness check → (future) external send. A mandatory operating-mode system (Read Only / Auto-Approval Required / Full Access) controls what agents can do at each stage, with a global pause button and daily send-limit enforced at the database level.
 
@@ -26,9 +32,9 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Tables:** `projects`, `company_memory`, `project_memory`, `project_map`, `project_managers`, `ceo_commands`, `ceo_reviews`, `agents`, `approval_items`, `campaigns`, `campaign_launch_checks`, `agent_tasks`, `agent_task_outputs`, `operating_mode`, `tool_connections`, `web_operator_sessions`, `system_capabilities`
 
 ### /connect-ai — AI Provider Setup
-- **Purpose:** Connect AI providers from a 26-entry OpenClaw-style catalog across 6 sections (Recommended, API providers, Local, Gateway & routing, Custom endpoints, Future/Specialized). Test connections, assign providers to agent roles (CEO, Research, Copywriting, Review, QA, Project Manager, Local Fallback). Available providers open a SetupDrawer driven by `ProviderCatalogEntry`; planned entries show amber "Coming soon" cards; unavailable entries show dimmed grey cards.
+- **Purpose:** Connect AI providers from a 26-entry OpenClaw-style catalog across 6 sections (Recommended, API providers, Local, Gateway & routing, Custom endpoints, Future/Specialized). Test connections, assign providers to agent roles (CEO, Project Manager, Research, Copywriting, Review, QA, Local Fallback) with capability-based smart defaults. Available providers open a SetupDrawer driven by `ProviderCatalogEntry`; planned entries show amber "Coming soon" cards; unavailable entries show dimmed grey cards.
 - **Key components:** `lib/ai/provider-catalog.ts`, `app/(dashboard)/connect-ai/page.tsx`
-- **APIs used:** `GET/POST /api/providers`, `GET/PATCH /api/providers/[id]`, `POST /api/providers/[id]/test`, `GET/PATCH /api/providers/roles`
+- **APIs used:** `GET/POST /api/providers`, `GET/PATCH /api/providers/[id]`, `POST /api/providers/[id]/test`, `GET/PATCH /api/providers/roles`, `GET/POST /api/providers/brain`
 - **Tables:** `provider_connections`, `ai_role_assignments`
 
 ### /dashboard — Operational Overview

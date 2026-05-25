@@ -60,6 +60,7 @@ export async function getAllProviders(): Promise<ProviderRow[]> {
     `SELECT id, name, type, status, base_url, model,
             '' as api_key_encrypted,
             supports_chat, supports_tools, supports_streaming,
+            compatibility, provider_catalog_id,
             last_tested_at, last_error, created_at, updated_at
      FROM provider_connections ORDER BY created_at`
   )
@@ -73,6 +74,50 @@ export async function getRoleAssignments(): Promise<Record<string, string | null
     map[row.role] = row.provider_id
   }
   return map
+}
+
+export interface LLMBridgeConfig {
+  baseURL: string
+  apiKey: string
+  model: string
+}
+
+/** Get LLMConfig for a role — bridges legacy callLLM agents to the new provider system */
+export async function getLLMConfigForRole(role: AgentRole): Promise<LLMBridgeConfig | null> {
+  const provider = await getProviderForRole(role)
+  if (!provider) return null
+  return {
+    baseURL: provider.base_url ?? '',
+    apiKey: provider.api_key_encrypted ?? '',
+    model: provider.model ?? '',
+  }
+}
+
+export interface RoleProviderInfo {
+  role: string
+  provider_id: string | null
+  provider_name: string | null
+  provider_type: string | null
+  provider_catalog_id: string | null
+  compatibility: string | null
+  model: string | null
+  status: string | null
+  last_error: string | null
+  last_tested_at: string | null
+}
+
+/** Returns all role assignments with provider details */
+export async function getAllRoleProviders(): Promise<RoleProviderInfo[]> {
+  const res = await db.query(`
+    SELECT r.role, r.provider_id,
+           p.name AS provider_name, p.type AS provider_type,
+           p.provider_catalog_id, p.compatibility,
+           p.model, p.status, p.last_error, p.last_tested_at
+    FROM ai_role_assignments r
+    LEFT JOIN provider_connections p ON p.id = r.provider_id
+    ORDER BY r.role
+  `)
+  return res.rows
 }
 
 // ── Core call ─────────────────────────────────────────────────────────────────

@@ -63,6 +63,24 @@ The router dispatches based on `compatibility` field (openai_compatible → open
 
 Each provider is tested before being activated. Role assignments let you choose which AI brain powers each agent role (CEO, Research, Copywriting, Review, QA, Project Manager, Local Fallback).
 
+### Role assignments
+
+Each AÏKO agent role can be assigned a specific AI brain:
+
+| Role | Description | Recommended capability |
+|------|-------------|----------------------|
+| CEO | Strategic decisions | reasoning |
+| Project Manager | Sprint tracking | reasoning |
+| Research | Lead discovery | research |
+| Copywriting | Outreach writing | writing |
+| Review | Quality review | reasoning |
+| QA | Quality checks | reasoning |
+| Local Fallback | Offline fallback | local |
+
+Configure roles at `/connect-ai` → "Assign AÏKO brains" section.
+
+**Legacy note**: Agents that use `callLLM` from `lib/models/provider` still rely on `model_configs` table for configuration. New routing via `getLLMConfigForRole()` in `lib/ai/router.ts` bridges this system. Do not remove `model_configs` — it is the legacy fallback for agents not yet migrated.
+
 ## Product surfaces
 
 - `/ceo` — **CEO Chat** (default home). Speak to the CEO, create projects, coordinate the company.

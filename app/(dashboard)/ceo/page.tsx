@@ -81,6 +81,7 @@ interface CeoReview {
 interface ProviderInfo {
   name: string
   type: string
+  model?: string
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -161,16 +162,18 @@ export default function CeoPage() {
   const [providerChecked, setProviderChecked] = useState(false)
 
   const loadData = useCallback(async () => {
-    const [memRes, statusRes, reviewsRes, provRes] = await Promise.all([
+    const [memRes, statusRes, reviewsRes, provRes, brainRes] = await Promise.all([
       fetch('/api/ceo/memory'),
       fetch('/api/ceo/status'),
       fetch('/api/ceo/reviews'),
       fetch('/api/providers'),
+      fetch('/api/providers/brain'),
     ])
     const memData     = await memRes.json()
     const statusData  = await statusRes.json()
     const reviewsData = await reviewsRes.json()
     const provData    = await provRes.json()
+    const brainData   = await brainRes.json()
 
     setMemory(memData.memory ?? null)
     setCommands(memData.commands ?? [])
@@ -180,9 +183,14 @@ export default function CeoPage() {
     setReviews(reviewList)
     if (reviewList.length > 0 && !selectedReview) setSelectedReview(reviewList[0])
 
-    // Find CEO provider or any connected one
-    const connected = (provData.providers ?? []).filter((p: { status: string }) => p.status === 'connected')
-    if (connected.length > 0) setProvider({ name: connected[0].name, type: connected[0].type })
+    // Find CEO-role-specific provider, fall back to first connected
+    const ceoBrain = (brainData.roles ?? []).find((r: { role: string }) => r.role === 'ceo')
+    if (ceoBrain?.provider_name) {
+      setProvider({ name: ceoBrain.provider_name, type: ceoBrain.provider_type ?? '', model: ceoBrain.model ?? undefined })
+    } else {
+      const connected = (provData.providers ?? []).filter((p: { status: string }) => p.status === 'connected')
+      if (connected.length > 0) setProvider({ name: connected[0].name, type: connected[0].type })
+    }
     setProviderChecked(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -313,7 +321,7 @@ export default function CeoPage() {
               }}
             >
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-              CEO brain: {providerLabel(provider)}
+              CEO brain: {providerLabel(provider)}{provider.model ? <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 400, color: '#64748b', marginLeft: 4 }}>{` · ${provider.model}`}</span> : null}
             </Link>
           ) : providerChecked ? (
             <Link

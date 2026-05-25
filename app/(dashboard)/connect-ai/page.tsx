@@ -18,16 +18,24 @@ interface Provider {
   last_tested_at: string | null
   last_error: string | null
   compatibility?: string | null
+  provider_catalog_id?: string | null
+}
+
+interface RoleDetail {
+  provider_name: string | null
+  model: string | null
+  status: string | null
+  compatibility: string | null
 }
 
 const ROLES = [
-  { id: 'ceo',            label: 'CEO Chat' },
-  { id: 'research',       label: 'Research Agent' },
-  { id: 'copywriting',    label: 'Copywriting Agent' },
-  { id: 'review',         label: 'Review Agent' },
-  { id: 'qa',             label: 'QA Agent' },
-  { id: 'local_fallback', label: 'Local Fallback' },
-  { id: 'project_manager',label: 'Project Manager' },
+  { id: 'ceo',            label: 'CEO',             description: 'Strategic decisions and company overview',           icon: '👑', recommendedFor: 'reasoning' },
+  { id: 'project_manager',label: 'Project Manager', description: 'Sprint tracking, PM reports, project coordination',  icon: '📋', recommendedFor: 'reasoning' },
+  { id: 'research',       label: 'Research',        description: 'Lead discovery and web research',                    icon: '🔍', recommendedFor: 'research'  },
+  { id: 'copywriting',    label: 'Copywriting',     description: 'Outreach messages and campaign copy',                icon: '✍️', recommendedFor: 'writing'   },
+  { id: 'review',         label: 'Review',          description: 'Quality reviews and validation',                     icon: '✅', recommendedFor: 'reasoning' },
+  { id: 'qa',             label: 'QA',              description: 'Quality assurance checks',                           icon: '🔬', recommendedFor: 'reasoning' },
+  { id: 'local_fallback', label: 'Local Fallback',  description: 'Offline fallback when main providers unavailable',   icon: '🖥',  recommendedFor: 'local'     },
 ]
 
 const INPUT: React.CSSProperties = {
@@ -231,7 +239,7 @@ export default function ConnectAIPage() {
       {/* ── Role assignments ──────────────────────────────────────────────── */}
       {providers.filter(p => p.status === 'connected').length > 0 && (
         <RoleAssignments
-          providers={providers.filter(p => p.status === 'connected')}
+          providers={providers.filter(p => p.status === 'connected') as Provider[]}
           roles={roles}
           onSave={load}
         />
@@ -467,12 +475,24 @@ function RoleAssignments({
   onSave: () => void
 }) {
   const [local, setLocal] = useState<Record<string, string>>({})
+  const [roleDetails, setRoleDetails] = useState<Record<string, RoleDetail>>({})
   const [saving, setSaving] = useState(false)
+  const [applyingDefaults, setApplyingDefaults] = useState(false)
 
   useEffect(() => {
     const init: Record<string, string> = {}
     for (const r of ROLES) { init[r.id] = roles[r.id] ?? '' }
     setLocal(init)
+  }, [roles])
+
+  useEffect(() => {
+    fetch('/api/providers/brain').then(r => r.json()).then(d => {
+      const map: Record<string, RoleDetail> = {}
+      for (const row of (d.roles ?? [])) {
+        map[row.role] = { provider_name: row.provider_name, model: row.model, status: row.status, compatibility: row.compatibility }
+      }
+      setRoleDetails(map)
+    }).catch(() => {})
   }, [roles])
 
   async function save() {
@@ -491,49 +511,168 @@ function RoleAssignments({
     }
   }
 
+  async function applyDefaults() {
+    setApplyingDefaults(true)
+    try {
+      await fetch('/api/providers/brain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'apply_defaults' }),
+      })
+      onSave()
+    } finally {
+      setApplyingDefaults(false)
+    }
+  }
+
+  const ceoBrainMissing = !local['ceo']
+  const connectedWithCatalog = providers.filter(p => p.provider_catalog_id)
+
+  function getRecommendedProvider(tag: string): Provider | null {
+    for (const p of connectedWithCatalog) {
+      const entry = CATALOG.find(c => c.id === p.provider_catalog_id)
+      if (entry?.capabilities?.includes(tag as never)) return p
+    }
+    return null
+  }
+
+  function statusDot(status: string | null) {
+    const color = status === 'connected' ? '#16a34a' : status === 'error' ? '#ef4444' : '#cbd5e1'
+    return <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+  }
+
   return (
     <div style={{
       background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: 12,
       padding: '20px 24px',
       boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
     }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>
-        Role assignments
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+        Assign AÏKO brains
       </div>
-      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 16px', lineHeight: 1.5 }}>
-        Choose which AI brain powers each agent role. Leave blank to use the first connected provider.
+      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 20px', lineHeight: 1.5 }}>
+        Choose which AI provider powers each agent role.
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        {ROLES.map(r => (
-          <div key={r.id}>
-            <label style={{ fontSize: 11, fontWeight: 500, color: '#64748b', display: 'block', marginBottom: 4 }}>
-              {r.label}
-            </label>
-            <select
-              value={local[r.id] ?? ''}
-              onChange={e => setLocal(prev => ({ ...prev, [r.id]: e.target.value }))}
-              style={{ ...INPUT, fontSize: 12 }}
-            >
-              <option value="">Auto (first connected)</option>
-              {providers.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        ))}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+        {ROLES.map(r => {
+          const detail = roleDetails[r.id]
+          const recommended = getRecommendedProvider(r.recommendedFor)
+          const hasAssignment = !!local[r.id]
+
+          return (
+            <div key={r.id} style={{
+              display: 'grid', gridTemplateColumns: '200px 1fr 220px',
+              alignItems: 'center', gap: 16,
+              padding: '12px 14px', borderRadius: 8,
+              background: '#f8fafc', border: '1px solid #f1f5f9',
+            }}>
+              {/* Left: icon + label + description */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <span style={{ fontSize: 18, lineHeight: 1, marginTop: 1 }}>{r.icon}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{r.label}</div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.4, marginTop: 1 }}>{r.description}</div>
+                </div>
+              </div>
+
+              {/* Middle: current assignment info */}
+              <div>
+                {hasAssignment && detail?.provider_name ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {statusDot(detail.status)}
+                    <span style={{ fontSize: 12, fontWeight: 500, color: '#374151' }}>{detail.provider_name}</span>
+                    {detail.model && (
+                      <span style={{
+                        fontSize: 10, fontFamily: 'DM Mono, monospace', color: '#6366f1',
+                        background: '#eef2ff', borderRadius: 4, padding: '1px 6px',
+                      }}>
+                        {detail.model}
+                      </span>
+                    )}
+                    {detail.compatibility && (
+                      <span style={{
+                        fontSize: 10, color: '#94a3b8', background: '#f1f5f9',
+                        borderRadius: 4, padding: '1px 6px',
+                      }}>
+                        {detail.compatibility.replace('_', ' ')}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 12, color: '#cbd5e1', fontStyle: 'italic' }}>No brain assigned</span>
+                )}
+              </div>
+
+              {/* Right: select + capability badge */}
+              <div>
+                <select
+                  value={local[r.id] ?? ''}
+                  onChange={e => setLocal(prev => ({ ...prev, [r.id]: e.target.value }))}
+                  style={{ ...INPUT, fontSize: 12, marginBottom: recommended && !hasAssignment ? 4 : 0 }}
+                >
+                  <option value="">Auto (first connected)</option>
+                  {providers.map(p => {
+                    const catalogEntry = CATALOG.find(c => c.id === p.provider_catalog_id)
+                    const isRecommended = catalogEntry?.capabilities?.includes(r.recommendedFor as never)
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {isRecommended ? '⭐ ' : ''}{p.name}
+                      </option>
+                    )
+                  })}
+                </select>
+                {recommended && !hasAssignment && (
+                  <div style={{ fontSize: 10, color: '#d97706', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <span>⭐</span>
+                    <span>Recommended: {recommended.name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
-      <button
-        onClick={save}
-        disabled={saving}
-        style={{
-          marginTop: 16, padding: '9px 20px', borderRadius: 8,
-          background: saving ? '#e2e8f0' : '#0f172a',
-          color: saving ? '#94a3b8' : '#ffffff',
-          border: 'none', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer',
-        }}
-      >
-        {saving ? 'Saving…' : 'Save assignments'}
-      </button>
+
+      {/* CEO no-brain warning */}
+      {ceoBrainMissing && (
+        <div style={{
+          marginBottom: 16, padding: '10px 14px',
+          background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+          fontSize: 12, color: '#d97706', display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>⚠</span>
+          <span>AÏKO CEO has no AI brain assigned — chat and automation will fail.</span>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={applyDefaults}
+          disabled={applyingDefaults}
+          style={{
+            padding: '9px 16px', borderRadius: 8,
+            background: applyingDefaults ? '#f1f5f9' : '#f8fafc',
+            color: applyingDefaults ? '#94a3b8' : '#374151',
+            border: '1px solid #e2e8f0',
+            fontSize: 12, fontWeight: 500, cursor: applyingDefaults ? 'default' : 'pointer',
+          }}
+        >
+          {applyingDefaults ? 'Applying…' : '✦ Apply smart defaults'}
+        </button>
+        <button
+          onClick={save}
+          disabled={saving}
+          style={{
+            padding: '9px 20px', borderRadius: 8,
+            background: saving ? '#e2e8f0' : '#0f172a',
+            color: saving ? '#94a3b8' : '#ffffff',
+            border: 'none', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer',
+          }}
+        >
+          {saving ? 'Saving…' : 'Save assignments'}
+        </button>
+      </div>
     </div>
   )
 }
