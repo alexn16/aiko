@@ -1,12 +1,13 @@
-import { callLLM, LLMConfig } from '@/lib/models/provider'
+import { callAI } from '@/lib/ai/router'
 import { db } from '@/lib/db/client'
 
 export async function runReportingAgent(params: {
   projectId: string
   agentId: string
-  modelConfig: LLMConfig
+  // modelConfig is kept for backward-compatibility but is no longer used.
+  modelConfig?: unknown
 }) {
-  const { projectId, agentId, modelConfig } = params
+  const { projectId, agentId } = params
 
   await db.query(
     'UPDATE agents SET status=$1, current_task=$2, updated_at=NOW() WHERE id=$3',
@@ -40,22 +41,27 @@ export async function runReportingAgent(params: {
     campaigns: campaignsResult.rows,
   }
 
-  const synthesis = await callLLM(modelConfig, [
-    {
-      role: 'system',
-      content: `You are a marketing reporting agent. Analyse the provided metrics and produce a structured report.
+  const synthesis = await callAI({
+    role: 'review',
+    messages: [
+      {
+        role: 'system',
+        content: `You are a marketing reporting agent. Analyse the provided metrics and produce a structured report.
 Return JSON: {
   "summary": "2-3 sentence executive summary",
   "metrics": { "total_leads": 0, "contacted": 0, "replied": 0, "qualified": 0, "pending_approval": 0 },
   "agentPerformance": [{ "name": "", "highlight": "" }],
   "recommendations": ["action1", "action2", "action3"]
-}`
-    },
-    {
-      role: 'user',
-      content: `Weekly metrics:\n${JSON.stringify(metrics, null, 2)}`
-    }
-  ], { jsonMode: true, maxTokens: 800 })
+}`,
+      },
+      {
+        role: 'user',
+        content: `Weekly metrics:\n${JSON.stringify(metrics, null, 2)}`,
+      },
+    ],
+    jsonMode: true,
+    maxTokens: 800,
+  })
 
   const report = JSON.parse(synthesis)
 

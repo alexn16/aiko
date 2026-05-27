@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { runCeoReviewAgent } from '@/lib/agents/ceo-review-agent'
-import { getAllModelConfigs } from '@/lib/models/config'
+import { getAnyConnectedProvider } from '@/lib/ai/router'
 import { createInstruction } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
 import { getOutputSummaryForCompany } from '@/lib/agents/task-outputs'
@@ -30,10 +30,10 @@ export async function GET() {
 
 export async function POST() {
   try {
-    const configs = await getAllModelConfigs()
-    const modelConfig = configs['ceoAgent'] ?? configs['researchAgent'] ?? Object.values(configs)[0]
-    if (!modelConfig) {
-      return NextResponse.json({ error: 'No model configured. Add a model in Settings.' }, { status: 503 })
+    // Verify at least one provider is reachable; runCeoReviewAgent uses callAI(role:'ceo')
+    const provider = await getAnyConnectedProvider()
+    if (!provider) {
+      return NextResponse.json({ error: 'No AI provider connected. Go to Connect AI to add one.' }, { status: 503 })
     }
 
     // Fetch task summary and output summary for enriched review context
@@ -100,7 +100,7 @@ export async function POST() {
       // non-fatal
     }
 
-    const review = await runCeoReviewAgent(modelConfig, taskContext)
+    const review = await runCeoReviewAgent(undefined, taskContext)
 
     // Dispatch instructions for recommended actions
     try {

@@ -8,7 +8,7 @@
  * exposed, no model routing altered.
  */
 
-import { callLLM, LLMConfig } from '@/lib/models/provider'
+import { callAI } from '@/lib/ai/router'
 import { db } from '@/lib/db/client'
 
 export interface CeoReviewFinding {
@@ -243,7 +243,12 @@ function buildPositives(p: RawProject): string[] {
   return positives
 }
 
-export async function runCeoReviewAgent(modelConfig: LLMConfig, taskContext?: string): Promise<CeoReviewResult> {
+export async function runCeoReviewAgent(
+  // modelConfig is kept for backward-compatibility but is no longer used.
+  // callAI() resolves the provider from the role assignment table.
+  _modelConfig?: unknown,
+  taskContext?: string
+): Promise<CeoReviewResult> {
   const now = new Date()
 
   // 1. Load all project data
@@ -341,14 +346,15 @@ export async function runCeoReviewAgent(modelConfig: LLMConfig, taskContext?: st
   }
 
   try {
-    const raw = await callLLM(
-      modelConfig,
-      [
+    const raw = await callAI({
+      role: 'ceo',
+      messages: [
         { role: 'system', content: CEO_REVIEW_SYSTEM },
         { role: 'user', content: `Company state:\n${JSON.stringify(ctx, null, 2)}` },
       ],
-      { jsonMode: true, maxTokens: 1400 }
-    )
+      jsonMode: true,
+      maxTokens: 1400,
+    })
     parsed = JSON.parse(raw)
   } catch {
     parsed = {

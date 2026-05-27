@@ -79,7 +79,11 @@ Each AÏKO agent role can be assigned a specific AI brain:
 
 Configure roles at `/connect-ai` → "Assign AÏKO brains" section.
 
-**Legacy note**: Agents that use `callLLM` from `lib/models/provider` still rely on `model_configs` table for configuration. New routing via `getLLMConfigForRole()` in `lib/ai/router.ts` bridges this system. Do not remove `model_configs` — it is the legacy fallback for agents not yet migrated.
+**How routing works**: Every active AI call goes through `callAI(role)` in `lib/ai/router.ts`, which resolves the provider from `ai_role_assignments` → `provider_connections`. The provider adapter (OpenAI-compatible or Anthropic SDK) is selected based on the `compatibility` column. See `AIKO_BRAIN_ROUTING_REPORT.md` for the full routing diagram and debug guide.
+
+**Legacy note**: Some background agents (`copywriting-agent.ts`, `research-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` — these are not reachable from the current UI and are safe to ignore. `model_configs` is checked by `GET /api/setup` as a final fallback for SetupGate only. All active features (CEO Chat, CEO Reviews, PM Chat, Reports, Lead extraction, Outreach drafting) use `callAI(role)`.
+
+**ChatGPT/Claude OAuth**: The catalog lists "ChatGPT direct" and "Claude direct" as OAuth-based entries, but the OAuth flow is not implemented. Use the **API key** entries (OpenAI API, Anthropic API) for real connections.
 
 ## Product surfaces
 
@@ -624,6 +628,7 @@ Available scripts from `package.json`:
 - `npm run build`
 - `npm run start`
 - `npm run lint`
+- `npm test` — runs brain-routing smoke tests (no API keys or DB required)
 
 ## Self-hosting
 

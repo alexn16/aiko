@@ -1,7 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24_
-_This is a read-only audit. No code was changed._
+_Generated: 2026-05-24 · Updated: 2026-05-27_
 
 ---
 
@@ -11,9 +10,15 @@ AÏKO is a self-hosted, agent-based AI marketing operating system built on Next.
 
 ### Role assignment system
 
-Each AÏKO agent role is assigned a specific AI brain via `ai_role_assignments`. The new system in `lib/ai/router.ts` exposes `getLLMConfigForRole(role)` to bridge legacy `callLLM` agents without migrating them. The `GET/POST /api/providers/brain` endpoint returns all role-provider mappings and supports auto-assignment via capability tags (reasoning, research, writing, coding, vision, local, low_cost, fast, fallback) defined in `lib/ai/provider-catalog.ts`.
+Each AÏKO agent role is assigned a specific AI brain via `ai_role_assignments`. `lib/ai/router.ts` is the single canonical AI entry point: `callAI(role, messages)` resolves the provider through `ai_role_assignments → provider_connections`, selects the right adapter (`openai_compatible` or `anthropic_messages`), and dispatches the call. Role → provider fallback: if no assignment exists, any connected provider is used.
 
-**Legacy note**: Agents using `callLLM` from `lib/models/provider` still rely on `model_configs`. Do not remove it — it is the fallback for agents not yet migrated to the new router.
+**Active features using `callAI`**: CEO Chat, CEO Reviews, PM Chat, Reports, Lead extraction, Outreach copywriting, Campaign analysis, Task output generation, System improvement analysis.
+
+**Legacy `callLLM`**: Background agents (`research-agent.ts`, `copywriting-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` but are not reachable from the current UI. `model_configs` table is checked by `GET /api/setup` as a final SetupGate fallback only — it is no longer the source for any active AI call.
+
+**ChatGPT/Claude OAuth**: Catalog entries "ChatGPT direct" and "Claude direct" require an OAuth flow that is not yet implemented. Use OpenAI API and Anthropic API instead.
+
+See `AIKO_BRAIN_ROUTING_REPORT.md` for the full routing diagram, fallback order, debug guide, and per-provider verification steps.
 
 The core workflow is: research leads → enrich → draft outreach → human approval gate → campaign assembly → readiness check → (future) external send. A mandatory operating-mode system (Read Only / Auto-Approval Required / Full Access) controls what agents can do at each stage, with a global pause button and daily send-limit enforced at the database level.
 
@@ -34,7 +39,7 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ### /connect-ai — AI Provider Setup
 - **Purpose:** Connect AI providers from a 26-entry OpenClaw-style catalog across 6 sections (Recommended, API providers, Local, Gateway & routing, Custom endpoints, Future/Specialized). Test connections, assign providers to agent roles (CEO, Project Manager, Research, Copywriting, Review, QA, Local Fallback) with capability-based smart defaults. Available providers open a SetupDrawer driven by `ProviderCatalogEntry`; planned entries show amber "Coming soon" cards; unavailable entries show dimmed grey cards.
 - **Key components:** `lib/ai/provider-catalog.ts`, `app/(dashboard)/connect-ai/page.tsx`
-- **APIs used:** `GET/POST /api/providers`, `GET/PATCH /api/providers/[id]`, `POST /api/providers/[id]/test`, `GET/PATCH /api/providers/roles`, `GET/POST /api/providers/brain`
+- **APIs used:** `GET/POST /api/providers`, `GET/PATCH /api/providers/[id]`, `POST /api/providers/[id]/test`, `GET/PATCH /api/providers/roles`, `GET/POST /api/providers/brain`, `GET /api/providers/diagnostics`
 - **Tables:** `provider_connections`, `ai_role_assignments`
 
 ### /dashboard — Operational Overview

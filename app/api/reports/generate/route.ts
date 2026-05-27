@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runReportingAgent } from '@/lib/agents/reporting-agent'
-import { getModelConfig } from '@/lib/models/config'
+import { getAnyConnectedProvider } from '@/lib/ai/router'
 import { db } from '@/lib/db/client'
 
 export async function POST(request: NextRequest) {
   const { projectId } = await request.json()
 
-  const modelConfig = await getModelConfig('reportingAgent')
-  if (!modelConfig) {
-    return NextResponse.json({ error: 'Reporting agent model not configured' }, { status: 400 })
+  const provider = await getAnyConnectedProvider()
+  if (!provider) {
+    return NextResponse.json({ error: 'No AI provider connected. Go to Connect AI to add one.' }, { status: 503 })
   }
 
   // Find or create reporting agent row
@@ -22,6 +22,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Reporting Agent not found for this project' }, { status: 404 })
   }
 
-  const report = await runReportingAgent({ projectId, agentId, modelConfig })
+  const report = await runReportingAgent({ projectId, agentId })
   return NextResponse.json({ report })
 }
