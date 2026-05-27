@@ -172,11 +172,14 @@ export async function delegateLeadToGmailDraft(opts: {
     operatorName: opts.operator_name,
   })
 
-  // 8. Update lead status to contacted on completed
-  if (delegation.status === 'completed') {
+  // 8. Do NOT mark lead as 'contacted' here — draft created ≠ email sent.
+  // Lead stays 'approved' until the draft is actually sent via sendLeadOutreachViaOperator.
+  // Add a note to the lead so the draft can be traced.
+  if (delegation.status === 'completed' || delegation.status === 'approval_required') {
+    const note = `Gmail draft prepared${delegation.status === 'approval_required' ? ' (pending approval)' : ''}. Subject: "${draft.subject}"`
     await db.query(
-      `UPDATE leads SET status='contacted', updated_at=NOW() WHERE id=$1 AND status='approved'`,
-      [lead.id]
+      `UPDATE leads SET notes = COALESCE(notes || ' | ', '') || $1, updated_at=NOW() WHERE id=$2`,
+      [note, lead.id]
     ).catch(() => {})
   }
 
