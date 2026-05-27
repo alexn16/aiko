@@ -1,6 +1,5 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -570,15 +569,6 @@ export default function ApprovalsPage() {
         </div>
       )}
 
-      {/* Footer link back to old approval queue */}
-      <div style={{ marginTop: 32, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
-        <Link
-          href="/approval"
-          style={{ fontSize: 12, color: '#6366f1', textDecoration: 'none' }}
-        >
-          Legacy outreach approval queue →
-        </Link>
-      </div>
     </div>
   )
 }

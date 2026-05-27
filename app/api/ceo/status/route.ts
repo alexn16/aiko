@@ -13,7 +13,7 @@ export async function GET() {
         ORDER BY p.created_at DESC
       `),
       db.query('SELECT id, name, specialty, status, current_focus FROM project_managers ORDER BY name'),
-      db.query("SELECT COUNT(*) AS n FROM approvals WHERE status IN ('pending','quality_passed')"),
+      db.query("SELECT COUNT(*) AS n FROM approval_items WHERE status = 'pending'"),
       db.query('SELECT COUNT(*) AS n FROM leads'),
       db.query("SELECT COUNT(*) AS n FROM agents WHERE status NOT IN ('idle','paused')"),
     ])

@@ -6,9 +6,9 @@ export async function GET(request: NextRequest) {
 
   const [leads, sent, replies, pending] = await Promise.all([
     db.query('SELECT COUNT(*) FROM leads WHERE project_id=$1', [projectId]),
-    db.query("SELECT COUNT(*) FROM approvals WHERE project_id=$1 AND status='sent'", [projectId]),
+    db.query("SELECT COUNT(*) FROM approval_items WHERE project_id=$1 AND status='approved'", [projectId]),
     db.query("SELECT COUNT(*) FROM leads WHERE project_id=$1 AND status='replied'", [projectId]),
-    db.query("SELECT COUNT(*) FROM approvals WHERE project_id=$1 AND status IN ('pending','quality_passed')", [projectId]),
+    db.query("SELECT COUNT(*) FROM approval_items WHERE project_id=$1 AND status='pending'", [projectId]),
   ])
 
   return NextResponse.json({

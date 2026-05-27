@@ -59,8 +59,8 @@ async function buildProjectContext(projectId: string): Promise<{
       ORDER BY created_at DESC LIMIT 1
     `, [projectId]),
     db.query(`
-      SELECT COUNT(*) AS n FROM approvals
-      WHERE project_id=$1 AND status IN ('pending','quality_passed')
+      SELECT COUNT(*) AS n FROM approval_items
+      WHERE project_id=$1 AND status = 'pending'
     `, [projectId]),
     getTaskSummaryForProject(projectId),
     getOutputSummaryForProject(projectId),
