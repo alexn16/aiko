@@ -1,6 +1,6 @@
 # AÏKO Brain Routing Report
 
-_Last updated: 2026-05-27_
+_Last updated: 2026-05-27 (rev 2 — Brain Verification panel added)_
 
 ---
 
@@ -154,15 +154,50 @@ POST /api/providers/brain
 ```
 Or manually assign via `/connect-ai` → Role Assignments section.
 
-### Step 5 — Check the banner
-Open `/connect-ai`. The status banner now shows:
-- 🔴 "AÏKO CEO is offline" — no connected providers
-- 🟡 "No CEO brain resolved" — providers connected but none assigned to CEO and fallback failed
-- 🟢 "CEO brain: {name} — {model}" — everything working
+### Step 5 — Use Brain Verification panel (easiest)
+Open `/connect-ai` → scroll to **Brain verification** section.
+
+The panel shows:
+- **CEO can think** — live flag from `/api/providers/diagnostics`
+- **Provider / Model / Compatibility** — which provider resolves for CEO
+- **Role assignment** — whether CEO has an explicit assignment or is using fallback
+
+Click **⚡ Send test CEO message** to fire a real `callAI(role:'ceo')` call with:
+```
+"Reply with exactly: AÏKO_CEO_OK followed by one short sentence confirming you are ready."
+```
+
+- ✓ Green result + provider name/model = brain is fully working
+- ✗ Red result + error text = fix the shown error (key issue, model not found, etc.)
+
+This calls `POST /api/providers/test-ceo-brain` which:
+1. Resolves the CEO provider through the canonical router
+2. Calls `callAI(role:'ceo', messages)` — real inference, no fake success
+3. Returns provider name, model, and raw response
+4. Creates no CEO commands, no tasks, no memory mutations
+
+### Step 6 — Send a real CEO chat message
+Once Brain Verification passes, go to `/ceo` and type a command:
+> "What is the current status of the company?"
+
+If you see a real executive-style response, the full routing chain is working.
 
 ---
 
 ## 7. How to verify with different provider types
+
+### End-to-end manual checklist
+
+1. **Connect provider** — `/connect-ai` → pick provider → enter key/URL/model → Save & connect → green "Connection successful"
+2. **Assign CEO** — `/connect-ai` → Role Assignments → set CEO → save  
+   *(or click "Apply smart defaults" to auto-assign by capability)*
+3. **Run Brain Verification** — `/connect-ai` → Brain verification → ⚡ Send test CEO message → expect green ✓
+4. **Send real CEO message** — `/ceo` → type a command → expect a real AI response
+
+If step 3 fails but step 1 passed, check:
+- Does the model name match what the provider supports? (e.g. Anthropic uses `claude-opus-4-5`, not `gpt-4o`)
+- Is the API key valid and has credits?
+- For Ollama: is `ollama serve` running and the model pulled?
 
 ### OpenAI
 1. Get key from [platform.openai.com](https://platform.openai.com/api-keys)

@@ -272,6 +272,9 @@ export default function ConnectAIPage() {
         />
       )}
 
+      {/* ── Brain verification ────────────────────────────────────────────── */}
+      <BrainVerification diagnostics={diagnostics} canThink={connectedCount > 0 && (diagnostics?.can_ceo_think ?? false)} />
+
       {/* ── Setup drawer ──────────────────────────────────────────────────── */}
       {configuring && (
         <SetupDrawer
@@ -982,5 +985,153 @@ function SetupDrawer({
         }
       `}</style>
     </>
+  )
+}
+
+// ── Brain verification panel ───────────────────────────────────────────────────
+
+interface BrainVerifyResult {
+  success: boolean
+  provider?: { name: string; model: string; type: string }
+  response?: string | null
+  error?: string | null
+}
+
+function BrainVerification({
+  diagnostics,
+  canThink,
+}: {
+  diagnostics: DiagnosticsResult | null
+  canThink: boolean
+}) {
+  const [testing, setTesting]     = useState(false)
+  const [result, setResult]       = useState<BrainVerifyResult | null>(null)
+
+  async function runTest() {
+    setTesting(true)
+    setResult(null)
+    try {
+      const res  = await fetch('/api/providers/test-ceo-brain', { method: 'POST' })
+      const data = await res.json() as BrainVerifyResult
+      setResult(data)
+    } catch {
+      setResult({ success: false, error: 'Request failed — check console.' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const ceo = diagnostics?.ceo_provider ?? null
+
+  return (
+    <div style={{ marginTop: 40, marginBottom: 40 }}>
+      <div style={SECTION_LABEL}>Brain verification</div>
+
+      <div style={{
+        background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 14,
+        padding: '20px 24px',
+      }}>
+        {/* Status grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px', marginBottom: 20 }}>
+          <InfoRow label="CEO can think"   value={canThink ? '✓ Yes' : '✗ No'} ok={canThink} />
+          <InfoRow label="Provider"        value={ceo?.name ?? '—'} />
+          <InfoRow label="Model"           value={ceo?.model ?? '—'} mono />
+          <InfoRow label="Compatibility"   value={(diagnostics?.ceo_provider as { type?: string } | null)?.type ?? '—'} mono />
+          <InfoRow
+            label="Role assignment"
+            value={diagnostics ? (diagnostics.can_ceo_think ? 'Assigned' : 'Not assigned (using fallback or none)') : '—'}
+            ok={diagnostics?.can_ceo_think}
+          />
+          <InfoRow
+            label="Connected providers"
+            value={diagnostics ? String(diagnostics.summary.connected) : '—'}
+            ok={diagnostics ? diagnostics.summary.connected > 0 : undefined}
+          />
+        </div>
+
+        {/* Send test message button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={runTest}
+            disabled={testing}
+            style={{
+              padding: '9px 18px', borderRadius: 8,
+              background: testing ? '#e2e8f0' : '#0f172a',
+              color: testing ? '#94a3b8' : '#ffffff',
+              border: 'none', fontSize: 13, fontWeight: 600,
+              cursor: testing ? 'default' : 'pointer',
+              transition: 'background 0.15s',
+            }}
+          >
+            {testing ? 'Sending…' : '⚡ Send test CEO message'}
+          </button>
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>
+            Sends a real call through <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 11 }}>callAI(role:&apos;ceo&apos;)</code> — no commands or memory created
+          </span>
+        </div>
+
+        {/* Result */}
+        {result && (
+          <div style={{
+            marginTop: 14, padding: '12px 14px', borderRadius: 8,
+            background: result.success ? '#f0fdf4' : '#fef2f2',
+            border: `1px solid ${result.success ? '#bbf7d0' : '#fecaca'}`,
+          }}>
+            {result.success ? (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>
+                  ✓ CEO brain is working — {result.provider?.name} / {result.provider?.model}
+                </div>
+                {result.response && (
+                  <div style={{ fontSize: 12, color: '#166534', fontFamily: 'DM Mono, monospace', lineHeight: 1.5 }}>
+                    {result.response}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#dc2626', marginBottom: 4 }}>
+                  ✗ Test failed
+                </div>
+                {result.error && (
+                  <div style={{ fontSize: 12, color: '#7f1d1d', fontFamily: 'DM Mono, monospace', lineHeight: 1.5 }}>
+                    {result.error}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Help text when CEO cannot think */}
+        {!canThink && !testing && !result && (
+          <div style={{ marginTop: 14, fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+            To enable the CEO brain: connect a provider above → it will be tested automatically → assign it to the CEO role in Role Assignments.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function InfoRow({
+  label, value, ok, mono,
+}: {
+  label: string
+  value: string
+  ok?: boolean
+  mono?: boolean
+}) {
+  const valueColor = ok === true ? '#16a34a' : ok === false ? '#dc2626' : '#0f172a'
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 500, marginBottom: 2 }}>{label}</div>
+      <div style={{
+        fontSize: 13, fontWeight: 500, color: valueColor,
+        fontFamily: mono ? 'DM Mono, monospace' : 'inherit',
+      }}>
+        {value}
+      </div>
+    </div>
   )
 }

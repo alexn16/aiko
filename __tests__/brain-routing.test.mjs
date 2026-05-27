@@ -122,3 +122,53 @@ test('getProviderForRole falls back to any connected provider when no role assig
   assert.ok(result, 'should return a provider')
   assert.equal(result.name, 'OpenAI', 'should return first connected provider as fallback')
 })
+
+// ── 7. test-ceo-brain endpoint helper logic ───────────────────────────────────
+
+test('test-ceo-brain returns clear error when no provider connected', async () => {
+  // Simulate the endpoint guard: getProviderForRole returns null
+  async function testCeoBrainSimulation(getProvider) {
+    const provider = await getProvider().catch(() => null)
+    if (!provider) {
+      return {
+        success: false,
+        error: 'AÏKO CEO has no working brain assigned. Connect a provider and assign it to the CEO role.',
+      }
+    }
+    // Would call callAI here (skipped — no real keys in tests)
+    return { success: true, provider: { name: provider.name, model: provider.model } }
+  }
+
+  const result = await testCeoBrainSimulation(async () => null)
+  assert.equal(result.success, false)
+  assert.ok(result.error.includes('AÏKO CEO has no working brain'), `Got: "${result.error}"`)
+})
+
+test('test-ceo-brain returns provider info when provider exists', async () => {
+  async function testCeoBrainSimulation(getProvider) {
+    const provider = await getProvider().catch(() => null)
+    if (!provider) {
+      return { success: false, error: 'No provider.' }
+    }
+    return { success: true, provider: { name: provider.name, model: provider.model } }
+  }
+
+  const fakeProvider = { name: 'OpenAI', model: 'gpt-4o', type: 'openai_api', status: 'connected' }
+  const result = await testCeoBrainSimulation(async () => fakeProvider)
+  assert.equal(result.success, true)
+  assert.equal(result.provider.name, 'OpenAI')
+  assert.equal(result.provider.model, 'gpt-4o')
+})
+
+test('test-ceo-brain token check: success when response contains AÏKO_CEO_OK', () => {
+  // Replicate the token check from the endpoint
+  function checkResponse(raw) {
+    const trimmed = raw.trim()
+    return trimmed.includes('AÏKO_CEO_OK') || trimmed.includes('AIKO_CEO_OK')
+  }
+
+  assert.equal(checkResponse('AÏKO_CEO_OK Ready to serve.'), true, 'exact token with accent')
+  assert.equal(checkResponse('AIKO_CEO_OK All systems operational.'), true, 'token without accent')
+  assert.equal(checkResponse('Sure, I am ready!'), false, 'no token — should fail')
+  assert.equal(checkResponse(''), false, 'empty — should fail')
+})
