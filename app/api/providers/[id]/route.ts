@@ -17,7 +17,11 @@ export async function PATCH(
     if (name !== undefined)     { updates.push(`name=$${idx++}`);               values.push(name) }
     if (base_url !== undefined) { updates.push(`base_url=$${idx++}`);           values.push(base_url) }
     if (model !== undefined)    { updates.push(`model=$${idx++}`);              values.push(model) }
-    if (api_key !== undefined)  { updates.push(`api_key_encrypted=$${idx++}`);  values.push(api_key) }
+    // Only update api_key if a non-empty string is provided — never wipe with null/empty
+    if (typeof api_key === 'string' && api_key.trim() !== '') {
+      updates.push(`api_key_encrypted=$${idx++}`)
+      values.push(api_key.trim())
+    }
     if (status !== undefined)   { updates.push(`status=$${idx++}`);             values.push(status) }
 
     if (updates.length === 0) {

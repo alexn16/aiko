@@ -51,21 +51,31 @@ const SECTION_LABEL: React.CSSProperties = {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+interface DiagnosticsResult {
+  ok: boolean
+  can_ceo_think: boolean
+  ceo_provider: { name: string; model: string | null; type: string } | null
+  summary: { total: number; connected: number; errored: number }
+}
+
 export default function ConnectAIPage() {
   const [providers, setProviders] = useState<Provider[]>([])
   const [roles, setRoles] = useState<Record<string, string | null>>({})
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null)
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [pRes, rRes] = await Promise.all([
+      const [pRes, rRes, dRes] = await Promise.all([
         fetch('/api/providers').then(r => r.json()),
         fetch('/api/providers/roles').then(r => r.json()),
+        fetch('/api/providers/diagnostics').then(r => r.json()).catch(() => null),
       ])
       setProviders(pRes.providers ?? [])
       setRoles(rRes.roles ?? {})
+      setDiagnostics(dRes ?? null)
     } finally {
       setLoading(false)
     }
@@ -114,7 +124,19 @@ export default function ConnectAIPage() {
             fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8,
           }}>
             <span>⚠</span>
-            <span>AÏKO CEO is offline. Connect at least one AI provider below.</span>
+            <span>AÏKO CEO is offline. Connect at least one AI provider below to start the company.</span>
+          </div>
+        ) : diagnostics && !diagnostics.can_ceo_think ? (
+          <div style={{
+            marginBottom: 28, padding: '12px 16px',
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+            fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span>⚠</span>
+            <span>
+              {connectedCount} provider{connectedCount > 1 ? 's' : ''} connected, but no CEO brain resolved.
+              Assign a provider to the CEO role below or reconnect a provider.
+            </span>
           </div>
         ) : (
           <div style={{
@@ -123,7 +145,12 @@ export default function ConnectAIPage() {
             fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 8,
           }}>
             <span>✓</span>
-            <span>{connectedCount} AI provider{connectedCount > 1 ? 's' : ''} connected — AÏKO is operational.</span>
+            <span>
+              {diagnostics?.ceo_provider
+                ? `CEO brain: ${diagnostics.ceo_provider.name}${diagnostics.ceo_provider.model ? ` — ${diagnostics.ceo_provider.model}` : ''} — AÏKO is operational.`
+                : `${connectedCount} AI provider${connectedCount > 1 ? 's' : ''} connected — AÏKO is operational.`
+              }
+            </span>
           </div>
         )
       )}
@@ -740,9 +767,11 @@ function SetupDrawer({
     }
   }
 
-  async function testExisting() {
+  async function testCredentials() {
     if (!effectiveModel.trim()) { setTestResult({ ok: false, msg: 'Enter a model name first.' }); return }
+    if (showApiKey && !apiKey.trim()) { setTestResult({ ok: false, msg: 'Enter an API key first.' }); return }
     setTesting(true); setTestResult(null)
+    let tempId: string | null = null
     try {
       const res = await fetch('/api/providers', {
         method: 'POST',
@@ -758,14 +787,20 @@ function SetupDrawer({
           api_key: apiKey || null,
         }),
       })
-      const { id } = await res.json()
-      const testRes = await fetch(`/api/providers/${id}/test`, { method: 'POST' })
+      const data = await res.json()
+      tempId = data.id ?? null
+      if (!tempId) throw new Error('Could not create test record')
+
+      const testRes = await fetch(`/api/providers/${tempId}/test`, { method: 'POST' })
       const testData = await testRes.json()
-      await fetch(`/api/providers/${id}`, { method: 'DELETE' })
       setTestResult({ ok: testData.ok, msg: testData.ok ? 'Connection successful!' : testData.error ?? 'Test failed' })
-    } catch {
-      setTestResult({ ok: false, msg: 'Test request failed' })
+    } catch (err) {
+      setTestResult({ ok: false, msg: err instanceof Error ? err.message : 'Test request failed' })
     } finally {
+      // Always clean up the temp record
+      if (tempId) {
+        await fetch(`/api/providers/${tempId}`, { method: 'DELETE' }).catch(() => {})
+      }
       setTesting(false)
     }
   }
@@ -916,7 +951,7 @@ function SetupDrawer({
 
         {/* Footer */}
         <div style={{ padding: '14px 24px 20px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8 }}>
-          <button onClick={testExisting} disabled={testing}
+          <button onClick={testCredentials} disabled={testing}
             style={{
               flex: 1, padding: '10px 0', borderRadius: 8,
               background: '#f8fafc', color: '#374151',

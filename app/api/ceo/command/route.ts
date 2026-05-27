@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
-import { getAllModelConfigs } from '@/lib/models/config'
 import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail } from '@/lib/web-operator/delegation'
 import type { DelegationResult } from '@/lib/web-operator/delegation'
 
@@ -27,15 +26,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No command provided' }, { status: 400 })
     }
 
-    // Try new provider router first
+    // Check that at least one provider is reachable before calling the agent.
+    // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').
     const provider = await getProviderForRole('ceo') ?? await getAnyConnectedProvider()
     if (provider) {
-      const modelConfig = {
-        baseURL: provider.base_url ?? '',
-        apiKey: provider.api_key_encrypted ?? '',
-        model: provider.model ?? '',
-      }
-      const result = await runCeoCommandAgent(command.trim(), modelConfig)
+      const result = await runCeoCommandAgent(command.trim())
 
       // Extract operator name from command
       let operatorName: string | undefined
@@ -217,133 +212,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Legacy fallback: old model_configs table
-    const configs = await getAllModelConfigs()
-    const legacyConfig = configs['ceoAgent'] ?? configs['researchAgent'] ?? Object.values(configs)[0]
-    if (legacyConfig) {
-      const result = await runCeoCommandAgent(command.trim(), legacyConfig)
-
-      // Extract operator name (legacy path)
-      let operatorNameLegacy: string | undefined
-      const operatorMatchLegacy = command.trim().match(/^([A-Z][a-z]+),\s+/i)
-      if (operatorMatchLegacy) operatorNameLegacy = operatorMatchLegacy[1]
-      if (!operatorNameLegacy) {
-        const askMatchLegacy = command.trim().match(/(?:ask|have|get|tell)\s+([A-Z][a-z]+)\s+to/i)
-        if (askMatchLegacy) operatorNameLegacy = askMatchLegacy[1]
-      }
-
-      // Detect Gmail workflow intents (legacy path)
-      const lcCommandLegacy = command.trim().toLowerCase()
-      const isOpenGmailLegacy = lcCommandLegacy.includes('open gmail') || (lcCommandLegacy.includes('gmail') && !lcCommandLegacy.includes('draft') && !lcCommandLegacy.includes('send') && !lcCommandLegacy.includes('email to'))
-      const isPrepareEmailLegacy = !!(command.trim().match(/prepare.*(email|mail)|write.*(email|mail)|draft.*(email|mail)/i))
-      const isSendEmailLegacy = !!(command.trim().match(/\bsend\s+(it|the email|the draft|that)\b/i)) && !lcCommandLegacy.includes('send email to')
-      const emailToMatchLegacy = command.trim().match(/to\s+([\w.+-]+@[\w-]+\.\w+)/)
-      const emailToLegacy = emailToMatchLegacy?.[1]
-      const subjectMatchLegacy = command.trim().match(/(?:subject|about|re:)\s+([^,\n.]{3,80})/i)
-      const emailSubjectLegacy = subjectMatchLegacy?.[1]
-
-      // Lead outreach intent detection (must come before generic web research)
-      const isLeadOutreachIntentLegacy = !isPrepareEmailLegacy && !isOpenGmailLegacy && (
-        !!(command.trim().match(/prepare.*(outreach|draft|email).*(lead|contact|prospect|approved)/i)) ||
-        !!(command.trim().match(/(outreach|draft|email).*(approved lead|our lead)/i))
-      )
-
-      let delegationResult: DelegationResult | null = null
-      const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
-
-      if (isOpenGmailLegacy && operatorNameLegacy) {
-        delegationResult = await delegateOpenGmail({
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName: operatorNameLegacy,
-        }).catch(() => null)
-      } else if (isPrepareEmailLegacy && operatorNameLegacy && emailToLegacy) {
-        delegationResult = await delegateGmailDraft({
-          to: emailToLegacy,
-          subject: emailSubjectLegacy ?? 'No subject',
-          body: command.trim(),
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName: operatorNameLegacy,
-        }).catch(() => null)
-      } else if (isSendEmailLegacy && operatorNameLegacy) {
-        delegationResult = await delegateSendGmail({
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName: operatorNameLegacy,
-        }).catch(() => null)
-      } else if (isLeadOutreachIntentLegacy) {
-        try {
-          const { delegateLeadToGmailDraft } = await import('@/lib/outreach/lead-outreach')
-          const { listLeads } = await import('@/lib/leads')
-
-          // Get first approved lead with email for the project
-          const projectIdForLeadsLegacy = result.project_id as string | undefined
-          const leads = await listLeads({
-            project_id: projectIdForLeadsLegacy,
-            status: 'approved',
-            limit: 1,
-          })
-          const firstLead = leads.find(l => l.email)
-
-          if (firstLead) {
-            const outreachResult = await delegateLeadToGmailDraft({
-              lead_id: firstLead.id,
-              project_id: projectIdForLeadsLegacy,
-              operator_name: operatorNameLegacy,
-            })
-            delegationResult = {
-              status: outreachResult.success ? 'completed' : 'blocked',
-              message: outreachResult.message,
-              actionId: outreachResult.delegation?.actionId,
-            }
-          } else {
-            // No approved lead with email found
-            delegationResult = {
-              status: 'blocked',
-              message: 'No approved leads with email addresses found. Approve some leads and ensure they have email addresses before preparing outreach.',
-            }
-          }
-        } catch { /* non-fatal */ }
-      } else if (needsWebResearch) {
-        const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
-        delegationResult = await delegateSearch({
-          query,
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName: operatorNameLegacy,
-        }).catch(() => null)
-      }
-
-      // Check capability gaps for strategy/create_project intents
-      let capabilityGap: { missing: string[]; proposal_id: string; score: number } | null = null
-      const resolvedProjectIdLegacy = result.project_id
-      if (['strategy', 'create_project'].includes(String(result.intent)) && resolvedProjectIdLegacy) {
-        const strategyText = command.trim()
-        try {
-          const { generateCapabilityGapReport } = await import('@/lib/system-improvements')
-          const gap = await generateCapabilityGapReport(strategyText, resolvedProjectIdLegacy)
-          if (gap.proposal && gap.check_result.missing.length > 0) {
-            capabilityGap = {
-              missing: gap.check_result.missing.map(c => c.name),
-              proposal_id: gap.proposal.id,
-              score: gap.check_result.score,
-            }
-          }
-        } catch { /* non-fatal */ }
-      }
-
-      return NextResponse.json({
-        ...result,
-        capability_gap: capabilityGap,
-        delegation: delegationResult ? {
-          status: delegationResult.status,
-          message: delegationResult.message,
-          actionId: delegationResult.actionId,
-          taskOutputId: delegationResult.taskOutputId,
-        } : null,
-      })
-    }
-
     return NextResponse.json(
       { error: 'AÏKO has no AI brain connected. Go to Connect AI to add a provider.' },
       { status: 503 }

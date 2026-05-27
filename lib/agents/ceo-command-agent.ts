@@ -1,4 +1,4 @@
-import { callLLM, LLMConfig } from '@/lib/models/provider'
+import { callAI } from '@/lib/ai/router'
 import { db } from '@/lib/db/client'
 import { createInstruction } from '@/lib/agents/internal-communication'
 import { getTaskSummaryForCompany } from '@/lib/agents/tasks'
@@ -366,21 +366,24 @@ async function executeActions(
 
 export async function runCeoCommandAgent(
   command: string,
-  modelConfig: LLMConfig
+  // modelConfig is kept for backward-compatibility but is no longer used.
+  // callAI() resolves the provider from the role assignment table.
+  _modelConfig?: unknown
 ): Promise<CEOCommandResult> {
   const context = await buildCompanyContext()
 
-  const raw = await callLLM(
-    modelConfig,
-    [
+  const raw = await callAI({
+    role: 'ceo',
+    messages: [
       { role: 'system', content: CEO_SYSTEM_PROMPT },
       {
         role: 'user',
         content: `Current company state:\n${context}\n\nUser command: ${command}`,
       },
     ],
-    { jsonMode: true, maxTokens: 1200 }
-  )
+    jsonMode: true,
+    maxTokens: 1200,
+  })
 
   let parsed: Record<string, unknown>
   try {
