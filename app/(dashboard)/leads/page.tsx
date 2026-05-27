@@ -43,6 +43,8 @@ export default function LeadsPage() {
   const [saving, setSaving] = useState(false)
   const [statusFilter, setStatusFilter] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [draftingId, setDraftingId] = useState<string | null>(null)
+  const [draftResult, setDraftResult] = useState<Record<string, string>>({})
 
   async function load(pid: string) {
     const [l, a] = await Promise.all([
@@ -87,6 +89,42 @@ export default function LeadsPage() {
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, status } : l))
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  async function prepareDraft(lead: Lead) {
+    setDraftingId(lead.id)
+    setDraftResult(prev => ({ ...prev, [lead.id]: '' }))
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/outreach-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      const data = await res.json()
+      setDraftResult(prev => ({ ...prev, [lead.id]: data.message ?? (data.success ? 'Draft sent to operator.' : 'Failed.') }))
+      if (data.success) load(projectId)
+    } catch {
+      setDraftResult(prev => ({ ...prev, [lead.id]: 'Error preparing draft.' }))
+    } finally {
+      setDraftingId(null)
+    }
+  }
+
+  async function findContact(lead: Lead) {
+    setDraftingId(lead.id)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/find-contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      const data = await res.json()
+      setDraftResult(prev => ({ ...prev, [lead.id]: data.message ?? 'Operator is searching for contact details.' }))
+    } catch {
+      setDraftResult(prev => ({ ...prev, [lead.id]: 'Error.' }))
+    } finally {
+      setDraftingId(null)
     }
   }
 
@@ -247,6 +285,11 @@ export default function LeadsPage() {
                     {lead.source_text.slice(0, 100)}{lead.source_text.length > 100 ? '…' : ''}
                   </div>
                 )}
+                {draftResult[lead.id] && (
+                  <div style={{ fontSize: 11, color: '#6366f1', marginTop: 4, fontStyle: 'italic' }}>
+                    {draftResult[lead.id]}
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}
@@ -289,6 +332,46 @@ export default function LeadsPage() {
                   >
                     Archive
                   </button>
+                )}
+                {/* Gmail draft button — approved leads */}
+                {lead.status === 'approved' && lead.email && (
+                  <button
+                    onClick={() => prepareDraft(lead)}
+                    disabled={draftingId === lead.id}
+                    title={`Prepare Gmail draft to ${lead.email}`}
+                    style={{
+                      background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe',
+                      borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                      cursor: draftingId === lead.id ? 'not-allowed' : 'pointer',
+                      opacity: draftingId === lead.id ? 0.6 : 1,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    {draftingId === lead.id ? '…' : '✉ Gmail draft'}
+                  </button>
+                )}
+                {/* Find contact — approved lead with no email but has website */}
+                {lead.status === 'approved' && !lead.email && (lead.website || lead.source_url) && (
+                  <button
+                    onClick={() => findContact(lead)}
+                    disabled={draftingId === lead.id}
+                    title="Ask Web Operator to find contact details on this website"
+                    style={{
+                      background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a',
+                      borderRadius: 5, padding: '4px 10px', fontSize: 11, fontWeight: 600,
+                      cursor: draftingId === lead.id ? 'not-allowed' : 'pointer',
+                      opacity: draftingId === lead.id ? 0.6 : 1,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    {draftingId === lead.id ? '…' : '🔍 Find contact'}
+                  </button>
+                )}
+                {/* No email warning for approved leads */}
+                {lead.status === 'approved' && !lead.email && !lead.website && !lead.source_url && (
+                  <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic', padding: '4px 0' }}>
+                    No email or website
+                  </span>
                 )}
               </div>
             </div>

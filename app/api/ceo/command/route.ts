@@ -114,6 +114,12 @@ export async function POST(request: NextRequest) {
       const subjectMatch = command.trim().match(/(?:subject|about|re:)\s+([^,\n.]{3,80})/i)
       const emailSubject = subjectMatch?.[1]
 
+      // Lead outreach intent detection (must come before generic web research)
+      const isLeadOutreachIntent = !isPrepareEmail && !isOpenGmail && (
+        !!(command.trim().match(/prepare.*(outreach|draft|email).*(lead|contact|prospect|approved)/i)) ||
+        !!(command.trim().match(/(outreach|draft|email).*(approved lead|our lead)/i))
+      )
+
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
 
       if (isOpenGmail && operatorName) {
@@ -137,6 +143,39 @@ export async function POST(request: NextRequest) {
           requestedByRole: 'CEO',
           operatorName,
         }).catch(() => null)
+      } else if (isLeadOutreachIntent) {
+        try {
+          const { delegateLeadToGmailDraft } = await import('@/lib/outreach/lead-outreach')
+          const { listLeads } = await import('@/lib/leads')
+
+          // Get first approved lead with email for the project
+          const projectIdForLeads = result.project_id as string | undefined
+          const leads = await listLeads({
+            project_id: projectIdForLeads,
+            status: 'approved',
+            limit: 1,
+          })
+          const firstLead = leads.find(l => l.email)
+
+          if (firstLead) {
+            const outreachResult = await delegateLeadToGmailDraft({
+              lead_id: firstLead.id,
+              project_id: projectIdForLeads,
+              operator_name: operatorName,
+            })
+            delegationResult = {
+              status: outreachResult.success ? 'completed' : 'blocked',
+              message: outreachResult.message,
+              actionId: outreachResult.delegation?.actionId,
+            }
+          } else {
+            // No approved lead with email found
+            delegationResult = {
+              status: 'blocked',
+              message: 'No approved leads with email addresses found. Approve some leads and ensure they have email addresses before preparing outreach.',
+            }
+          }
+        } catch { /* non-fatal */ }
       } else if (needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({
@@ -202,6 +241,12 @@ export async function POST(request: NextRequest) {
       const subjectMatchLegacy = command.trim().match(/(?:subject|about|re:)\s+([^,\n.]{3,80})/i)
       const emailSubjectLegacy = subjectMatchLegacy?.[1]
 
+      // Lead outreach intent detection (must come before generic web research)
+      const isLeadOutreachIntentLegacy = !isPrepareEmailLegacy && !isOpenGmailLegacy && (
+        !!(command.trim().match(/prepare.*(outreach|draft|email).*(lead|contact|prospect|approved)/i)) ||
+        !!(command.trim().match(/(outreach|draft|email).*(approved lead|our lead)/i))
+      )
+
       let delegationResult: DelegationResult | null = null
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
 
@@ -226,6 +271,39 @@ export async function POST(request: NextRequest) {
           requestedByRole: 'CEO',
           operatorName: operatorNameLegacy,
         }).catch(() => null)
+      } else if (isLeadOutreachIntentLegacy) {
+        try {
+          const { delegateLeadToGmailDraft } = await import('@/lib/outreach/lead-outreach')
+          const { listLeads } = await import('@/lib/leads')
+
+          // Get first approved lead with email for the project
+          const projectIdForLeadsLegacy = result.project_id as string | undefined
+          const leads = await listLeads({
+            project_id: projectIdForLeadsLegacy,
+            status: 'approved',
+            limit: 1,
+          })
+          const firstLead = leads.find(l => l.email)
+
+          if (firstLead) {
+            const outreachResult = await delegateLeadToGmailDraft({
+              lead_id: firstLead.id,
+              project_id: projectIdForLeadsLegacy,
+              operator_name: operatorNameLegacy,
+            })
+            delegationResult = {
+              status: outreachResult.success ? 'completed' : 'blocked',
+              message: outreachResult.message,
+              actionId: outreachResult.delegation?.actionId,
+            }
+          } else {
+            // No approved lead with email found
+            delegationResult = {
+              status: 'blocked',
+              message: 'No approved leads with email addresses found. Approve some leads and ensure they have email addresses before preparing outreach.',
+            }
+          }
+        } catch { /* non-fatal */ }
       } else if (needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({

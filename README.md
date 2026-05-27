@@ -445,6 +445,24 @@ When a Web Operator completes a search or reads a website, AÏKO automatically e
 
 **Safety:** Leads must be reviewed before any outreach. Contact is never automated without explicit approval.
 
+## Lead-to-Gmail outreach workflow
+
+Approved leads with email addresses can become Gmail drafts through a named Web Operator:
+
+1. Research → Lead extracted → Reviewed → **Approved**
+2. Click "✉ Gmail draft" on an approved lead (or tell CEO "prepare outreach for approved leads")
+3. AÏKO Copywriting brain generates subject + body based on lead context
+4. Named Web Operator opens Gmail and creates the draft
+5. Draft stays as draft — no auto-send
+6. Send requires Full Access mode + manual confirmation
+
+**Safety rules:**
+- Only approved leads can be drafted
+- Leads with no email: "Find contact" delegates website visit to Web Operator
+- No SMTP, no Gmail API — browser only
+- Daily send limits enforced by Operating Mode
+- Single-lead outreach only — no bulk send in this version
+
 ### Agent delegation
 
 Agents do not browse directly — they delegate to the Web Operator:

@@ -509,6 +509,17 @@ CEO/PM Chat
 
 3. **Lead extraction from research** — when Web Operator completes a search or read_page action, automatically extract company names, URLs, contacts from the output and create lead records. Closes the research → leads pipeline gap.
 
+### Lead-to-Gmail outreach workflow — 2026-05-27
+- `lib/outreach/lead-outreach.ts` — orchestration: load lead, check status/email/mode, generate AI draft, create tracking task, delegate to Web Operator via Gmail
+- `POST /api/leads/[id]/outreach-draft` — prepare Gmail draft for a single approved lead
+- `POST /api/leads/[id]/send` — send via operator (requires Full Access mode)
+- `POST /api/leads/[id]/find-contact` — delegate website visit to Web Operator to find contact details
+- "✉ Gmail draft" button on approved leads with email in `/leads` page and Project Leads Panel
+- "🔍 Find contact" button on approved leads with no email but with website/source URL
+- CEO command intent detection for "prepare outreach for approved leads" patterns
+- No SMTP, no Gmail API — Web Operator browser only
+- Safety: only approved leads, mode check, single-lead (no bulk), draft-only by default
+
 ### Web Operator reliability — 2026-05-24
 - Screenshots per action (non-sensitive)
 - Page state capture (URL, title, preview) after each action

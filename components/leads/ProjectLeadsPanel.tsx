@@ -38,6 +38,8 @@ export function ProjectLeadsPanel({ projectId }: Props) {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [draftingId, setDraftingId] = useState<string | null>(null)
+  const [draftResult, setDraftResult] = useState<Record<string, string>>({})
   const [extractingAction, setExtractingAction] = useState<string | null>(null)
   const [extractResult, setExtractResult] = useState<{ count: number; at: number } | null>(null)
   const [showManual, setShowManual] = useState(false)
@@ -75,6 +77,42 @@ export function ProjectLeadsPanel({ projectId }: Props) {
   const filteredLeads = statusFilter
     ? leads.filter(l => l.status === statusFilter)
     : leads
+
+  async function prepareDraft(lead: Lead) {
+    setDraftingId(lead.id)
+    setDraftResult(prev => ({ ...prev, [lead.id]: '' }))
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/outreach-draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      const data = await res.json()
+      setDraftResult(prev => ({ ...prev, [lead.id]: data.message ?? (data.success ? 'Draft sent to operator.' : 'Failed.') }))
+      if (data.success) loadLeads()
+    } catch {
+      setDraftResult(prev => ({ ...prev, [lead.id]: 'Error preparing draft.' }))
+    } finally {
+      setDraftingId(null)
+    }
+  }
+
+  async function findContact(lead: Lead) {
+    setDraftingId(lead.id)
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/find-contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      const data = await res.json()
+      setDraftResult(prev => ({ ...prev, [lead.id]: data.message ?? 'Operator is searching for contact details.' }))
+    } catch {
+      setDraftResult(prev => ({ ...prev, [lead.id]: 'Error.' }))
+    } finally {
+      setDraftingId(null)
+    }
+  }
 
   async function updateStatus(lead: Lead, status: string) {
     setUpdatingId(lead.id)
@@ -345,10 +383,15 @@ export function ProjectLeadsPanel({ projectId }: Props) {
                     {lead.notes.slice(0, 80)}{lead.notes.length > 80 ? '…' : ''}
                   </div>
                 )}
+                {draftResult[lead.id] && (
+                  <div style={{ fontSize: 10, color: '#6366f1', marginTop: 3, fontStyle: 'italic' }}>
+                    {draftResult[lead.id]}
+                  </div>
+                )}
               </div>
 
-              {/* Approve / Reject buttons */}
-              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+              {/* Approve / Reject / Gmail draft buttons */}
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
                 {lead.status !== 'approved' && (
                   <button
                     onClick={() => updateStatus(lead, 'approved')}
@@ -376,6 +419,46 @@ export function ProjectLeadsPanel({ projectId }: Props) {
                   >
                     Reject
                   </button>
+                )}
+                {/* Gmail draft button — approved leads */}
+                {lead.status === 'approved' && lead.email && (
+                  <button
+                    onClick={() => prepareDraft(lead)}
+                    disabled={draftingId === lead.id}
+                    title={`Prepare Gmail draft to ${lead.email}`}
+                    style={{
+                      background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe',
+                      borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                      cursor: draftingId === lead.id ? 'not-allowed' : 'pointer',
+                      opacity: draftingId === lead.id ? 0.6 : 1,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    {draftingId === lead.id ? '…' : '✉ Gmail draft'}
+                  </button>
+                )}
+                {/* Find contact — approved lead with no email but has website */}
+                {lead.status === 'approved' && !lead.email && (lead.website || lead.source_url) && (
+                  <button
+                    onClick={() => findContact(lead)}
+                    disabled={draftingId === lead.id}
+                    title="Ask Web Operator to find contact details on this website"
+                    style={{
+                      background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a',
+                      borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                      cursor: draftingId === lead.id ? 'not-allowed' : 'pointer',
+                      opacity: draftingId === lead.id ? 0.6 : 1,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    {draftingId === lead.id ? '…' : '🔍 Find contact'}
+                  </button>
+                )}
+                {/* No email warning for approved leads */}
+                {lead.status === 'approved' && !lead.email && !lead.website && !lead.source_url && (
+                  <span style={{ fontSize: 9, color: '#94a3b8', fontStyle: 'italic' }}>
+                    No email or website
+                  </span>
                 )}
               </div>
             </div>
