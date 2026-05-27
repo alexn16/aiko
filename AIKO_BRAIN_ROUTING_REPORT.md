@@ -1,6 +1,6 @@
 # AÏKO Brain Routing Report
 
-_Last updated: 2026-05-27 (rev 2 — Brain Verification panel added)_
+_Last updated: 2026-05-27 (rev 3 — CEO offline brain guard added)_
 
 ---
 
@@ -176,11 +176,27 @@ This calls `POST /api/providers/test-ceo-brain` which:
 3. Returns provider name, model, and raw response
 4. Creates no CEO commands, no tasks, no memory mutations
 
+### Step 5b — Test from /ceo directly
+If the CEO brain is offline, `/ceo` now shows a **CEO Offline** panel instead of the chat. The panel:
+- Explains the specific reason (no provider / provider error / no CEO assignment)
+- Shows last error text from the provider
+- Shows connected / errored / total provider counts from diagnostics
+- Has **⚡ Test CEO brain** button (same as Connect AI panel — calls `POST /api/providers/test-ceo-brain`)
+- On success: reloads page state and enables chat automatically
+- On failure: shows specific error with link to `/connect-ai`
+
+The top bar also switches to a red "CEO brain offline" badge (instead of green) when `can_ceo_think` is false.
+
 ### Step 6 — Send a real CEO chat message
-Once Brain Verification passes, go to `/ceo` and type a command:
+Once the offline panel disappears (or if it was never shown), go to `/ceo` and type:
 > "What is the current status of the company?"
 
 If you see a real executive-style response, the full routing chain is working.
+
+**If the message fails** (provider errors mid-session), the chat now:
+- Keeps your message visible with a red error bubble (not silently removed)
+- Shows a specific error: "AÏKO CEO has no working brain" (503) or "Provider error: …" (502)
+- Shows a dismissible error banner above the input with "Connect AI →" link
 
 ---
 

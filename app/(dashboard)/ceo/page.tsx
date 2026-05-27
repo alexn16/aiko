@@ -84,6 +84,13 @@ interface ProviderInfo {
   model?: string
 }
 
+interface BrainDiagnostics {
+  can_ceo_think: boolean
+  ceo_provider: { name: string; model: string | null; type: string } | null
+  summary: { total: number; connected: number; errored: number }
+  ceo_role_assignment?: { provider_id: string | null; last_error?: string | null } | null
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const WELCOME_MESSAGE = `Hello, I'm AÏKO CEO.
@@ -160,36 +167,39 @@ export default function CeoPage() {
   const [status, setStatus]           = useState<StatusData | null>(null)
   const [provider, setProvider]       = useState<ProviderInfo | null>(null)
   const [providerChecked, setProviderChecked] = useState(false)
+  const [diagnostics, setDiagnostics] = useState<BrainDiagnostics | null>(null)
 
   const loadData = useCallback(async () => {
-    const [memRes, statusRes, reviewsRes, provRes, brainRes] = await Promise.all([
+    const [memRes, statusRes, reviewsRes, brainRes, diagRes] = await Promise.all([
       fetch('/api/ceo/memory'),
       fetch('/api/ceo/status'),
       fetch('/api/ceo/reviews'),
-      fetch('/api/providers'),
       fetch('/api/providers/brain'),
+      fetch('/api/providers/diagnostics').catch(() => null),
     ])
     const memData     = await memRes.json()
     const statusData  = await statusRes.json()
     const reviewsData = await reviewsRes.json()
-    const provData    = await provRes.json()
     const brainData   = await brainRes.json()
+    const diagData: BrainDiagnostics | null = diagRes ? await diagRes.json().catch(() => null) : null
 
     setMemory(memData.memory ?? null)
     setCommands(memData.commands ?? [])
     setStatus(statusData)
+    setDiagnostics(diagData)
 
     const reviewList: CeoReview[] = reviewsData.reviews ?? []
     setReviews(reviewList)
     if (reviewList.length > 0 && !selectedReview) setSelectedReview(reviewList[0])
 
-    // Find CEO-role-specific provider, fall back to first connected
-    const ceoBrain = (brainData.roles ?? []).find((r: { role: string }) => r.role === 'ceo')
-    if (ceoBrain?.provider_name) {
-      setProvider({ name: ceoBrain.provider_name, type: ceoBrain.provider_type ?? '', model: ceoBrain.model ?? undefined })
+    // Populate provider info from diagnostics (preferred) or brain roles
+    if (diagData?.ceo_provider) {
+      setProvider({ name: diagData.ceo_provider.name, type: diagData.ceo_provider.type, model: diagData.ceo_provider.model ?? undefined })
     } else {
-      const connected = (provData.providers ?? []).filter((p: { status: string }) => p.status === 'connected')
-      if (connected.length > 0) setProvider({ name: connected[0].name, type: connected[0].type })
+      const ceoBrain = (brainData.roles ?? []).find((r: { role: string }) => r.role === 'ceo')
+      if (ceoBrain?.provider_name) {
+        setProvider({ name: ceoBrain.provider_name, type: ceoBrain.provider_type ?? '', model: ceoBrain.model ?? undefined })
+      }
     }
     setProviderChecked(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -230,15 +240,30 @@ export default function CeoPage() {
       })
       const data = await res.json()
       if (!res.ok || data.error) {
-        setCmdError(data.error ?? 'Something went wrong.')
-        setCommands(prev => prev.filter(c => c.id !== optimistic.id))
+        // Build a specific error — keep user message visible in history
+        let errMsg = data.error ?? 'Something went wrong.'
+        if (res.status === 503) {
+          errMsg = 'AÏKO CEO has no working brain. Connect a provider and assign it to the CEO role.'
+        } else if (res.status === 502) {
+          errMsg = `Provider error: ${data.error ?? 'Unknown error from AI provider.'}`
+        }
+        setCmdError(errMsg)
+        // Replace optimistic bubble with an error state rather than removing it
+        setCommands(prev => prev.map(c =>
+          c.id === optimistic.id ? { ...c, response: `⚠ ${errMsg}`, intent: 'error' } : c
+        ))
       } else {
+        // Remove optimistic bubble — real commands loaded via loadData()
+        setCommands(prev => prev.filter(c => c.id !== optimistic.id))
         if (data.delegation) setLastDelegation(data.delegation)
         if (data.capability_gap) setLastCapabilityGap(data.capability_gap)
       }
     } catch {
-      setCmdError('Could not reach the server.')
-      setCommands(prev => prev.filter(c => c.id !== optimistic.id))
+      const errMsg = 'Could not reach the server. Check your connection.'
+      setCmdError(errMsg)
+      setCommands(prev => prev.map(c =>
+        c.id === optimistic.id ? { ...c, response: `⚠ ${errMsg}`, intent: 'error' } : c
+      ))
     } finally {
       setLoading(false)
       await loadData()
@@ -265,7 +290,12 @@ export default function CeoPage() {
     await loadData()
   }
 
-  const noProvider = providerChecked && !provider
+  // brainOffline: true when we've checked and the CEO brain cannot resolve
+  // Prefer diagnostics.can_ceo_think; fall back to whether any provider was found
+  const brainOffline = providerChecked && (
+    diagnostics ? !diagnostics.can_ceo_think : !provider
+  )
+  const noProvider = brainOffline // alias kept for existing disabled checks
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -309,35 +339,37 @@ export default function CeoPage() {
 
         {/* Right: provider badge + run review */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {provider ? (
-            <Link
-              href="/connect-ai"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '4px 10px', borderRadius: 6,
-                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                fontSize: 11, fontWeight: 500, color: '#16a34a',
-                textDecoration: 'none',
-              }}
-            >
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-              CEO brain: {providerLabel(provider)}{provider.model ? <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 400, color: '#64748b', marginLeft: 4 }}>{` · ${provider.model}`}</span> : null}
-            </Link>
-          ) : providerChecked ? (
-            <Link
-              href="/connect-ai"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5,
-                padding: '4px 10px', borderRadius: 6,
-                background: '#fef2f2', border: '1px solid #fecaca',
-                fontSize: 11, fontWeight: 500, color: '#dc2626',
-                textDecoration: 'none',
-              }}
-            >
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} />
-              No AI connected
-            </Link>
-          ) : null}
+          {providerChecked && (
+            brainOffline ? (
+              <Link
+                href="/connect-ai"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 6,
+                  background: '#fef2f2', border: '1px solid #fecaca',
+                  fontSize: 11, fontWeight: 500, color: '#dc2626',
+                  textDecoration: 'none',
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626', display: 'inline-block' }} />
+                {diagnostics?.summary.connected === 0 ? 'No AI connected' : 'CEO brain offline'}
+              </Link>
+            ) : provider ? (
+              <Link
+                href="/connect-ai"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 6,
+                  background: '#f0fdf4', border: '1px solid #bbf7d0',
+                  fontSize: 11, fontWeight: 500, color: '#16a34a',
+                  textDecoration: 'none',
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+                CEO brain: {providerLabel(provider)}{provider.model ? <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 400, color: '#64748b', marginLeft: 4 }}>{` · ${provider.model}`}</span> : null}
+              </Link>
+            ) : null
+          )}
 
           <button
             onClick={runReview}
@@ -366,16 +398,12 @@ export default function CeoPage() {
             {/* Main chat area */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-              {/* Offline banner */}
-              {noProvider && (
-                <div style={{
-                  margin: '16px 24px 0', padding: '14px 18px',
-                  background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
-                  fontSize: 13, color: '#dc2626', lineHeight: 1.6,
-                }}>
-                  <strong>AÏKO CEO is offline.</strong> Connect ChatGPT, Claude, OpenAI API, Anthropic API, Local AI, or Custom Endpoint before the company can operate.{' '}
-                  <Link href="/connect-ai" style={{ color: '#dc2626', fontWeight: 600 }}>Connect AI →</Link>
-                </div>
+              {/* Offline panel */}
+              {brainOffline && (
+                <CeoOfflinePanel
+                  diagnostics={diagnostics}
+                  onBrainRestored={loadData}
+                />
               )}
 
               {/* Messages */}
@@ -396,8 +424,8 @@ export default function CeoPage() {
                         boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                         whiteSpace: 'pre-line',
                       }}>
-                        {noProvider
-                          ? 'AÏKO CEO is offline. Connect ChatGPT, Claude, OpenAI API, Anthropic API, Local AI, or Custom Endpoint before the company can operate.'
+                        {brainOffline
+                          ? 'AÏKO CEO is offline. See the panel above to connect or verify the CEO brain.'
                           : WELCOME_MESSAGE}
                       </div>
 
@@ -468,12 +496,22 @@ export default function CeoPage() {
                           ) : (
                             <>
                               <div style={{
-                                background: '#ffffff', borderRadius: '4px 14px 14px 14px',
-                                padding: '14px 18px', fontSize: 14, color: '#0f172a',
-                                lineHeight: 1.75, border: '1px solid #f1f5f9',
+                                background: cmd.intent === 'error' ? '#fef2f2' : '#ffffff',
+                                borderRadius: '4px 14px 14px 14px',
+                                padding: '14px 18px', fontSize: 14,
+                                color: cmd.intent === 'error' ? '#dc2626' : '#0f172a',
+                                lineHeight: 1.75,
+                                border: `1px solid ${cmd.intent === 'error' ? '#fecaca' : '#f1f5f9'}`,
                                 boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                                 whiteSpace: 'pre-line',
                               }}>
+                                {cmd.intent === 'error' && (
+                                  <span style={{ display: 'block', marginBottom: 8 }}>
+                                    <Link href="/connect-ai" style={{ color: '#dc2626', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
+                                      Fix in Connect AI →
+                                    </Link>
+                                  </span>
+                                )}
                                 {cmd.response}
                               </div>
                               {cmd.actions.length > 0 && (
@@ -540,12 +578,20 @@ export default function CeoPage() {
                     marginBottom: 10, padding: '9px 14px',
                     background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
                     fontSize: 12, color: '#dc2626',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8,
                   }}>
-                    <span>{cmdError}</span>
-                    <Link href="/connect-ai" style={{ color: '#dc2626', fontWeight: 600, fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                      Connect AI →
-                    </Link>
+                    <span style={{ lineHeight: 1.5 }}>{cmdError}</span>
+                    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                      <button
+                        onClick={() => setCmdError(null)}
+                        style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, padding: 0 }}
+                      >
+                        ✕
+                      </button>
+                      <Link href="/connect-ai" style={{ color: '#dc2626', fontWeight: 600, fontSize: 11, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                        Connect AI →
+                      </Link>
+                    </div>
                   </div>
                 )}
 
@@ -832,6 +878,171 @@ export default function CeoPage() {
           50%       { opacity: 1;    transform: scale(1); }
         }
       `}</style>
+    </div>
+  )
+}
+
+// ── CEO offline panel ─────────────────────────────────────────────────────────
+
+function CeoOfflinePanel({
+  diagnostics,
+  onBrainRestored,
+}: {
+  diagnostics: BrainDiagnostics | null
+  onBrainRestored: () => void
+}) {
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    success: boolean
+    provider?: { name: string; model: string }
+    response?: string | null
+    error?: string | null
+  } | null>(null)
+
+  async function runTest() {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res  = await fetch('/api/providers/test-ceo-brain', { method: 'POST' })
+      const data = await res.json()
+      setTestResult(data)
+      if (data.success) {
+        // Brain is now working — reload page state
+        await onBrainRestored()
+      }
+    } catch {
+      setTestResult({ success: false, error: 'Request failed. Check console.' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  // Determine the reason the brain is offline
+  const noConnected    = diagnostics && diagnostics.summary.connected === 0
+  const hasErrored     = diagnostics && diagnostics.summary.errored > 0 && diagnostics.summary.connected === 0
+  const noAssignment   = diagnostics && diagnostics.summary.connected > 0 && !diagnostics.can_ceo_think
+  const lastError      = (diagnostics?.ceo_role_assignment as { last_error?: string | null } | null | undefined)?.last_error ?? null
+
+  let reason = 'No AI provider is connected.'
+  if (hasErrored) reason = 'Provider connection failed — all providers have errors.'
+  else if (noAssignment) reason = 'A provider is connected but the CEO role has no working brain assigned.'
+  else if (!diagnostics) reason = 'Could not check provider status.'
+
+  return (
+    <div style={{
+      margin: '16px 24px 0', padding: '20px 22px',
+      background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12,
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: '50%', background: '#ef4444',
+          display: 'inline-block', flexShrink: 0,
+        }} />
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+          AÏKO CEO is offline
+        </span>
+      </div>
+
+      {/* Reason */}
+      <p style={{ fontSize: 13, color: '#7f1d1d', margin: '0 0 8px', lineHeight: 1.6 }}>
+        {reason}
+      </p>
+
+      {/* Last error detail */}
+      {lastError && (
+        <div style={{
+          padding: '7px 10px', borderRadius: 7,
+          background: 'rgba(220,38,38,0.06)', border: '1px solid #fecaca',
+          fontSize: 11, color: '#dc2626', fontFamily: 'DM Mono, monospace',
+          lineHeight: 1.5, marginBottom: 10,
+        }}>
+          {lastError}
+        </div>
+      )}
+
+      {/* Diagnostics summary */}
+      {diagnostics && (
+        <div style={{
+          display: 'flex', gap: 16, marginBottom: 14,
+          fontSize: 11, color: '#64748b',
+        }}>
+          <span>Connected: <strong>{diagnostics.summary.connected}</strong></span>
+          <span>Errored: <strong style={{ color: diagnostics.summary.errored > 0 ? '#dc2626' : 'inherit' }}>{diagnostics.summary.errored}</strong></span>
+          <span>Total: <strong>{diagnostics.summary.total}</strong></span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Link
+          href="/connect-ai"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            padding: '8px 14px', borderRadius: 8,
+            background: '#0f172a', color: '#ffffff',
+            fontSize: 12, fontWeight: 600, textDecoration: 'none',
+          }}
+        >
+          Connect or verify CEO brain →
+        </Link>
+
+        <button
+          onClick={runTest}
+          disabled={testing}
+          style={{
+            padding: '8px 14px', borderRadius: 8,
+            background: testing ? '#f1f5f9' : '#ffffff',
+            color: testing ? '#94a3b8' : '#374151',
+            border: '1px solid #e2e8f0',
+            fontSize: 12, fontWeight: 500,
+            cursor: testing ? 'default' : 'pointer',
+            transition: 'background 0.15s',
+          }}
+        >
+          {testing ? 'Testing…' : '⚡ Test CEO brain'}
+        </button>
+      </div>
+
+      {/* Test result */}
+      {testResult && (
+        <div style={{
+          marginTop: 12, padding: '10px 12px', borderRadius: 8,
+          background: testResult.success ? '#f0fdf4' : '#fff1f1',
+          border: `1px solid ${testResult.success ? '#bbf7d0' : '#fecaca'}`,
+          fontSize: 12,
+        }}>
+          {testResult.success ? (
+            <>
+              <div style={{ fontWeight: 600, color: '#16a34a', marginBottom: 4 }}>
+                ✓ CEO brain is working — {testResult.provider?.name} / {testResult.provider?.model}
+              </div>
+              {testResult.response && (
+                <div style={{ color: '#166534', fontFamily: 'DM Mono, monospace', fontSize: 11, lineHeight: 1.5 }}>
+                  {testResult.response}
+                </div>
+              )}
+              <div style={{ color: '#16a34a', marginTop: 6, fontSize: 11 }}>
+                Reloading CEO state…
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 600, color: '#dc2626', marginBottom: 4 }}>✗ Test failed</div>
+              {testResult.error && (
+                <div style={{ color: '#7f1d1d', fontFamily: 'DM Mono, monospace', fontSize: 11, lineHeight: 1.5 }}>
+                  {testResult.error}
+                </div>
+              )}
+              <div style={{ marginTop: 6 }}>
+                <Link href="/connect-ai" style={{ color: '#dc2626', fontSize: 11, fontWeight: 600, textDecoration: 'none' }}>
+                  Fix in Connect AI →
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
