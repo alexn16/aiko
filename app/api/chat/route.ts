@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 import { streamAI, getProviderForRole } from '@/lib/ai/router'
 
 const SYSTEM_PROMPT = `You are AÏKO, an AI marketing assistant embedded inside the AÏKO platform.
@@ -8,10 +10,13 @@ Keep answers concise unless the user asks for detail.`
 
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions)
+    const userId = session?.user?.id ?? null
+
     const { messages } = await req.json()
 
     // Check provider is available before streaming
-    const provider = await getProviderForRole('ceo')
+    const provider = await getProviderForRole('ceo', userId)
     if (!provider) {
       return new Response(
         JSON.stringify({ error: 'AÏKO has no AI brain connected. Go to Connect AI to add a provider.' }),
@@ -25,6 +30,7 @@ export async function POST(req: NextRequest) {
         try {
           await streamAI({
             role: 'ceo',
+            userId,
             messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
             maxTokens: 1200,
             temperature: 0.5,

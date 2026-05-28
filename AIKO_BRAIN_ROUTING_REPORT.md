@@ -1,6 +1,66 @@
 # AÏKO Brain Routing Report
 
-_Last updated: 2026-05-27 (rev 3 — CEO offline brain guard added)_
+_Last updated: 2026-05-28 (rev 4 — account login and subscription AI connections)_
+
+---
+
+## 0. Authentication model
+
+AÏKO uses NextAuth v4 with Google OAuth for user login.
+
+| Identity layer | What it does | What it does NOT do |
+|---|---|---|
+| **Google login** | Identifies the AÏKO user, creates a `users` row | Connects ChatGPT or Claude |
+| **ChatGPT / Codex OAuth** | Connects ChatGPT subscription brain | Not granted by Google login |
+| **Claude account OAuth** | Connects Claude subscription brain | Not granted by Google login |
+| **OpenAI API key** | Separate billing / API brain | Different from ChatGPT OAuth |
+| **Anthropic API key** | Separate billing / API brain | Different from Claude account OAuth |
+
+### Login flow
+1. User visits any protected route → redirected to `/login`
+2. User clicks "Sign in with Google" → NextAuth handles Google OAuth
+3. Google returns sub + email → AÏKO upserts `users` row
+4. Session JWT stores `user.id` (our UUID)
+5. All provider connections are now scoped to that `user.id`
+
+### Per-user provider isolation
+- `provider_connections.user_id` — owner of the connection
+- `ai_role_assignments.user_id` — owner of the assignment
+- `getAllProviders(userId)` returns only that user's providers
+- `getProviderForRole(role, userId)` resolves only that user's assignment
+- Background agents (no HTTP request context) use `user_id IS NULL` global fallback
+
+### OAuth connection types
+
+| Provider | Catalog ID | Auth type | Env vars needed |
+|---|---|---|---|
+| ChatGPT | `chatgpt_oauth` | `oauth` | `OPENAI_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` |
+| Claude | `claude_oauth` | `oauth` | `CLAUDE_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` |
+
+When env vars are missing → routes return `{ configured: false, error: "...not configured..." }` — no fake success.
+
+OAuth tokens are stored as `oauth_access_token` / `oauth_refresh_token` in `provider_connections`.  
+When expired, `dispatchCall` auto-refreshes. On refresh failure → `status = 'needs_reauth'` → `NeedsReauthError` thrown.
+
+### Environment variables required
+
+```
+# Google login (user identity)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+NEXTAUTH_SECRET=          # openssl rand -base64 32
+NEXTAUTH_URL=             # http://localhost:3001 for dev
+
+# ChatGPT OAuth (optional)
+OPENAI_OAUTH_CLIENT_ID=
+OPENAI_OAUTH_AUTH_URL=
+OPENAI_OAUTH_TOKEN_URL=
+
+# Claude OAuth (optional)
+CLAUDE_OAUTH_CLIENT_ID=
+CLAUDE_OAUTH_AUTH_URL=
+CLAUDE_OAUTH_TOKEN_URL=
+```
 
 ---
 

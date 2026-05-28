@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 import { callAI, getProviderForRole } from '@/lib/ai/router'
 
 /**
@@ -15,8 +17,11 @@ import { callAI, getProviderForRole } from '@/lib/ai/router'
  * - expose API keys
  */
 export async function POST() {
+  const session = await getServerSession(authOptions)
+  const userId = session?.user?.id ?? null
+
   // Resolve which provider the CEO role would use
-  const provider = await getProviderForRole('ceo').catch(() => null)
+  const provider = await getProviderForRole('ceo', userId).catch(() => null)
 
   if (!provider) {
     return NextResponse.json(
@@ -37,6 +42,7 @@ export async function POST() {
   try {
     const response = await callAI({
       role: 'ceo',
+      userId,
       messages: [
         {
           role: 'system',

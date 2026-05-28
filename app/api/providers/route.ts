@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 import { db } from '@/lib/db/client'
 import { getAllProviders } from '@/lib/ai/router'
 
+async function getUserId(): Promise<string | null> {
+  const session = await getServerSession(authOptions)
+  return session?.user?.id ?? null
+}
+
 export async function GET() {
   try {
-    const providers = await getAllProviders()
+    const userId = await getUserId()
+    const providers = await getAllProviders(userId)
     return NextResponse.json({ providers })
   } catch (err) {
     console.error('[api/providers GET]', err)
@@ -14,6 +22,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getUserId()
     const body = await req.json()
     const { name, type, base_url, model, api_key, provider_catalog_id, compatibility, auth_type } = body
 
@@ -24,8 +33,8 @@ export async function POST(req: NextRequest) {
     const res = await db.query(
       `INSERT INTO provider_connections
          (name, type, status, base_url, model, api_key_encrypted, supports_streaming,
-          provider_catalog_id, compatibility, auth_type)
-       VALUES ($1, $2, 'disconnected', $3, $4, $5, true, $6, $7, $8)
+          provider_catalog_id, compatibility, auth_type, user_id)
+       VALUES ($1, $2, 'disconnected', $3, $4, $5, true, $6, $7, $8, $9)
        RETURNING id`,
       [
         name,
@@ -36,6 +45,7 @@ export async function POST(req: NextRequest) {
         provider_catalog_id ?? null,
         compatibility ?? null,
         auth_type ?? null,
+        userId ?? null,
       ]
     )
 

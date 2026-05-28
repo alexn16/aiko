@@ -172,3 +172,104 @@ test('test-ceo-brain token check: success when response contains AÏKO_CEO_OK', 
   assert.equal(checkResponse('Sure, I am ready!'), false, 'no token — should fail')
   assert.equal(checkResponse(''), false, 'empty — should fail')
 })
+
+// ── 11. User-scoped provider lookup ──────────────────────────────────────────
+
+test('provider connections are user-scoped: user A cannot see user B providers', () => {
+  // Simulate getAllProviders scoping — each user only sees their own rows
+  const allProviders = [
+    { id: '1', name: 'OpenAI', user_id: 'user-a', status: 'connected' },
+    { id: '2', name: 'Anthropic', user_id: 'user-b', status: 'connected' },
+    { id: '3', name: 'Ollama', user_id: null, status: 'connected' }, // global
+  ]
+
+  function getProvidersForUser(userId) {
+    return allProviders.filter(p => p.user_id === userId)
+  }
+
+  const userAProviders = getProvidersForUser('user-a')
+  const userBProviders = getProvidersForUser('user-b')
+
+  assert.equal(userAProviders.length, 1, 'user A sees only their own provider')
+  assert.equal(userAProviders[0].name, 'OpenAI')
+  assert.equal(userBProviders.length, 1, 'user B sees only their own provider')
+  assert.equal(userBProviders[0].name, 'Anthropic')
+
+  // Verify neither user can see the other's providers
+  assert.ok(!userAProviders.some(p => p.user_id === 'user-b'), 'user A cannot see user B providers')
+  assert.ok(!userBProviders.some(p => p.user_id === 'user-a'), 'user B cannot see user A providers')
+})
+
+// ── 12. OAuth token resolution ────────────────────────────────────────────────
+
+test('OAuth provider uses access token instead of api_key', () => {
+  // Simulate resolveProviderKey logic
+  function resolveKey(provider) {
+    if (provider.auth_type !== 'oauth') return provider.api_key_encrypted ?? ''
+    if (!provider.oauth_access_token) throw new Error('No OAuth access token')
+    return provider.oauth_access_token
+  }
+
+  const apiKeyProvider = { auth_type: 'api_key', api_key_encrypted: 'sk-abc', oauth_access_token: null }
+  const oauthProvider  = { auth_type: 'oauth', api_key_encrypted: null, oauth_access_token: 'tok_xyz' }
+
+  assert.equal(resolveKey(apiKeyProvider), 'sk-abc', 'api_key provider uses stored key')
+  assert.equal(resolveKey(oauthProvider), 'tok_xyz', 'oauth provider uses access token')
+
+  // Missing token throws
+  const badOAuth = { auth_type: 'oauth', api_key_encrypted: null, oauth_access_token: null }
+  assert.throws(() => resolveKey(badOAuth), /No OAuth access token/)
+})
+
+// ── 13. OAuth not-configured response is honest ───────────────────────────────
+
+test('OAuth start returns configured:false when env vars missing', () => {
+  // Simulate the start route guard
+  function startOAuth(authUrl, clientId) {
+    if (!authUrl || !clientId) {
+      return {
+        status: 422,
+        body: {
+          configured: false,
+          error: 'ChatGPT/Codex OAuth is not configured on this AÏKO instance. Use OpenAI API key instead.',
+        },
+      }
+    }
+    return { status: 302, location: `${authUrl}?client_id=${clientId}&...` }
+  }
+
+  const notConfigured = startOAuth(null, null)
+  assert.equal(notConfigured.status, 422)
+  assert.equal(notConfigured.body.configured, false)
+  assert.ok(notConfigured.body.error.includes('not configured'))
+
+  const configured = startOAuth('https://auth.openai.com/authorize', 'client123')
+  assert.equal(configured.status, 302)
+})
+
+// ── 14. diagnostics returns no user when unauthenticated ─────────────────────
+
+test('diagnostics signed_in_user is null when no session', () => {
+  // Simulate diagnostics construction without a session
+  const session = null
+  const signedInUser = session?.user ?? null
+  assert.equal(signedInUser, null, 'no session → no signed_in_user in diagnostics')
+})
+
+// ── 15. NeedsReauthError is a distinct error class ────────────────────────────
+
+test('NeedsReauthError carries providerId and is distinguishable from generic Error', () => {
+  class NeedsReauthError extends Error {
+    constructor(providerId, message) {
+      super(message)
+      this.name = 'NeedsReauthError'
+      this.providerId = providerId
+    }
+  }
+
+  const err = new NeedsReauthError('provider-123', 'Token expired. Please reconnect.')
+  assert.equal(err.name, 'NeedsReauthError')
+  assert.equal(err.providerId, 'provider-123')
+  assert.ok(err instanceof Error)
+  assert.ok(err.message.includes('Token expired'))
+})

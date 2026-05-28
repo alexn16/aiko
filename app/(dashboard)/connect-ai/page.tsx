@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useSession, signOut } from 'next-auth/react'
+import { useSearchParams } from 'next/navigation'
 import {
   CATALOG,
   getCatalogByCategory,
@@ -56,14 +58,24 @@ interface DiagnosticsResult {
   can_ceo_think: boolean
   ceo_provider: { name: string; model: string | null; type: string } | null
   summary: { total: number; connected: number; errored: number }
+  chatgpt_connection: { status: string; account_email: string | null } | null
+  claude_connection:  { status: string; account_email: string | null } | null
+  signed_in_user: { id: string; email: string; name: string | null } | null
 }
 
 export default function ConnectAIPage() {
+  const { data: session } = useSession()
+  const searchParams = useSearchParams()
   const [providers, setProviders] = useState<Provider[]>([])
   const [roles, setRoles] = useState<Record<string, string | null>>({})
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null)
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // OAuth redirect feedback
+  const oauthSuccess = searchParams.get('oauth_success') // 'chatgpt' | 'claude'
+  const oauthError   = searchParams.get('oauth_error')
+  const oauthProvider = searchParams.get('provider')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -101,6 +113,72 @@ export default function ConnectAIPage() {
 
   return (
     <div style={{ padding: '40px 40px', maxWidth: 1000 }} className="page-enter">
+
+      {/* ── Account section ─────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0',
+        borderRadius: 10, marginBottom: 28,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%', background: '#6366f1',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 700, color: '#ffffff', flexShrink: 0,
+          }}>
+            {(session?.user?.name ?? session?.user?.email ?? '?')[0].toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+              {session?.user?.name ?? session?.user?.email ?? 'Loading…'}
+            </div>
+            {session?.user?.name && (
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>{session.user.email}</div>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => signOut({ callbackUrl: '/login' })}
+          style={{
+            fontSize: 12, color: '#64748b', background: 'none',
+            border: '1px solid #e2e8f0', borderRadius: 7,
+            padding: '5px 12px', cursor: 'pointer',
+          }}
+        >
+          Sign out
+        </button>
+      </div>
+
+      {/* ── Auth clarity notice ──────────────────────────────────────────────── */}
+      <div style={{
+        padding: '10px 14px', background: '#f0f9ff', border: '1px solid #bae6fd',
+        borderRadius: 8, fontSize: 12, color: '#0369a1', marginBottom: 28, lineHeight: 1.6,
+      }}>
+        <strong>Note:</strong> Signing in with Google identifies you in AÏKO. It does <em>not</em> automatically
+        connect ChatGPT or Claude. Connect each AI brain separately below.
+      </div>
+
+      {/* ── OAuth feedback banners ────────────────────────────────────────────── */}
+      {oauthSuccess && (
+        <div style={{
+          marginBottom: 20, padding: '11px 16px', background: '#f0fdf4',
+          border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 13, color: '#16a34a',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          ✓ {oauthSuccess === 'chatgpt' ? 'ChatGPT' : 'Claude'} connected successfully.
+        </div>
+      )}
+      {oauthError && (
+        <div style={{
+          marginBottom: 20, padding: '11px 16px', background: '#fef2f2',
+          border: '1px solid #fecaca', borderRadius: 10, fontSize: 13, color: '#dc2626',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          ⚠ {oauthProvider ? `${oauthProvider === 'chatgpt' ? 'ChatGPT' : 'Claude'} connection failed: ` : ''}
+          {decodeURIComponent(oauthError)}
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 6px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -155,13 +233,29 @@ export default function ConnectAIPage() {
         )
       )}
 
-      {/* ── Recommended (subscription / OAuth) ────────────────────────────── */}
+      {/* ── Account-based AI connections (subscription / OAuth) ────────────── */}
       <div style={{ marginBottom: 32 }}>
-        <div style={SECTION_LABEL}>Recommended</div>
+        <div style={SECTION_LABEL}>Connect your AI accounts</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {recommendedEntries.map(entry => (
-            <UnavailableCard key={entry.id} entry={entry} />
-          ))}
+          <OAuthCard
+            icon="🟢"
+            title="ChatGPT"
+            subtitle="Connect via your ChatGPT account"
+            startUrl="/api/providers/oauth/chatgpt/start"
+            disconnectUrl="/api/providers/oauth/chatgpt/disconnect"
+            connection={diagnostics?.chatgpt_connection ?? null}
+            onRefresh={load}
+          />
+          <OAuthCard
+            icon="🟠"
+            title="Claude"
+            subtitle="Connect via your Claude.ai account"
+            startUrl="/api/providers/oauth/claude/start"
+            disconnectUrl="/api/providers/oauth/claude/disconnect"
+            connection={diagnostics?.claude_connection ?? null}
+            onRefresh={load}
+            notConfiguredNote="Claude account connection is not configured on this AÏKO instance. Use Anthropic API key instead."
+          />
         </div>
       </div>
 
@@ -283,6 +377,170 @@ export default function ConnectAIPage() {
           onSaved={() => { setConfiguring(null); load() }}
         />
       )}
+    </div>
+  )
+}
+
+// ── OAuth card ────────────────────────────────────────────────────────────────
+
+/**
+ * Shows the connection status for an OAuth AI provider (ChatGPT, Claude).
+ * Distinguishes between:
+ *   - not_configured  (env vars missing on this instance)
+ *   - not_connected   (configured but user hasn't connected)
+ *   - connected       (token stored and working)
+ *   - needs_reauth    (token expired and refresh failed)
+ */
+function OAuthCard({
+  icon, title, subtitle, startUrl, disconnectUrl, connection, onRefresh, notConfiguredNote,
+}: {
+  icon: string
+  title: string
+  subtitle: string
+  startUrl: string
+  disconnectUrl: string
+  connection: { status: string; account_email: string | null } | null
+  onRefresh: () => void
+  notConfiguredNote?: string
+}) {
+  const [checking, setChecking]     = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [configuredState, setConfiguredState] = useState<boolean | null>(null) // null = not yet checked
+
+  // Probe whether OAuth is configured on this instance by hitting the start URL.
+  // We do a fetch (not a full redirect) to check the JSON response.
+  async function checkConfigured() {
+    setChecking(true)
+    try {
+      const res = await fetch(startUrl, { redirect: 'manual' })
+      // 422 = not configured, 3xx = configured (OAuth redirect started)
+      // We can't follow the redirect, but status 0 or 3xx both mean "configured"
+      if (res.status === 422) {
+        const data = await res.json().catch(() => ({}))
+        setConfiguredState(data.configured === false ? false : true)
+      } else {
+        setConfiguredState(true)
+      }
+    } catch {
+      setConfiguredState(true) // assume configured if fetch errors (CORS etc.)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  async function disconnect() {
+    if (!confirm(`Disconnect ${title}?`)) return
+    setDisconnecting(true)
+    try {
+      await fetch(disconnectUrl, { method: 'POST' })
+      onRefresh()
+    } finally {
+      setDisconnecting(false)
+    }
+  }
+
+  const status = connection?.status ?? 'not_connected'
+  const email  = connection?.account_email
+
+  const statusColor =
+    status === 'connected'    ? '#16a34a' :
+    status === 'needs_reauth' ? '#f59e0b' : '#94a3b8'
+
+  const statusLabel =
+    status === 'connected'    ? (email ? `Connected as ${email}` : 'Connected') :
+    status === 'needs_reauth' ? 'Needs re-authentication' :
+    'Not connected'
+
+  return (
+    <div style={{
+      background: '#ffffff',
+      border: `1px solid ${status === 'connected' ? '#bbf7d0' : status === 'needs_reauth' ? '#fde68a' : '#f1f5f9'}`,
+      borderRadius: 12, padding: '18px 20px',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <span style={{ fontSize: 20 }}>{icon}</span>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{title}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }} />
+            <span style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
+          </div>
+        </div>
+      </div>
+
+      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 14px', lineHeight: 1.5 }}>
+        {subtitle}
+      </p>
+
+      {/* Configured-check result */}
+      {configuredState === false && (
+        <div style={{
+          fontSize: 12, color: '#64748b', background: '#f8fafc',
+          border: '1px solid #e2e8f0', borderRadius: 8,
+          padding: '8px 10px', marginBottom: 10, lineHeight: 1.5,
+        }}>
+          {notConfiguredNote ?? `${title} OAuth is not configured on this AÏKO instance.`}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {status !== 'connected' ? (
+          <>
+            <a
+              href={startUrl}
+              style={{
+                display: 'inline-block',
+                padding: '7px 14px', borderRadius: 7,
+                background: '#0f172a', color: '#ffffff',
+                border: 'none', fontSize: 12, fontWeight: 500,
+                cursor: 'pointer', textDecoration: 'none',
+              }}
+            >
+              Connect {title}
+            </a>
+            {configuredState === null && (
+              <button
+                onClick={checkConfigured}
+                disabled={checking}
+                style={{
+                  padding: '7px 12px', borderRadius: 7, fontSize: 12,
+                  background: 'none', border: '1px solid #e2e8f0',
+                  color: '#94a3b8', cursor: 'pointer',
+                }}
+              >
+                {checking ? 'Checking…' : 'Check if configured'}
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <a
+              href={startUrl}
+              style={{
+                display: 'inline-block',
+                padding: '7px 14px', borderRadius: 7,
+                background: '#f8fafc', color: '#374151',
+                border: '1px solid #e2e8f0', fontSize: 12, fontWeight: 500,
+                cursor: 'pointer', textDecoration: 'none',
+              }}
+            >
+              Reconnect
+            </a>
+            <button
+              onClick={disconnect}
+              disabled={disconnecting}
+              style={{
+                padding: '7px 12px', borderRadius: 7, fontSize: 12,
+                background: 'none', border: '1px solid #fecaca',
+                color: '#dc2626', cursor: 'pointer',
+              }}
+            >
+              {disconnecting ? '…' : 'Disconnect'}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }

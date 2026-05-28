@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth-options'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail } from '@/lib/web-operator/delegation'
@@ -21,6 +23,9 @@ function extractSearchQuery(command: string, _parsed: Record<string, unknown>): 
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions)
+    const userId = session?.user?.id ?? null
+
     const { command } = await request.json()
     if (!command?.trim()) {
       return NextResponse.json({ error: 'No command provided' }, { status: 400 })
@@ -28,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Check that at least one provider is reachable before calling the agent.
     // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').
-    const provider = await getProviderForRole('ceo') ?? await getAnyConnectedProvider()
+    const provider = await getProviderForRole('ceo', userId) ?? await getAnyConnectedProvider(userId)
     if (provider) {
       const result = await runCeoCommandAgent(command.trim())
 
