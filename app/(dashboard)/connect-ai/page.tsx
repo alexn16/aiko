@@ -63,12 +63,55 @@ interface DiagnosticsResult {
   signed_in_user: { id: string; email: string; name: string | null } | null
 }
 
+interface AuthDiagnosticsResult {
+  google_login: {
+    client_id_set: boolean
+    client_secret_set: boolean
+    secret_set: boolean
+    url_set: boolean
+    signed_in: boolean
+    signed_in_user: { id: string | null; email: string | null; name: string | null } | null
+  }
+  chatgpt_oauth: {
+    client_id_set: boolean
+    client_secret_set: boolean
+    auth_url_set: boolean
+    token_url_set: boolean
+    scope_set: boolean
+    fully_configured: boolean
+    connection: { status: string; account_email: string | null } | null
+  }
+  claude_oauth: {
+    client_id_set: boolean
+    client_secret_set: boolean
+    auth_url_set: boolean
+    token_url_set: boolean
+    scope_set: boolean
+    fully_configured: boolean
+    connection: { status: string; account_email: string | null } | null
+  }
+  api_providers: {
+    openai_api_connected: boolean
+    anthropic_api_connected: boolean
+    openrouter_connected: boolean
+    ollama_connected: boolean
+  }
+  ceo_brain: {
+    can_ceo_think: boolean
+    assigned_provider: string | null
+    model: string | null
+    compatibility: string | null
+    last_error: string | null
+  }
+}
+
 export default function ConnectAIPage() {
   const { data: session } = useSession()
   const searchParams = useSearchParams()
   const [providers, setProviders] = useState<Provider[]>([])
   const [roles, setRoles] = useState<Record<string, string | null>>({})
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null)
+  const [authDiagnostics, setAuthDiagnostics] = useState<AuthDiagnosticsResult | null>(null)
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -80,14 +123,16 @@ export default function ConnectAIPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [pRes, rRes, dRes] = await Promise.all([
+      const [pRes, rRes, dRes, adRes] = await Promise.all([
         fetch('/api/providers').then(r => r.json()),
         fetch('/api/providers/roles').then(r => r.json()),
         fetch('/api/providers/diagnostics').then(r => r.json()).catch(() => null),
+        fetch('/api/auth/diagnostics').then(r => r.json()).catch(() => null),
       ])
       setProviders(pRes.providers ?? [])
       setRoles(rRes.roles ?? {})
       setDiagnostics(dRes ?? null)
+      setAuthDiagnostics(adRes ?? null)
     } finally {
       setLoading(false)
     }
@@ -365,6 +410,9 @@ export default function ConnectAIPage() {
           onSave={load}
         />
       )}
+
+      {/* ── Auth & provider diagnostics ──────────────────────────────────── */}
+      <AuthDiagnosticsPanel data={authDiagnostics} onReload={load} />
 
       {/* ── Brain verification ────────────────────────────────────────────── */}
       <BrainVerification diagnostics={diagnostics} canThink={connectedCount > 0 && (diagnostics?.can_ceo_think ?? false)} />
@@ -1243,6 +1291,221 @@ function SetupDrawer({
         }
       `}</style>
     </>
+  )
+}
+
+// ── Auth & provider diagnostics panel ────────────────────────────────────────
+
+function AuthDiagnosticsPanel({
+  data,
+  onReload,
+}: {
+  data: AuthDiagnosticsResult | null
+  onReload: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function refresh() {
+    setRefreshing(true)
+    try { await onReload() } finally { setRefreshing(false) }
+  }
+
+  function BoolRow({ label, value, warn }: { label: string; value: boolean; warn?: boolean }) {
+    const ok    = value
+    const color = ok ? '#16a34a' : warn ? '#f59e0b' : '#dc2626'
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
+        <span style={{ fontSize: 12, color: '#374151' }}>{label}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color }}>
+          {ok ? '✓ set' : warn ? '— not set (optional)' : '✗ missing'}
+        </span>
+      </div>
+    )
+  }
+
+  function StatusRow({ label, value }: { label: string; value: string | null }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
+        <span style={{ fontSize: 12, color: '#374151' }}>{label}</span>
+        <span style={{ fontSize: 12, color: '#0f172a', fontFamily: 'DM Mono, monospace' }}>{value ?? '—'}</span>
+      </div>
+    )
+  }
+
+  function Section({ title, children }: { title: string; children: React.ReactNode }) {
+    return (
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+          {title}
+        </div>
+        {children}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginTop: 40, marginBottom: 4 }}>
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer', userSelect: 'none',
+        }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <div style={SECTION_LABEL}>Auth &amp; provider diagnostics</div>
+        <button
+          style={{
+            background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
+            fontSize: 11, color: '#94a3b8', padding: '3px 10px', cursor: 'pointer',
+          }}
+        >
+          {open ? 'Hide ▲' : 'Show ▼'}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{
+          background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12,
+          padding: '20px 24px', marginTop: 12,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+              Safe booleans only — no secrets, tokens, or API keys are shown here.
+            </p>
+            <button
+              onClick={refresh}
+              disabled={refreshing}
+              style={{
+                padding: '5px 12px', borderRadius: 6, fontSize: 11,
+                background: '#f8fafc', color: '#374151',
+                border: '1px solid #e2e8f0', cursor: 'pointer',
+              }}
+            >
+              {refreshing ? 'Refreshing…' : '↻ Refresh'}
+            </button>
+          </div>
+
+          {!data ? (
+            <div style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center', padding: '20px 0' }}>
+              Loading diagnostics…
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 40px' }}>
+
+              {/* Left column */}
+              <div>
+                {/* Google Login */}
+                <Section title="Google Login (user identity)">
+                  <BoolRow label="GOOGLE_CLIENT_ID"     value={data.google_login.client_id_set} />
+                  <BoolRow label="GOOGLE_CLIENT_SECRET" value={data.google_login.client_secret_set} />
+                  <BoolRow label="NEXTAUTH_SECRET"      value={data.google_login.secret_set} />
+                  <BoolRow label="NEXTAUTH_URL"         value={data.google_login.url_set} warn />
+                  <div style={{ padding: '8px 0 0', borderBottom: '1px solid #f8fafc' }}>
+                    <div style={{ fontSize: 12, color: '#374151', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 500 }}>Signed in: </span>
+                      {data.google_login.signed_in
+                        ? <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ Yes</span>
+                        : <span style={{ color: '#dc2626', fontWeight: 600 }}>✗ No</span>
+                      }
+                    </div>
+                    {data.google_login.signed_in_user && (
+                      <>
+                        <StatusRow label="Email"       value={data.google_login.signed_in_user.email} />
+                        <StatusRow label="Name"        value={data.google_login.signed_in_user.name} />
+                        <StatusRow label="Internal ID" value={data.google_login.signed_in_user.id} />
+                      </>
+                    )}
+                  </div>
+                </Section>
+
+                {/* API-key providers */}
+                <Section title="API-key Providers">
+                  <BoolRow label="OpenAI API"    value={data.api_providers.openai_api_connected}    warn={!data.api_providers.openai_api_connected} />
+                  <BoolRow label="Anthropic API" value={data.api_providers.anthropic_api_connected} warn={!data.api_providers.anthropic_api_connected} />
+                  <BoolRow label="OpenRouter"    value={data.api_providers.openrouter_connected}    warn={!data.api_providers.openrouter_connected} />
+                  <BoolRow label="Ollama (local)" value={data.api_providers.ollama_connected}       warn={!data.api_providers.ollama_connected} />
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
+                    ✓ set = connected and last test passed
+                  </div>
+                </Section>
+              </div>
+
+              {/* Right column */}
+              <div>
+                {/* ChatGPT OAuth */}
+                <Section title="ChatGPT / Codex OAuth (optional)">
+                  <BoolRow label="OPENAI_OAUTH_CLIENT_ID"     value={data.chatgpt_oauth.client_id_set}     warn />
+                  <BoolRow label="OPENAI_OAUTH_CLIENT_SECRET" value={data.chatgpt_oauth.client_secret_set} warn />
+                  <BoolRow label="OPENAI_OAUTH_AUTH_URL"      value={data.chatgpt_oauth.auth_url_set}      warn />
+                  <BoolRow label="OPENAI_OAUTH_TOKEN_URL"     value={data.chatgpt_oauth.token_url_set}     warn />
+                  <BoolRow label="OPENAI_OAUTH_SCOPE"         value={data.chatgpt_oauth.scope_set}         warn />
+                  <div style={{ padding: '6px 0 0' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fully configured: </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: data.chatgpt_oauth.fully_configured ? '#16a34a' : '#94a3b8' }}>
+                      {data.chatgpt_oauth.fully_configured ? '✓ Yes' : '— No'}
+                    </span>
+                  </div>
+                  {data.chatgpt_oauth.connection && (
+                    <div style={{ marginTop: 6 }}>
+                      <StatusRow label="Connection status" value={data.chatgpt_oauth.connection.status} />
+                      {data.chatgpt_oauth.connection.account_email && (
+                        <StatusRow label="Account email" value={data.chatgpt_oauth.connection.account_email} />
+                      )}
+                    </div>
+                  )}
+                </Section>
+
+                {/* Claude OAuth */}
+                <Section title="Claude Account OAuth (optional)">
+                  <BoolRow label="CLAUDE_OAUTH_CLIENT_ID"     value={data.claude_oauth.client_id_set}     warn />
+                  <BoolRow label="CLAUDE_OAUTH_CLIENT_SECRET" value={data.claude_oauth.client_secret_set} warn />
+                  <BoolRow label="CLAUDE_OAUTH_AUTH_URL"      value={data.claude_oauth.auth_url_set}      warn />
+                  <BoolRow label="CLAUDE_OAUTH_TOKEN_URL"     value={data.claude_oauth.token_url_set}     warn />
+                  <BoolRow label="CLAUDE_OAUTH_SCOPE"         value={data.claude_oauth.scope_set}         warn />
+                  <div style={{ padding: '6px 0 0' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fully configured: </span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: data.claude_oauth.fully_configured ? '#16a34a' : '#94a3b8' }}>
+                      {data.claude_oauth.fully_configured ? '✓ Yes' : '— No'}
+                    </span>
+                  </div>
+                  {data.claude_oauth.connection && (
+                    <div style={{ marginTop: 6 }}>
+                      <StatusRow label="Connection status" value={data.claude_oauth.connection.status} />
+                      {data.claude_oauth.connection.account_email && (
+                        <StatusRow label="Account email" value={data.claude_oauth.connection.account_email} />
+                      )}
+                    </div>
+                  )}
+                </Section>
+
+                {/* CEO brain summary */}
+                <Section title="CEO Brain">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
+                    <span style={{ fontSize: 12, color: '#374151' }}>Can think</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: data.ceo_brain.can_ceo_think ? '#16a34a' : '#dc2626' }}>
+                      {data.ceo_brain.can_ceo_think ? '✓ Yes' : '✗ No'}
+                    </span>
+                  </div>
+                  <StatusRow label="Provider" value={data.ceo_brain.assigned_provider} />
+                  <StatusRow label="Model"    value={data.ceo_brain.model} />
+                  {data.ceo_brain.last_error && (
+                    <div style={{
+                      marginTop: 8, padding: '7px 10px', borderRadius: 7,
+                      background: '#fef2f2', border: '1px solid #fecaca',
+                      fontSize: 11, color: '#dc2626', fontFamily: 'DM Mono, monospace', lineHeight: 1.4,
+                    }}>
+                      {data.ceo_brain.last_error.slice(0, 200)}
+                    </div>
+                  )}
+                </Section>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

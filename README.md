@@ -620,6 +620,85 @@ Open `http://localhost:3001` (or whichever port is configured).
 
 On first launch with no provider configured, AÏKO shows the setup screen.
 
+### Local setup — environment variables
+
+Copy `.env.example` to `.env.local` and fill in your values.
+
+#### Required (Google login — user identity)
+
+```
+NEXTAUTH_SECRET=        # openssl rand -base64 32
+NEXTAUTH_URL=http://localhost:3001
+GOOGLE_CLIENT_ID=       # from console.cloud.google.com/apis/credentials
+GOOGLE_CLIENT_SECRET=
+```
+
+Create a Google OAuth app:
+1. Go to [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Create an OAuth 2.0 Client ID (web application)
+3. Add authorized redirect URI: `{NEXTAUTH_URL}/api/auth/callback/google`
+
+> **Note:** Google login only identifies the AÏKO user. It does **not** connect ChatGPT or Claude.
+
+#### AI provider (at least one required for CEO Chat)
+
+Connect an AI brain via `/connect-ai`. The fastest path is an OpenAI or Anthropic API key — no extra env vars needed beyond connecting the key in the UI.
+
+| Provider | What you need | Where to get it |
+|---|---|---|
+| OpenAI API | API key | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| Anthropic API | API key | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
+| OpenRouter | API key | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| Ollama | Local install | `ollama pull llama3.2 && ollama serve` |
+
+#### Optional: ChatGPT subscription OAuth
+
+Allows users to connect their ChatGPT subscription account instead of using an API key.
+Requires registering an OAuth app with OpenAI (when publicly available).
+
+```
+OPENAI_OAUTH_CLIENT_ID=
+OPENAI_OAUTH_CLIENT_SECRET=
+OPENAI_OAUTH_AUTH_URL=
+OPENAI_OAUTH_TOKEN_URL=
+OPENAI_OAUTH_SCOPE=openid profile email
+```
+
+Redirect URI to register: `{NEXTAUTH_URL}/api/providers/oauth/chatgpt/callback`
+
+If these vars are not set, the ChatGPT OAuth card shows "not configured" — the app falls back to API key connections. No fake success, no silent failure.
+
+#### Optional: Claude account OAuth
+
+Allows users to connect their Claude.ai account instead of using an Anthropic API key.
+Requires registering an OAuth app with Anthropic (when publicly available).
+
+```
+CLAUDE_OAUTH_CLIENT_ID=
+CLAUDE_OAUTH_CLIENT_SECRET=
+CLAUDE_OAUTH_AUTH_URL=
+CLAUDE_OAUTH_TOKEN_URL=
+CLAUDE_OAUTH_SCOPE=openid profile email
+```
+
+Redirect URI to register: `{NEXTAUTH_URL}/api/providers/oauth/claude/callback`
+
+Same fallback behaviour: if vars are missing, the Claude OAuth card shows "not configured" and API key connections work normally.
+
+#### Verify your setup
+
+After starting the app, go to `/connect-ai` → scroll to **Auth & provider diagnostics** → click **Show** to see:
+- Which env vars are configured (boolean only — no values shown)
+- Whether you are signed in, and your internal user ID
+- Whether ChatGPT / Claude OAuth is fully configured
+- Which API-key providers are connected
+- CEO brain status and last error
+
+Or call the endpoint directly:
+```
+GET /api/auth/diagnostics
+```
+
 ## Validation commands
 
 Available scripts from `package.json`:
