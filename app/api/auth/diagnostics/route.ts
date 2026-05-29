@@ -21,6 +21,8 @@ export async function GET() {
     const userId = session?.user?.id ?? null
 
     // ── Env var presence checks (boolean only — no values returned) ──────────
+    const nextauthUrl = process.env.NEXTAUTH_URL ?? ''
+
     const google = {
       client_id_set:     !!process.env.GOOGLE_CLIENT_ID,
       client_secret_set: !!process.env.GOOGLE_CLIENT_SECRET,
@@ -28,8 +30,23 @@ export async function GET() {
 
     const nextauth = {
       secret_set: !!(process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET),
-      url_set:    !!process.env.NEXTAUTH_URL,
+      url_set:    !!nextauthUrl,
     }
+
+    // ── Missing required env vars ─────────────────────────────────────────────
+    const missing_env: string[] = []
+    if (!process.env.GOOGLE_CLIENT_ID)     missing_env.push('GOOGLE_CLIENT_ID')
+    if (!process.env.GOOGLE_CLIENT_SECRET) missing_env.push('GOOGLE_CLIENT_SECRET')
+    if (!(process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET)) {
+      missing_env.push('NEXTAUTH_SECRET (or AUTH_SECRET)')
+    }
+    if (!nextauthUrl) missing_env.push('NEXTAUTH_URL')
+
+    // ── Derived Google OAuth URLs (safe to return — constructed from NEXTAUTH_URL) ──
+    const google_origin           = nextauthUrl || null
+    const expected_redirect_uri   = nextauthUrl
+      ? `${nextauthUrl}/api/auth/callback/google`
+      : null
 
     const chatgpt_oauth_config = {
       client_id_set:     !!process.env.OPENAI_OAUTH_CLIENT_ID,
@@ -132,7 +149,13 @@ export async function GET() {
               name:  session.user.name  ?? null,
             }
           : null,
+        // Derived URLs for Google Cloud Console setup
+        expected_redirect_uri,
+        google_origin,
       },
+
+      // ── Missing required env vars ──────────────────────────────────────
+      missing_env,
 
       // ── ChatGPT OAuth ──────────────────────────────────────────────────
       chatgpt_oauth: {

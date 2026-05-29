@@ -699,6 +699,52 @@ Or call the endpoint directly:
 GET /api/auth/diagnostics
 ```
 
+## Auth troubleshooting
+
+### Blank page or 500 error after running `npm run build`
+
+Running `npm run build` while the dev server is active corrupts the `.next/` directory — the dev server tries to load production chunks it doesn't know about.
+
+**Fix:**
+```bash
+# Stop the dev server (kill the process on port 3001)
+kill $(lsof -ti :3001)
+# Remove the stale build artifacts
+rm -rf .next
+# Restart the dev server
+npm run dev
+```
+
+### `OAuthSignin` error / "client_id is required"
+
+The `GOOGLE_CLIENT_ID` (or `GOOGLE_CLIENT_SECRET`) env var is missing or empty.
+
+**Fix:** Add both vars to `.env.local`, then **restart the dev server** (env vars are read at startup).
+
+The `/login` page will show step-by-step setup instructions when credentials are missing.
+
+### `redirect_uri_mismatch` from Google
+
+The redirect URI registered in Google Cloud Console doesn't match what AÏKO sends.
+
+**Fix:**
+1. Check `NEXTAUTH_URL` in `.env.local` — it must match the URL you open in the browser (e.g. `http://localhost:3001`).
+2. In [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials), ensure the OAuth client has this exact redirect URI:
+   ```
+   {NEXTAUTH_URL}/api/auth/callback/google
+   ```
+   e.g. `http://localhost:3001/api/auth/callback/google`
+3. Trailing slashes matter — match exactly.
+
+### Sign-in completes but session is not created
+
+The JWT is not being signed, usually because `NEXTAUTH_SECRET` / `AUTH_SECRET` is missing.
+
+**Fix:**
+1. Ensure `.env.local` has `NEXTAUTH_SECRET=` set (generate with `openssl rand -base64 32`).
+2. Check the database: the `users` table must exist. Run `npm run db:migrate` if it's missing.
+3. Restart the dev server after any `.env.local` change.
+
 ## Validation commands
 
 Available scripts from `package.json`:

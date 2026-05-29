@@ -20,6 +20,9 @@ function LoginContent() {
   const error = searchParams.get('error')
 
   const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(null)
+  const [redirectUri, setRedirectUri] = useState<string | null>(null)
+  const [googleOrigin, setGoogleOrigin] = useState<string | null>(null)
+  const [missingEnv, setMissingEnv] = useState<string[]>([])
 
   // Check whether Google OAuth credentials are configured on this instance
   useEffect(() => {
@@ -30,6 +33,9 @@ function LoginContent() {
           d?.google_login?.client_id_set === true &&
           d?.google_login?.client_secret_set === true
         )
+        setRedirectUri(d?.google_login?.expected_redirect_uri ?? null)
+        setGoogleOrigin(d?.google_login?.google_origin ?? null)
+        setMissingEnv(d?.missing_env ?? [])
       })
       .catch(() => setGoogleConfigured(null)) // unknown — don't block
   }, [])
@@ -77,15 +83,77 @@ function LoginContent() {
           Use your Google account to sign in. This identifies you in AÏKO — it does not connect ChatGPT or Claude automatically.
         </p>
 
-        {/* Google credentials not configured */}
+        {/* Google credentials not configured — show full setup instructions */}
         {googleConfigured === false && (
           <div style={{
-            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
-            padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#92400e', lineHeight: 1.6,
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+            padding: '14px 16px', marginBottom: 16, fontSize: 12, color: '#78350f',
+            lineHeight: 1.7, textAlign: 'left',
           }}>
-            <strong>Google OAuth not configured.</strong> Add <code style={{ fontFamily: 'monospace' }}>GOOGLE_CLIENT_ID</code> and{' '}
-            <code style={{ fontFamily: 'monospace' }}>GOOGLE_CLIENT_SECRET</code> to{' '}
-            <code style={{ fontFamily: 'monospace' }}>.env.local</code> to enable sign-in.
+            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13 }}>
+              Google OAuth not configured
+            </div>
+
+            {missingEnv.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <span style={{ fontWeight: 600 }}>Missing env vars: </span>
+                {missingEnv.map((v, i) => (
+                  <span key={v}>
+                    <code style={{ fontFamily: 'monospace', background: '#fef3c7', borderRadius: 3, padding: '1px 4px' }}>{v}</code>
+                    {i < missingEnv.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>Setup steps:</div>
+            <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <li>
+                Open{' '}
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#b45309', fontWeight: 600 }}
+                >
+                  Google Cloud Console → APIs &amp; Services → Credentials
+                </a>
+              </li>
+              <li>
+                Click <strong>Create Credentials → OAuth 2.0 Client ID</strong>, choose <strong>Web application</strong>
+              </li>
+              <li>
+                Under <strong>Authorized JavaScript origins</strong>, add:
+                <div style={{
+                  fontFamily: 'monospace', background: '#fef3c7', borderRadius: 4,
+                  padding: '3px 8px', marginTop: 3, fontSize: 11, wordBreak: 'break-all',
+                }}>
+                  {googleOrigin ?? 'http://localhost:3001'}
+                </div>
+              </li>
+              <li>
+                Under <strong>Authorized redirect URIs</strong>, add:
+                <div style={{
+                  fontFamily: 'monospace', background: '#fef3c7', borderRadius: 4,
+                  padding: '3px 8px', marginTop: 3, fontSize: 11, wordBreak: 'break-all',
+                }}>
+                  {redirectUri ?? 'http://localhost:3001/api/auth/callback/google'}
+                </div>
+              </li>
+              <li>
+                Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> into{' '}
+                <code style={{ fontFamily: 'monospace', background: '#fef3c7', borderRadius: 3, padding: '1px 4px' }}>.env.local</code>:
+                <div style={{
+                  fontFamily: 'monospace', background: '#fef3c7', borderRadius: 4,
+                  padding: '6px 8px', marginTop: 3, fontSize: 11, whiteSpace: 'pre',
+                }}>
+                  {'GOOGLE_CLIENT_ID=your-client-id\nGOOGLE_CLIENT_SECRET=your-client-secret'}
+                </div>
+              </li>
+              <li>
+                <strong>Restart the dev server</strong> to pick up the new env vars
+              </li>
+            </ol>
           </div>
         )}
 
