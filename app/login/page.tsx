@@ -1,14 +1,38 @@
 'use client'
 import { signIn, useSession } from 'next-auth/react'
-import { useEffect } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
+// useSearchParams requires a Suspense boundary in Next.js 14 App Router
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') ?? '/ceo'
   const error = searchParams.get('error')
+
+  const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(null)
+
+  // Check whether Google OAuth credentials are configured on this instance
+  useEffect(() => {
+    fetch('/api/auth/diagnostics')
+      .then(r => r.json())
+      .then(d => {
+        setGoogleConfigured(
+          d?.google_login?.client_id_set === true &&
+          d?.google_login?.client_secret_set === true
+        )
+      })
+      .catch(() => setGoogleConfigured(null)) // unknown — don't block
+  }, [])
 
   // Already signed in → redirect
   useEffect(() => {
@@ -53,16 +77,32 @@ export default function LoginPage() {
           Use your Google account to sign in. This identifies you in AÏKO — it does not connect ChatGPT or Claude automatically.
         </p>
 
-        {/* Error */}
+        {/* Google credentials not configured */}
+        {googleConfigured === false && (
+          <div style={{
+            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8,
+            padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#92400e', lineHeight: 1.6,
+          }}>
+            <strong>Google OAuth not configured.</strong> Add <code style={{ fontFamily: 'monospace' }}>GOOGLE_CLIENT_ID</code> and{' '}
+            <code style={{ fontFamily: 'monospace' }}>GOOGLE_CLIENT_SECRET</code> to{' '}
+            <code style={{ fontFamily: 'monospace' }}>.env.local</code> to enable sign-in.
+          </div>
+        )}
+
+        {/* Sign-in error */}
         {error && (
           <div style={{
             background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
             padding: '10px 14px', marginBottom: 20, fontSize: 12, color: '#dc2626',
           }}>
-            {error === 'OAuthSignin' || error === 'OAuthCallback'
-              ? 'Google sign-in failed. Please try again.'
+            {error === 'OAuthSignin'
+              ? 'Google OAuth failed to start. Check that GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set correctly.'
+              : error === 'OAuthCallback'
+              ? 'Google OAuth callback failed. Verify the redirect URI in Google Cloud Console matches: http://localhost:3001/api/auth/callback/google'
               : error === 'OAuthAccountNotLinked'
               ? 'This email is linked to a different sign-in method.'
+              : error === 'Callback'
+              ? 'Sign-in callback error — check server logs for details.'
               : `Sign-in error: ${error}`}
           </div>
         )}

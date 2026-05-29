@@ -1,8 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { SetupGate } from '@/components/setup/SetupGate'
-import { AIChatWidget } from '@/components/chat/AIChatWidget'
 import { SessionWrapper } from '@/components/providers/SessionWrapper'
 
 export const metadata: Metadata = {
@@ -10,18 +7,19 @@ export const metadata: Metadata = {
   description: 'Open, self-hostable AI marketing operating system',
 }
 
+/**
+ * Root layout — bare shell with session provider only.
+ *
+ * Dashboard chrome (Sidebar, SetupGate, AIChatWidget) lives in
+ * app/(dashboard)/layout.tsx so /login and other standalone pages
+ * never inherit it.
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body style={{ margin: 0, background: '#f8fafc', color: '#0f172a', display: 'flex', minHeight: '100vh' }}>
         <SessionWrapper>
-          <SetupGate>
-            <Sidebar />
-            <main style={{ flex: 1, marginLeft: 220, minHeight: '100vh' }}>
-              {children}
-            </main>
-            <AIChatWidget />
-          </SetupGate>
+          {children}
         </SessionWrapper>
       </body>
     </html>

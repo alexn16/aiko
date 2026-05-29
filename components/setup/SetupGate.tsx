@@ -75,37 +75,33 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const [configured, setConfigured] = useState(true) // optimistic — hide flash
   const router = useRouter()
 
-  // Bypass the gate on auth routes — the login page must render as-is
-  const isAuthRoute = typeof window !== 'undefined' &&
-    (window.location.pathname.startsWith('/login') ||
-     window.location.pathname.startsWith('/api/auth'))
-
   useEffect(() => {
-    if (isAuthRoute) { setConfigured(true); setChecked(true); return }
     fetch('/api/setup')
       .then(r => r.json())
       .then(d => { setConfigured(d.configured); setChecked(true) })
       .catch(() => { setConfigured(false); setChecked(true) })
-  }, [isAuthRoute])
+  }, [])
 
-  function handleDone() {
-    setConfigured(true)
-    router.push('/ceo')
-  }
+  useEffect(() => {
+    // Once checked: if no AI provider is configured, redirect to /connect-ai
+    // so the user completes setup there. Don't redirect if already on /connect-ai
+    // (avoids an infinite loop) or on other setup-exempt paths.
+    if (checked && !configured) {
+      const path = window.location.pathname
+      const exempt = ['/connect-ai', '/login', '/api/']
+      if (!exempt.some(p => path.startsWith(p))) {
+        router.replace('/connect-ai')
+      }
+    }
+  }, [checked, configured, router])
 
+  // Hold render until we know configured status (avoids setup-form flash)
   if (!checked) return null
-  if (configured) return <>{children}</>
 
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      background: '#f8fafc',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
-    }}>
-      <SetupForm onDone={handleDone} />
-    </div>
-  )
+  // Once checked, always render children.
+  // If !configured, the useEffect above fires router.replace('/connect-ai')
+  // and the user is moved there. Children render briefly during navigation.
+  return <>{children}</>
 }
 
 // ── Setup form ────────────────────────────────────────────────────────────────
