@@ -75,12 +75,18 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const [configured, setConfigured] = useState(true) // optimistic — hide flash
   const router = useRouter()
 
+  // Bypass the gate on auth routes — the login page must render as-is
+  const isAuthRoute = typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/login') ||
+     window.location.pathname.startsWith('/api/auth'))
+
   useEffect(() => {
+    if (isAuthRoute) { setConfigured(true); setChecked(true); return }
     fetch('/api/setup')
       .then(r => r.json())
       .then(d => { setConfigured(d.configured); setChecked(true) })
       .catch(() => { setConfigured(false); setChecked(true) })
-  }, [])
+  }, [isAuthRoute])
 
   function handleDone() {
     setConfigured(true)

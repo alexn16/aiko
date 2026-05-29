@@ -1,13 +1,10 @@
 /**
- * Login layout — standalone, no sidebar or SetupGate.
- * Used by /login and /api/auth/* redirects.
+ * Login layout — passthrough only.
+ * The sidebar, SetupGate and AIChatWidget are excluded by the SetupGate
+ * bypass (it checks window.location.pathname for /login).
+ * Do NOT add <html> or <body> here — only the root layout may do that
+ * in Next.js App Router.
  */
 export default function LoginLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body style={{ margin: 0, background: '#f8fafc', color: '#0f172a', fontFamily: 'Inter, sans-serif' }}>
-        {children}
-      </body>
-    </html>
-  )
+  return <>{children}</>
 }
