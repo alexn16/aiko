@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
+import { getAuthMode, isAuthOptional } from '@/lib/auth-mode'
 import { db } from '@/lib/db/client'
 
 export const dynamic = 'force-dynamic'
@@ -137,6 +138,10 @@ export async function GET() {
     }
 
     return NextResponse.json({
+      // ── Auth mode ──────────────────────────────────────────────────────
+      auth_mode: getAuthMode(),
+      can_configure_without_login: isAuthOptional(),
+
       // ── Google login ────────────────────────────────────────────────────
       google_login: {
         ...google,

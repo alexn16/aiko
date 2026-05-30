@@ -3,18 +3,22 @@
  *
  * Initiates the ChatGPT/OpenAI OAuth authorization flow.
  *
+ * In AIKO_AUTH_MODE=optional (default), this works without a Google session.
+ * The resulting token is stored with user_id = null (global/single-user mode).
+ *
+ * In AIKO_AUTH_MODE=required, the user must be signed in.
+ *
  * Requirements:
  *   OPENAI_OAUTH_CLIENT_ID
  *   OPENAI_OAUTH_AUTH_URL
  *   OPENAI_OAUTH_TOKEN_URL
  *   OPENAI_OAUTH_REDIRECT_URI  (optional — defaults to {NEXTAUTH_URL}/api/providers/oauth/chatgpt/callback)
- *
- * If those vars are not set, returns { configured: false } with a clear message.
  */
 
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
+import { isAuthRequired } from '@/lib/auth-mode'
 import {
   getOAuthProviderConfig,
   isConfigured,
@@ -28,9 +32,11 @@ import {
 } from '@/lib/oauth-helpers'
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+  if (isAuthRequired()) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+    }
   }
 
   const cfg = getOAuthProviderConfig('chatgpt')
@@ -45,10 +51,10 @@ export async function GET() {
     )
   }
 
-  const state        = generateState()
-  const codeVerifier = generateCodeVerifier()
+  const state         = generateState()
+  const codeVerifier  = generateCodeVerifier()
   const codeChallenge = deriveCodeChallenge(codeVerifier)
-  const authUrl      = buildAuthUrl(cfg, state, codeChallenge)
+  const authUrl       = buildAuthUrl(cfg, state, codeChallenge)
 
   const cookieOpts = makeStateCookieOptions()
   const response = NextResponse.redirect(authUrl)

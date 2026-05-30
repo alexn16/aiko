@@ -64,6 +64,8 @@ interface DiagnosticsResult {
 }
 
 interface AuthDiagnosticsResult {
+  auth_mode?: 'optional' | 'required'
+  can_configure_without_login?: boolean
   google_login: {
     client_id_set: boolean
     client_secret_set: boolean
@@ -159,49 +161,67 @@ export default function ConnectAIPage() {
   return (
     <div style={{ padding: '40px 40px', maxWidth: 1000 }} className="page-enter">
 
-      {/* ── Account section ─────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0',
-        borderRadius: 10, marginBottom: 28,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: '50%', background: '#6366f1',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, color: '#ffffff', flexShrink: 0,
-          }}>
-            {(session?.user?.name ?? session?.user?.email ?? '?')[0].toUpperCase()}
-          </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
-              {session?.user?.name ?? session?.user?.email ?? 'Loading…'}
+      {/* ── Local mode / account notice ──────────────────────────────────────── */}
+      {session?.user ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0',
+          borderRadius: 10, marginBottom: 28,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%', background: '#6366f1',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 700, color: '#ffffff', flexShrink: 0,
+            }}>
+              {(session.user.name ?? session.user.email ?? '?')[0].toUpperCase()}
             </div>
-            {session?.user?.name && (
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>{session.user.email}</div>
-            )}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                {session.user.name ?? session.user.email}
+              </div>
+              {session.user.name && (
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>{session.user.email}</div>
+              )}
+            </div>
           </div>
+          <button
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            style={{
+              fontSize: 12, color: '#64748b', background: 'none',
+              border: '1px solid #e2e8f0', borderRadius: 7,
+              padding: '5px 12px', cursor: 'pointer',
+            }}
+          >
+            Sign out
+          </button>
         </div>
-        <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
-          style={{
-            fontSize: 12, color: '#64748b', background: 'none',
-            border: '1px solid #e2e8f0', borderRadius: 7,
-            padding: '5px 12px', cursor: 'pointer',
-          }}
-        >
-          Sign out
-        </button>
-      </div>
-
-      {/* ── Auth clarity notice ──────────────────────────────────────────────── */}
-      <div style={{
-        padding: '10px 14px', background: '#f0f9ff', border: '1px solid #bae6fd',
-        borderRadius: 8, fontSize: 12, color: '#0369a1', marginBottom: 28, lineHeight: 1.6,
-      }}>
-        <strong>Note:</strong> Signing in with Google identifies you in AÏKO. It does <em>not</em> automatically
-        connect ChatGPT or Claude. Connect each AI brain separately below.
-      </div>
+      ) : (
+        <div style={{
+          padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0',
+          borderRadius: 10, marginBottom: 28, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 3 }}>
+              Local single-user mode
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+              You are configuring AI providers without signing in. Connections are stored globally and available to all users of this AÏKO instance.
+              Google login is only needed for account-scoped connections in a multi-user setup.
+            </div>
+          </div>
+          <a
+            href="/login"
+            style={{
+              flexShrink: 0, fontSize: 12, color: '#6366f1', background: '#eef2ff',
+              border: '1px solid #c7d2fe', borderRadius: 7,
+              padding: '6px 14px', cursor: 'pointer', textDecoration: 'none', whiteSpace: 'nowrap',
+            }}
+          >
+            Sign in
+          </a>
+        </div>
+      )}
 
       {/* ── OAuth feedback banners ────────────────────────────────────────────── */}
       {oauthSuccess && (
@@ -230,11 +250,10 @@ export default function ConnectAIPage() {
           AI Brain
         </p>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em', margin: '0 0 8px' }}>
-          Choose AÏKO&apos;s brain
+          AÏKO Brain Setup
         </h1>
         <p style={{ fontSize: 14, color: '#64748b', margin: 0, lineHeight: 1.6 }}>
-          AÏKO needs an AI brain before the company can operate.
-          Connect ChatGPT, Claude, or another provider to start the CEO.
+          Connect ChatGPT, Claude, or any API provider directly. No Google login required to set up your AI brain.
         </p>
       </div>
 
@@ -1392,12 +1411,29 @@ function AuthDiagnosticsPanel({
               Loading diagnostics…
             </div>
           ) : (
+            <>
+            {/* Auth mode banner */}
+            {data.auth_mode && (
+              <div style={{
+                marginBottom: 20, padding: '9px 14px',
+                background: data.auth_mode === 'optional' ? '#f0f9ff' : '#fef9c3',
+                border: `1px solid ${data.auth_mode === 'optional' ? '#bae6fd' : '#fde68a'}`,
+                borderRadius: 8, fontSize: 12,
+                color: data.auth_mode === 'optional' ? '#0369a1' : '#92400e',
+              }}>
+                <strong>AIKO_AUTH_MODE={data.auth_mode}</strong>
+                {data.auth_mode === 'optional'
+                  ? ' — AI provider setup works without Google login. Connections are stored globally when not signed in.'
+                  : ' — Account login is required on this deployment.'}
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 40px' }}>
 
               {/* Left column */}
               <div>
                 {/* Google Login */}
-                <Section title="Google Login (user identity)">
+                <Section title="Google Login (optional account identity)">
                   <BoolRow label="GOOGLE_CLIENT_ID"     value={data.google_login.client_id_set} />
                   <BoolRow label="GOOGLE_CLIENT_SECRET" value={data.google_login.client_secret_set} />
                   <BoolRow label="NEXTAUTH_SECRET"      value={data.google_login.secret_set} />
@@ -1502,6 +1538,7 @@ function AuthDiagnosticsPanel({
                 </Section>
               </div>
             </div>
+            </>
           )}
         </div>
       )}

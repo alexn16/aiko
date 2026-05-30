@@ -256,6 +256,123 @@ test('diagnostics signed_in_user is null when no session', () => {
   assert.equal(signedInUser, null, 'no session → no signed_in_user in diagnostics')
 })
 
+// ── 16. AIKO_AUTH_MODE: optional allows setup without session ────────────────
+
+test('optional mode: provider setup allowed without session (user_id = null)', () => {
+  // Simulate the /api/providers POST guard in optional mode
+  function canCreateProvider(session, authMode) {
+    if (authMode === 'required' && !session?.user?.id) return false
+    return true
+  }
+
+  assert.equal(canCreateProvider(null, 'optional'), true,  'optional + no session → allowed')
+  assert.equal(canCreateProvider(null, 'required'), false, 'required + no session → blocked')
+  assert.equal(
+    canCreateProvider({ user: { id: 'u1' } }, 'required'), true, 'required + session → allowed'
+  )
+})
+
+// ── 17. AIKO_AUTH_MODE: required blocks protected routes without session ───────
+
+test('required mode: protected routes blocked without session', () => {
+  // Simulate middleware authorized() callback
+  function authorized(token, pathname, authMode) {
+    const alwaysPublic = ['/login', '/api/auth/']
+    if (alwaysPublic.some(p => pathname.startsWith(p))) return true
+    const optionalPublic = ['/connect-ai', '/api/providers/']
+    if (authMode !== 'required' && optionalPublic.some(p => pathname.startsWith(p))) return true
+    return !!token
+  }
+
+  // Optional mode — /connect-ai always public
+  assert.equal(authorized(null, '/connect-ai', 'optional'), true)
+  assert.equal(authorized(null, '/api/providers/roles', 'optional'), true)
+  assert.equal(authorized(null, '/dashboard', 'optional'), false, 'dashboard still blocked without token')
+
+  // Required mode — /connect-ai also protected
+  assert.equal(authorized(null, '/connect-ai', 'required'), false)
+  assert.equal(authorized(null, '/api/providers/roles', 'required'), false)
+
+  // Always public regardless of mode
+  assert.equal(authorized(null, '/login', 'required'), true)
+  assert.equal(authorized(null, '/api/auth/callback/google', 'required'), true)
+})
+
+// ── 18. Global provider fallback in optional mode ────────────────────────────
+
+test('optional mode: falls back to global (null user_id) providers when no session', () => {
+  const allProviders = [
+    { id: '1', name: 'OpenAI',    user_id: 'user-a', status: 'connected' },
+    { id: '2', name: 'Anthropic', user_id: null,     status: 'connected' }, // global
+  ]
+
+  // Simulate getProviderForRole with optional-mode fallback
+  async function getProvider(userId) {
+    if (userId) {
+      const userProvider = allProviders.find(p => p.user_id === userId && p.status === 'connected')
+      if (userProvider) return userProvider
+    }
+    // Fall back to global
+    return allProviders.find(p => p.user_id === null && p.status === 'connected') ?? null
+  }
+
+  return Promise.all([
+    getProvider(null).then(p => {
+      assert.ok(p, 'no session → global provider returned')
+      assert.equal(p.name, 'Anthropic')
+    }),
+    getProvider('user-a').then(p => {
+      assert.ok(p, 'user-a → user-scoped provider returned first')
+      assert.equal(p.name, 'OpenAI')
+    }),
+  ])
+})
+
+// ── 19. User-scoped provider preferred over global when logged in ─────────────
+
+test('user-scoped provider preferred over global when logged in', () => {
+  const allProviders = [
+    { id: '1', name: 'UserOpenAI',    user_id: 'user-x', status: 'connected' },
+    { id: '2', name: 'GlobalAnthropic', user_id: null,   status: 'connected' },
+  ]
+
+  function getProviderForUser(userId) {
+    const userScoped = allProviders.find(p => p.user_id === userId && p.status === 'connected')
+    if (userScoped) return userScoped
+    return allProviders.find(p => p.user_id === null && p.status === 'connected') ?? null
+  }
+
+  const result = getProviderForUser('user-x')
+  assert.equal(result.name, 'UserOpenAI', 'user-scoped row preferred when available')
+})
+
+// ── 20. Diagnostics includes auth_mode ───────────────────────────────────────
+
+test('diagnostics response includes auth_mode and can_configure_without_login', () => {
+  // Simulate what /api/auth/diagnostics and /api/providers/diagnostics return
+  function buildDiagnostics(authMode, session) {
+    const isOptional = authMode !== 'required'
+    return {
+      auth_mode: authMode,
+      can_configure_without_login: isOptional,
+      signed_in: !!session?.user,
+      provider_scope: session?.user ? 'user' : 'global',
+    }
+  }
+
+  const optDiag = buildDiagnostics('optional', null)
+  assert.equal(optDiag.auth_mode, 'optional')
+  assert.equal(optDiag.can_configure_without_login, true)
+  assert.equal(optDiag.signed_in, false)
+  assert.equal(optDiag.provider_scope, 'global')
+
+  const reqDiag = buildDiagnostics('required', { user: { id: 'u1' } })
+  assert.equal(reqDiag.auth_mode, 'required')
+  assert.equal(reqDiag.can_configure_without_login, false)
+  assert.equal(reqDiag.signed_in, true)
+  assert.equal(reqDiag.provider_scope, 'user')
+})
+
 // ── 15. NeedsReauthError is a distinct error class ────────────────────────────
 
 test('NeedsReauthError carries providerId and is distinguishable from generic Error', () => {

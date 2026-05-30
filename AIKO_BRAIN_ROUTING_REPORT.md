@@ -1,62 +1,84 @@
 # AÏKO Brain Routing Report
 
-_Last updated: 2026-05-28 (rev 4 — account login and subscription AI connections)_
+_Last updated: 2026-05-30 (rev 5 — OpenClaw-style provider auth, AIKO_AUTH_MODE)_
 
 ---
 
 ## 0. Authentication model
 
-AÏKO uses NextAuth v4 with Google OAuth for user login.
+AÏKO follows **OpenClaw-style provider auth**: AI brain connections are independent of Google login.
+Google login is optional account identity, not a prerequisite for connecting ChatGPT or Claude.
 
 | Identity layer | What it does | What it does NOT do |
 |---|---|---|
-| **Google login** | Identifies the AÏKO user, creates a `users` row | Connects ChatGPT or Claude |
-| **ChatGPT / Codex OAuth** | Connects ChatGPT subscription brain | Not granted by Google login |
-| **Claude account OAuth** | Connects Claude subscription brain | Not granted by Google login |
-| **OpenAI API key** | Separate billing / API brain | Different from ChatGPT OAuth |
-| **Anthropic API key** | Separate billing / API brain | Different from Claude account OAuth |
+| **Google login** | Identifies the AÏKO user in multi-user mode | Connects ChatGPT or Claude |
+| **ChatGPT / Codex OAuth** | Connects ChatGPT subscription brain directly | Require Google login |
+| **Claude account OAuth** | Connects Claude subscription brain directly | Require Google login |
+| **OpenAI API key** | Separate API brain (billing via OpenAI account) | Same as ChatGPT OAuth |
+| **Anthropic API key** | Separate API brain (billing via Anthropic account) | Same as Claude account OAuth |
 
-### Login flow
+### AIKO_AUTH_MODE
+
+`AIKO_AUTH_MODE` (env var) controls whether Google login is required:
+
+| Mode | Default | Behavior |
+|---|---|---|
+| `optional` | **Yes** | `/connect-ai` and all `/api/providers/**` routes work without session. Provider rows stored with `user_id = null` (global). ChatGPT/Claude OAuth work without Google login. |
+| `required` | No | All dashboard routes require a session. Provider rows are user-scoped. Use for multi-user / hosted deployments. |
+
+### Login flow (when signed in)
 1. User visits any protected route → redirected to `/login`
 2. User clicks "Sign in with Google" → NextAuth handles Google OAuth
 3. Google returns sub + email → AÏKO upserts `users` row
 4. Session JWT stores `user.id` (our UUID)
-5. All provider connections are now scoped to that `user.id`
+5. Provider connections are now scoped to that `user.id`
+
+### Flow in optional mode (no login)
+1. User visits `/connect-ai` → no redirect, page loads
+2. User connects ChatGPT via OAuth or API key
+3. Provider row stored with `user_id = null` (global / single-user)
+4. CEO Chat resolves provider from global fallback
+5. Google login available as optional step at any time
 
 ### Per-user provider isolation
-- `provider_connections.user_id` — owner of the connection
-- `ai_role_assignments.user_id` — owner of the assignment
-- `getAllProviders(userId)` returns only that user's providers
-- `getProviderForRole(role, userId)` resolves only that user's assignment
-- Background agents (no HTTP request context) use `user_id IS NULL` global fallback
+- `provider_connections.user_id` — owner of the connection (`null` = global)
+- `ai_role_assignments.user_id` — owner of the assignment (`null` = global)
+- `getAllProviders(userId)` returns only that user's providers; `null` → global providers
+- `getProviderForRole(role, userId)` resolves: user assignment → user fallback → global assignment → global fallback
+- User A cannot see User B's providers
 
 ### OAuth connection types
 
-| Provider | Catalog ID | Auth type | Env vars needed |
-|---|---|---|---|
-| ChatGPT | `chatgpt_oauth` | `oauth` | `OPENAI_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` |
-| Claude | `claude_oauth` | `oauth` | `CLAUDE_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` |
+| Provider | Catalog ID | Auth type | Env vars needed | Requires Google login? |
+|---|---|---|---|---|
+| ChatGPT | `chatgpt_oauth` | `oauth` | `OPENAI_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` | No (optional mode) |
+| Claude | `claude_oauth` | `oauth` | `CLAUDE_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` | No (optional mode) |
 
 When env vars are missing → routes return `{ configured: false, error: "...not configured..." }` — no fake success.
 
 OAuth tokens are stored as `oauth_access_token` / `oauth_refresh_token` in `provider_connections`.  
 When expired, `dispatchCall` auto-refreshes. On refresh failure → `status = 'needs_reauth'` → `NeedsReauthError` thrown.
 
-### Environment variables required
+In `AIKO_AUTH_MODE=optional` with no session, OAuth callback stores token under `user_id = null`.
+
+### Environment variables
 
 ```
-# Google login (user identity)
+# Auth mode (default: optional)
+AIKO_AUTH_MODE=optional   # or 'required' for hosted/multi-user
+
+# Google login (optional in local mode)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 NEXTAUTH_SECRET=          # openssl rand -base64 32
 NEXTAUTH_URL=             # http://localhost:3001 for dev
 
-# ChatGPT OAuth (optional)
+# ChatGPT OAuth (optional — for subscription OAuth)
 OPENAI_OAUTH_CLIENT_ID=
 OPENAI_OAUTH_AUTH_URL=
 OPENAI_OAUTH_TOKEN_URL=
 
-# Claude OAuth (optional)
+# Claude OAuth (optional — for subscription OAuth)
 CLAUDE_OAUTH_CLIENT_ID=
 CLAUDE_OAUTH_AUTH_URL=
 CLAUDE_OAUTH_TOKEN_URL=

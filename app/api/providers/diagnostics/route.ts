@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
+import { getAuthMode, isAuthOptional } from '@/lib/auth-mode'
 import { getAllProviders, getAllRoleProviders, getProviderForRole } from '@/lib/ai/router'
 
 export const dynamic = 'force-dynamic'
@@ -41,9 +42,15 @@ export async function GET() {
       (p as { provider_catalog_id?: string }).provider_catalog_id === 'claude_oauth'
     )
 
+    const signed_in = !!session?.user
+
     return NextResponse.json({
       ok: canCeoThink,
       can_ceo_think: canCeoThink,
+      auth_mode: getAuthMode(),
+      signed_in,
+      provider_scope: signed_in ? 'user' : 'global',
+      can_configure_without_login: isAuthOptional(),
 
       // Signed-in user
       signed_in_user: session?.user

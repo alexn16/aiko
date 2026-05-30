@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-27_
+_Generated: 2026-05-24 · Updated: 2026-05-30_
 
 ---
 
@@ -16,7 +16,9 @@ Each AÏKO agent role is assigned a specific AI brain via `ai_role_assignments`.
 
 **Legacy `callLLM`**: Background agents (`research-agent.ts`, `copywriting-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` but are not reachable from the current UI. `model_configs` table is checked by `GET /api/setup` as a final SetupGate fallback only — it is no longer the source for any active AI call.
 
-**ChatGPT/Claude OAuth**: Catalog entries "ChatGPT direct" and "Claude direct" require an OAuth flow that is not yet implemented. Use OpenAI API and Anthropic API instead.
+**ChatGPT/Claude OAuth**: AÏKO follows OpenClaw-style provider auth. ChatGPT/Codex OAuth and Claude account OAuth are the real subscription-brain connections — they do not require Google login. In `AIKO_AUTH_MODE=optional` (the default for local dev), the OAuth flow works without any Google session. If OAuth env vars are missing, the cards show "not configured" and fall back to API keys. See `AIKO_BRAIN_ROUTING_REPORT.md` for details.
+
+**Google login**: Optional account identity. Google login identifies the user in multi-user deployments and scopes provider connections to that user's `user_id`. In `AIKO_AUTH_MODE=optional` (default), it is not required to connect an AI brain or run CEO Chat. Set `AIKO_AUTH_MODE=required` for hosted/multi-user deployments.
 
 See `AIKO_BRAIN_ROUTING_REPORT.md` for the full routing diagram, fallback order, debug guide, and per-provider verification steps.
 

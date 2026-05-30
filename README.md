@@ -83,7 +83,7 @@ Configure roles at `/connect-ai` → "Assign AÏKO brains" section.
 
 **Legacy note**: Some background agents (`copywriting-agent.ts`, `research-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` — these are not reachable from the current UI and are safe to ignore. `model_configs` is checked by `GET /api/setup` as a final fallback for SetupGate only. All active features (CEO Chat, CEO Reviews, PM Chat, Reports, Lead extraction, Outreach drafting) use `callAI(role)`.
 
-**ChatGPT/Claude OAuth**: The catalog lists "ChatGPT direct" and "Claude direct" as OAuth-based entries, but the OAuth flow is not implemented. Use the **API key** entries (OpenAI API, Anthropic API) for real connections.
+**ChatGPT/Claude OAuth**: The catalog lists "ChatGPT direct" and "Claude direct" as OAuth-based entries. The OAuth flow is implemented — see `OPENAI_OAUTH_*` / `CLAUDE_OAUTH_*` env vars. In `AIKO_AUTH_MODE=optional`, the OAuth flow works without Google login. If env vars are missing, the cards show "not configured" and fall back to API key connections.
 
 ## Product surfaces
 
@@ -624,7 +624,25 @@ On first launch with no provider configured, AÏKO shows the setup screen.
 
 Copy `.env.example` to `.env.local` and fill in your values.
 
-#### Required (Google login — user identity)
+#### Auth mode (controls whether login is required)
+
+```
+AIKO_AUTH_MODE=optional   # default — AI provider setup works without Google login
+# AIKO_AUTH_MODE=required # use this for multi-user / hosted deployments
+```
+
+**`AIKO_AUTH_MODE=optional` (default for local dev)**
+- `/connect-ai` and all provider API routes are accessible without signing in
+- Provider connections and role assignments are stored with `user_id = null` (global/single-user)
+- ChatGPT/Codex OAuth and Claude OAuth do not require Google login
+- Google login is available as optional account identity only
+
+**`AIKO_AUTH_MODE=required`**
+- All dashboard routes require a signed-in session
+- Provider connections are scoped to the signed-in user
+- Google login is mandatory before provider setup
+
+#### Google login (optional in local mode, required when AIKO_AUTH_MODE=required)
 
 ```
 NEXTAUTH_SECRET=        # openssl rand -base64 32
@@ -638,7 +656,8 @@ Create a Google OAuth app:
 2. Create an OAuth 2.0 Client ID (web application)
 3. Add authorized redirect URI: `{NEXTAUTH_URL}/api/auth/callback/google`
 
-> **Note:** Google login only identifies the AÏKO user. It does **not** connect ChatGPT or Claude.
+> **Note:** Google login identifies the AÏKO user. It does **not** connect ChatGPT or Claude.
+> In `AIKO_AUTH_MODE=optional`, you can connect AI providers and run CEO Chat without Google login.
 
 #### AI provider (at least one required for CEO Chat)
 

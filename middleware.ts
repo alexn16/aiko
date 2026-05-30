@@ -1,25 +1,49 @@
 /**
  * AÏKO Middleware — route protection
  *
- * All dashboard routes require a valid session.
- * Unauthenticated requests are redirected to /login.
+ * AIKO_AUTH_MODE=optional (default):
+ *   /connect-ai and /api/providers/** are public — AI setup works without login.
+ *   All other dashboard routes still require a session.
  *
- * Public routes (no auth required):
+ * AIKO_AUTH_MODE=required:
+ *   All dashboard routes require a valid session (original behavior).
+ *
+ * Always public (no auth required):
  *   /login         — sign-in page
  *   /api/auth/**   — NextAuth endpoints
  */
 
 import { withAuth } from 'next-auth/middleware'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
+
+/** Routes that are always public regardless of auth mode. */
+const ALWAYS_PUBLIC = ['/login', '/api/auth/']
+
+/** Routes that are public when AIKO_AUTH_MODE=optional. */
+const OPTIONAL_MODE_PUBLIC = [
+  '/connect-ai',
+  '/api/providers/',
+  '/api/setup',
+  '/api/auth/diagnostics',
+]
+
+function isPublicPath(pathname: string): boolean {
+  if (ALWAYS_PUBLIC.some(p => pathname.startsWith(p))) return true
+  const authMode = process.env.AIKO_AUTH_MODE ?? 'optional'
+  if (authMode !== 'required') {
+    if (OPTIONAL_MODE_PUBLIC.some(p => pathname.startsWith(p))) return true
+  }
+  return false
+}
 
 export default withAuth(
-  function middleware(_req) {
+  function middleware(req: NextRequest) {
     return NextResponse.next()
   },
   {
     callbacks: {
-      authorized({ token }) {
-        // Token present = authenticated
+      authorized({ req, token }) {
+        if (isPublicPath(req.nextUrl.pathname)) return true
         return !!token
       },
     },
@@ -29,15 +53,8 @@ export default withAuth(
   }
 )
 
-/**
- * Matcher: protect everything except:
- *   - /login
- *   - /api/auth/** (NextAuth routes)
- *   - Next.js internals (_next/*)
- *   - Public assets (favicon, etc.)
- */
 export const config = {
   matcher: [
-    '/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }
