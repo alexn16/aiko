@@ -28,20 +28,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'role is required' }, { status: 400 })
     }
 
+    // Upsert: delete existing row for this (role, user_id) then insert.
+    // Uses DELETE+INSERT rather than ON CONFLICT because the unique constraints
+    // ai_role_asgn_user_uniq / ai_role_asgn_global_uniq may not exist in all
+    // migrations. This is safe inside a single async DB call.
     if (userId) {
       await db.query(
+        `DELETE FROM ai_role_assignments WHERE role = $1 AND user_id = $2`,
+        [role, userId]
+      )
+      await db.query(
         `INSERT INTO ai_role_assignments (role, provider_id, user_id, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT ON CONSTRAINT ai_role_asgn_user_uniq
-         DO UPDATE SET provider_id = $2, updated_at = NOW()`,
+         VALUES ($1, $2, $3, NOW())`,
         [role, provider_id ?? null, userId]
       )
     } else {
       await db.query(
+        `DELETE FROM ai_role_assignments WHERE role = $1 AND user_id IS NULL`,
+        [role]
+      )
+      await db.query(
         `INSERT INTO ai_role_assignments (role, provider_id, updated_at)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT ON CONSTRAINT ai_role_asgn_global_uniq
-         DO UPDATE SET provider_id = $2, updated_at = NOW()`,
+         VALUES ($1, $2, NOW())`,
         [role, provider_id ?? null]
       )
     }

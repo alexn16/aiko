@@ -631,6 +631,8 @@ AIKO_AUTH_MODE=optional   # default — AI provider setup works without Google l
 # AIKO_AUTH_MODE=required # use this for multi-user / hosted deployments
 ```
 
+For a full walkthrough of the zero-login local flow, see **[AIKO_LOCAL_E2E_TEST.md](./AIKO_LOCAL_E2E_TEST.md)**.
+
 **`AIKO_AUTH_MODE=optional` (default — local / OpenClaw-style use)**
 - **All routes** are accessible without signing in — this is local single-user mode
 - Connect a brain at `/connect-ai`, then go straight to `/ceo` — no Google account required
