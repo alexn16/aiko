@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -311,8 +311,23 @@ function LaunchTemplateCard({
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
+// ── Root export (Suspense boundary required for useSearchParams) ───────────────
+
 export default function StartCampaignPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ padding: '48px 40px', color: '#94a3b8', fontSize: 14 }}>
+        Loading campaign flow…
+      </div>
+    }>
+      <StartCampaignInner />
+    </Suspense>
+  )
+}
+
+function StartCampaignInner() {
   const searchParams = useSearchParams()
+  const router       = useRouter()
   const urlProjectId = searchParams.get('project_id') ?? ''
 
   const [summary, setSummary]       = useState<Summary | null>(null)
@@ -337,6 +352,14 @@ export default function StartCampaignPage() {
 
   // Track whether any draft was prepared this session (for step 5 "done")
   const [anyDraftDone, setAnyDraftDone] = useState(false)
+
+  // Sync project selection to URL so refresh preserves it
+  const selectProject = useCallback((id: string) => {
+    setSelectedProject(id)
+    const next = new URLSearchParams(searchParams.toString())
+    if (id) { next.set('project_id', id) } else { next.delete('project_id') }
+    router.replace(`/start-campaign?${next.toString()}`, { scroll: false })
+  }, [router, searchParams])
 
   const fetchSummary = useCallback(async (projectId?: string) => {
     const qs = projectId ? `?project_id=${projectId}` : ''
@@ -400,7 +423,7 @@ export default function StartCampaignPage() {
       }
       const id = data.project?.id ?? data.id
       if (id) {
-        setSelectedProject(id)
+        selectProject(id)
         setNewProjectName('')
         setCreateState({ status: 'ok', message: `Project "${newProjectName.trim()}" created.` })
         await fetchSummary(id)
@@ -535,7 +558,10 @@ export default function StartCampaignPage() {
     )
   }
 
-  const selectedProjectName = summary.projects.find(p => p.id === selectedProject)?.name ?? null
+  const selectedProjectObj  = summary.projects.find(p => p.id === selectedProject) ?? null
+  const selectedProjectName = selectedProjectObj?.name ?? null
+  // If URL had a project_id that doesn't exist in the loaded list, show a warning
+  const urlProjectInvalid   = !!urlProjectId && !loading && !selectedProjectObj && summary.projects.length >= 0
   const selectedOperatorObj = summary.operators.find(o => o.id === selectedOperator) ?? null
   const researchDisabled    = researching() || !researchQuery.trim()
 
@@ -589,6 +615,21 @@ export default function StartCampaignPage() {
         ))}
       </div>
 
+      {/* ── Invalid project_id warning ── */}
+      {urlProjectInvalid && (
+        <div style={{
+          background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: 8,
+          padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#92400e',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>⚠️</span>
+          <span>
+            The project in this URL was not found (it may have been deleted or you may not have access).
+            Please select a project below.
+          </span>
+        </div>
+      )}
+
       {/* ── Launch template checklist (shown when project selected + template exists) ── */}
       {summary.launch_template && selectedProject && (
         <LaunchTemplateCard template={summary.launch_template} projectId={selectedProject} />
@@ -612,7 +653,7 @@ export default function StartCampaignPage() {
           <div style={{ marginBottom: 12 }}>
             <select
               value={selectedProject}
-              onChange={e => setSelectedProject(e.target.value)}
+              onChange={e => selectProject(e.target.value)}
               style={{ ...INPUT_STYLE, marginRight: 8, minWidth: 200 }}
             >
               <option value="">— select a project —</option>

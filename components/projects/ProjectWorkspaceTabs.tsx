@@ -100,18 +100,35 @@ interface LaunchTpl {
 }
 
 function LaunchTemplateStrip({ projectId }: { projectId: string }) {
-  const [tpl, setTpl] = useState<LaunchTpl | null>(null)
+  const [tpl, setTpl]         = useState<LaunchTpl | null>(null)
+  const [fetching, setFetching] = useState(true)
 
   useEffect(() => {
+    setFetching(true)
     fetch(`/api/projects/${projectId}/launch-template`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => d?.template ? setTpl({
-        ...d.template,
-        checklist_done: d.template.checklist?.filter((i: ChecklistItem) => i.completed).length ?? 0,
-        start_campaign_url: `/start-campaign?project_id=${projectId}`,
-      }) : null)
+      .then(d => {
+        if (d?.template) setTpl({
+          ...d.template,
+          checklist_done: d.template.checklist?.filter((i: ChecklistItem) => i.completed).length ?? 0,
+          start_campaign_url: `/start-campaign?project_id=${projectId}`,
+        })
+      })
       .catch(() => null)
+      .finally(() => setFetching(false))
   }, [projectId])
+
+  if (fetching) {
+    return (
+      <div style={{
+        marginBottom: 16, padding: '10px 18px',
+        background: '#fafbff', border: '1px solid #e0e7ff', borderRadius: 10,
+        fontSize: 11, color: '#94a3b8',
+      }}>
+        Loading launch plan…
+      </div>
+    )
+  }
 
   if (!tpl) return null
 

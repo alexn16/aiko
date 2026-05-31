@@ -223,6 +223,7 @@ export default function CeoPage() {
     setCmdError(null)
     setLastDelegation(null)
     setLastCapabilityGap(null)
+    setLastStartCampaignUrl(null)   // clear previous chip when a new command starts
     setLoading(true)
 
     // Optimistic user message

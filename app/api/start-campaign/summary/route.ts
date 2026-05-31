@@ -135,8 +135,11 @@ export async function GET(req: NextRequest) {
           const hasReplyCheck = trailRes.rows.some(r =>
             ['check_gmail_reply','search_gmail'].includes(String(r.action_type))
           )
+          // "has_operator" = at least one operator exists (any operator can be used
+          // for any project; project scoping is by user selection not by assignment)
+          const hasAnyOperator = operatorsRes.rows.length > 0
           const computedChecklist = computeChecklistCompletion(tpl, {
-            has_operator:       operatorsRes.rows.length > 0, // conservative: any operator exists
+            has_operator:       hasAnyOperator,
             has_leads:          Object.values(leadCounts).reduce((a, b) => a + b, 0) > 0,
             has_approved_leads: (leadCounts['approved'] ?? 0) > 0,
             has_draft_action:   hasDraftAction,
