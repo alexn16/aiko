@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import React, { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 
@@ -25,6 +25,13 @@ interface LaunchTemplate {
   start_campaign_url: string
 }
 
+interface StrategyBrief {
+  id: string; project_id: string
+  title: string; objective: string; target_audience: string
+  research_prompt: string; recommended_channel: string; value_proposition: string
+  risks: string[]; assumptions: string[]; next_actions: string[]
+}
+
 interface Summary {
   projects:          Project[]
   operators:         Operator[]
@@ -35,6 +42,7 @@ interface Summary {
   resume_candidates: ResumeRow[]
   recent_trail:      TrailRow[]
   launch_template:   LaunchTemplate | null
+  strategy_brief:    StrategyBrief | null
 }
 
 // ok | error | loading state for each action
@@ -309,6 +317,110 @@ function LaunchTemplateCard({
   )
 }
 
+// ── Strategy Brief Card ───────────────────────────────────────────────────────
+
+function StrategyBriefCard({
+  brief,
+  onUseResearchPrompt,
+}: {
+  brief: StrategyBrief
+  onUseResearchPrompt: (prompt: string) => void
+}) {
+  const [expanded, setExpanded] = React.useState(false)
+
+  return (
+    <div style={{
+      background: '#f0fdf4',
+      border: '1px solid #86efac',
+      borderRadius: 10,
+      padding: '16px 20px',
+      marginBottom: 16,
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: expanded ? 12 : 0, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#14532d', flex: 1 }}>
+          📋 {brief.title || 'First Campaign Strategy Brief'}
+        </span>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 11, color: '#16a34a', fontWeight: 600, padding: 0,
+          }}
+        >
+          {expanded ? 'Collapse ▲' : 'Expand ▼'}
+        </button>
+      </div>
+
+      {/* Compact summary (always visible) */}
+      {!expanded && brief.objective && (
+        <div style={{ fontSize: 11, color: '#166534', marginTop: 4, fontStyle: 'italic' }}>
+          {brief.objective}
+        </div>
+      )}
+
+      {/* Expanded content */}
+      {expanded && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {brief.objective && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Objective</div>
+              <div style={{ fontSize: 12, color: '#0f172a' }}>{brief.objective}</div>
+            </div>
+          )}
+          {brief.target_audience && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Target Audience</div>
+              <div style={{ fontSize: 12, color: '#0f172a' }}>{brief.target_audience}</div>
+            </div>
+          )}
+          {brief.value_proposition && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Value Proposition</div>
+              <div style={{ fontSize: 12, color: '#0f172a' }}>{brief.value_proposition}</div>
+            </div>
+          )}
+          {brief.recommended_channel && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Recommended Channel</div>
+              <div style={{ fontSize: 12, color: '#0f172a', textTransform: 'capitalize' }}>{brief.recommended_channel}</div>
+            </div>
+          )}
+          {brief.research_prompt && (
+            <div style={{
+              background: '#dcfce7', border: '1px solid #86efac', borderRadius: 6, padding: '10px 12px',
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 4 }}>
+                Suggested Research Prompt
+              </div>
+              <div style={{ fontSize: 12, color: '#0f172a', marginBottom: 8 }}>{brief.research_prompt}</div>
+              <button
+                onClick={() => onUseResearchPrompt(brief.research_prompt)}
+                style={btnStyle('secondary')}
+              >
+                ↓ Use in Step 3
+              </button>
+            </div>
+          )}
+          {brief.risks.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Risks &amp; Assumptions</div>
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11, color: '#374151' }}>
+                {brief.risks.map((r, i) => <li key={i}>{r}</li>)}
+                {brief.assumptions.map((a, i) => <li key={`a${i}`} style={{ color: '#6b7280' }}>{a}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 10, fontSize: 10, color: '#15803d' }}>
+        🔒 This brief is guidance only — it does not research, contact, send, or approve anything.
+      </div>
+    </div>
+  )
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 // ── Root export (Suspense boundary required for useSearchParams) ───────────────
@@ -382,6 +494,17 @@ function StartCampaignInner() {
   useEffect(() => {
     fetchSummary(selectedProject || undefined)
   }, [fetchSummary, selectedProject])
+
+  // Pre-fill research query from strategy brief when a project is first selected
+  // Only fills if the user hasn't already typed something
+  useEffect(() => {
+    const brief = summary?.strategy_brief
+    if (brief?.research_prompt && !researchQuery) {
+      setResearchQuery(brief.research_prompt)
+    }
+  // We deliberately only react to brief changes, not researchQuery (user edits)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summary?.strategy_brief?.research_prompt])
 
   // ── Derived state ─────────────────────────────────────────────────────────────
 
@@ -628,6 +751,14 @@ function StartCampaignInner() {
             Please select a project below.
           </span>
         </div>
+      )}
+
+      {/* ── Strategy brief (shown when project selected + brief exists) ── */}
+      {summary.strategy_brief && selectedProject && (
+        <StrategyBriefCard
+          brief={summary.strategy_brief}
+          onUseResearchPrompt={setResearchQuery}
+        />
       )}
 
       {/* ── Launch template checklist (shown when project selected + template exists) ── */}

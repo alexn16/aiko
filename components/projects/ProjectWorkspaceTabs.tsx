@@ -172,6 +172,88 @@ function LaunchTemplateStrip({ projectId }: { projectId: string }) {
   )
 }
 
+// ── Strategy Brief Strip ───────────────────────────────────────────────────────
+
+interface StrategyBriefData {
+  id: string; title: string; objective: string; target_audience: string
+  recommended_channel: string; value_proposition: string; research_prompt: string
+}
+
+function StrategyBriefStrip({ projectId }: { projectId: string }) {
+  const [brief, setBrief]       = useState<StrategyBriefData | null>(null)
+  const [fetching, setFetching] = useState(true)
+
+  useEffect(() => {
+    setFetching(true)
+    fetch(`/api/projects/${projectId}/strategy-brief`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.brief) setBrief(d.brief) })
+      .catch(() => null)
+      .finally(() => setFetching(false))
+  }, [projectId])
+
+  if (fetching) {
+    return (
+      <div style={{
+        marginBottom: 12, padding: '10px 18px',
+        background: '#f0fdf4', border: '1px solid #d1fae5', borderRadius: 10,
+        fontSize: 11, color: '#94a3b8',
+      }}>
+        Loading strategy brief…
+      </div>
+    )
+  }
+
+  if (!brief) return null
+
+  return (
+    <div style={{
+      marginBottom: 12, padding: '14px 18px',
+      background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: '#14532d', marginBottom: 6 }}>
+        📋 {brief.title || 'First Campaign Strategy Brief'}
+      </div>
+      {brief.objective && (
+        <div style={{ fontSize: 12, color: '#166534', marginBottom: 6 }}>{brief.objective}</div>
+      )}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8 }}>
+        {brief.target_audience && (
+          <div style={{ fontSize: 11, color: '#374151' }}>
+            <span style={{ color: '#15803d', fontWeight: 600 }}>Audience: </span>
+            {brief.target_audience}
+          </div>
+        )}
+        {brief.recommended_channel && (
+          <div style={{ fontSize: 11, color: '#374151' }}>
+            <span style={{ color: '#15803d', fontWeight: 600 }}>Channel: </span>
+            {brief.recommended_channel}
+          </div>
+        )}
+      </div>
+      {brief.value_proposition && (
+        <div style={{ fontSize: 11, color: '#374151', marginBottom: 8 }}>
+          <span style={{ color: '#15803d', fontWeight: 600 }}>Value prop: </span>
+          {brief.value_proposition}
+        </div>
+      )}
+      <a
+        href={`/start-campaign?project_id=${projectId}`}
+        style={{
+          background: '#16a34a', color: '#ffffff', textDecoration: 'none',
+          borderRadius: 6, padding: '6px 12px', fontSize: 11, fontWeight: 600,
+          display: 'inline-block',
+        }}
+      >
+        ▶ Open First Campaign Flow
+      </a>
+      <div style={{ fontSize: 10, color: '#15803d', marginTop: 8 }}>
+        🔒 Guidance only — does not trigger research or outreach.
+      </div>
+    </div>
+  )
+}
+
 export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity, hasProvider }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
 
@@ -261,6 +343,9 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
                 </div>
               ))}
             </div>
+
+            {/* First Campaign Strategy Brief */}
+            <StrategyBriefStrip projectId={project.id} />
 
             {/* First Campaign Launch card */}
             <LaunchTemplateStrip projectId={project.id} />

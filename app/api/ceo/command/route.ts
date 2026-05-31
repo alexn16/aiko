@@ -220,9 +220,10 @@ export async function POST(request: NextRequest) {
         }).catch(() => null)
       }
 
-      // For new projects: attach start_campaign_url + launch template summary
+      // For new projects: attach start_campaign_url + launch template + strategy brief summary
       let startCampaignUrl: string | null = null
       let launchTemplate: Record<string, unknown> | null = null
+      let strategyBrief: Record<string, unknown> | null = null
       const resolvedProjectId = result.project_id
       if (String(result.intent) === 'create_project' && resolvedProjectId) {
         startCampaignUrl = `/start-campaign?project_id=${resolvedProjectId}`
@@ -235,6 +236,21 @@ export async function POST(request: NextRequest) {
               status:   tpl.status,
               checklist_count: tpl.checklist.length,
               checklist_done:  tpl.checklist.filter(i => i.completed).length,
+            }
+          }
+        } catch { /* non-fatal */ }
+        try {
+          const { getProjectStrategyBrief } = await import('@/lib/project-strategy-brief')
+          const brief = await getProjectStrategyBrief(String(resolvedProjectId))
+          if (brief) {
+            strategyBrief = {
+              id:                  brief.id,
+              title:               brief.title,
+              objective:           brief.objective,
+              target_audience:     brief.target_audience,
+              research_prompt:     brief.research_prompt,
+              recommended_channel: brief.recommended_channel,
+              value_proposition:   brief.value_proposition,
             }
           }
         } catch { /* non-fatal */ }
@@ -262,6 +278,7 @@ export async function POST(request: NextRequest) {
         capability_gap:      capabilityGap,
         start_campaign_url:  startCampaignUrl,
         launch_template:     launchTemplate,
+        strategy_brief:      strategyBrief,
         delegation: delegationResult ? {
           status: delegationResult.status,
           message: delegationResult.message,

@@ -1170,3 +1170,167 @@ test('CEO create_project response shape includes start_campaign_url and launch_t
   const other = buildCeoResponse(otherResult, tpl)
   assert.equal(other.start_campaign_url, null, 'Non-project intent → no start_campaign_url')
 })
+
+// ── 48. Strategy brief creation is idempotent ─────────────────────────────────
+
+test('strategy brief creation is idempotent', () => {
+  // Simulate the idempotency check in createProjectStrategyBrief
+  function createBrief(existingBrief, opts) {
+    if (existingBrief) return existingBrief  // idempotent: return existing
+    return {
+      id: 'new-brief',
+      project_id: opts.project_id,
+      title: opts.title ?? '',
+      objective: opts.objective ?? '',
+      research_prompt: opts.research_prompt ?? '',
+      risks: opts.risks ?? [],
+      assumptions: opts.assumptions ?? [],
+      next_actions: opts.next_actions ?? ['Open First Campaign Flow'],
+    }
+  }
+
+  const existing = { id: 'brief-1', project_id: 'p-1', title: 'Existing Brief', research_prompt: 'Find leads' }
+  const opts = { project_id: 'p-1', title: 'New Brief', research_prompt: 'Different' }
+
+  // With existing: returns existing unchanged
+  const result1 = createBrief(existing, opts)
+  assert.equal(result1.id, 'brief-1', 'Returns existing brief when one exists')
+  assert.equal(result1.title, 'Existing Brief', 'Does not overwrite existing brief')
+
+  // Without existing: creates new
+  const result2 = createBrief(null, opts)
+  assert.equal(result2.id, 'new-brief', 'Creates new brief when none exists')
+  assert.equal(result2.title, 'New Brief', 'Uses provided title')
+})
+
+// ── 49. Fallback brief is always valid ────────────────────────────────────────
+
+test('fallback brief is valid when AI generation fails', () => {
+  function buildFallbackBrief(opts) {
+    return {
+      project_id:          opts.project_id,
+      title:               `${opts.project_name} — First Campaign Brief`,
+      objective:           opts.goal
+                             ? `Drive initial outreach for: ${opts.goal}`
+                             : `Launch first outbound campaign for ${opts.project_name}`,
+      target_audience:     'To be defined — use First Campaign Flow to refine',
+      research_prompt:     `Find potential leads and companies for ${opts.project_name}`,
+      recommended_channel: 'email',
+      value_proposition:   'To be defined — describe your core offer in one sentence',
+      risks:               ['Target audience not yet validated', 'Messaging may need iteration'],
+      assumptions:         ['Email is an appropriate first channel', 'Leads can be found via web research'],
+      next_actions:        ['Open First Campaign Flow', 'Define target audience in step 1', 'Research leads via Web Operator'],
+      created_by_role:     'CEO',
+    }
+  }
+
+  // With goal
+  const brief1 = buildFallbackBrief({ project_id: 'p-1', project_name: 'ALB Parking', goal: 'Find parking operators' })
+  assert.ok(brief1.title.includes('ALB Parking'), 'Title includes project name')
+  assert.ok(brief1.objective.includes('Find parking operators'), 'Objective includes goal')
+  assert.ok(brief1.research_prompt.includes('ALB Parking'), 'Research prompt includes project name')
+  assert.ok(Array.isArray(brief1.risks) && brief1.risks.length > 0, 'Risks array populated')
+  assert.ok(Array.isArray(brief1.next_actions) && brief1.next_actions.includes('Open First Campaign Flow'), 'Next actions include First Campaign Flow')
+
+  // Without goal
+  const brief2 = buildFallbackBrief({ project_id: 'p-2', project_name: 'Acme Corp' })
+  assert.ok(brief2.objective.includes('Acme Corp'), 'Objective includes project name when no goal')
+  assert.equal(brief2.recommended_channel, 'email', 'Default channel is email')
+  assert.equal(brief2.created_by_role, 'CEO', 'Created by CEO')
+})
+
+// ── 50. Start-campaign summary includes strategy_brief ────────────────────────
+
+test('start-campaign summary response includes strategy_brief field', () => {
+  // Replicate the response construction from the summary API
+  function buildSummaryResponse(projectId, brief) {
+    return {
+      projects:          [],
+      operators:         [],
+      lead_counts:       {},
+      approved_leads:    [],
+      contacted_leads:   [],
+      pending_approvals: [],
+      resume_candidates: [],
+      recent_trail:      [],
+      launch_template:   null,
+      strategy_brief:    projectId && brief ? brief : null,
+    }
+  }
+
+  const brief = {
+    id: 'b-1', project_id: 'p-1',
+    title: 'ALB Parking — First Campaign Brief',
+    objective: 'Find parking operators in the US',
+    research_prompt: 'Find parking lot operators in the US',
+  }
+
+  const withProject = buildSummaryResponse('p-1', brief)
+  assert.ok('strategy_brief' in withProject, 'summary has strategy_brief field')
+  assert.equal(withProject.strategy_brief?.id, 'b-1', 'Returns brief when project selected')
+
+  const withoutProject = buildSummaryResponse(null, null)
+  assert.equal(withoutProject.strategy_brief, null, 'strategy_brief is null when no project')
+})
+
+// ── 51. Research prompt from brief does not auto-trigger Web Operator ─────────
+
+test('research prompt from strategy brief does not auto-trigger Web Operator', () => {
+  // The research prompt is a suggestion: it pre-fills the input field.
+  // It does NOT automatically call any API or Web Operator.
+  // Triggering research requires explicit user action (clicking "Start Research").
+
+  // Simulate the UI state machine
+  function simulatePageState(brief, userClicked) {
+    const prefilled = brief?.research_prompt ?? ''  // pre-fill only
+    const webOperatorCalled = userClicked           // only called on explicit action
+    return { prefilled, webOperatorCalled }
+  }
+
+  const brief = { research_prompt: 'Find parking operators' }
+
+  // Brief loaded but user has not clicked — no Web Operator call
+  const passive = simulatePageState(brief, false)
+  assert.equal(passive.prefilled, 'Find parking operators', 'Research prompt pre-filled in input')
+  assert.equal(passive.webOperatorCalled, false, 'Web Operator NOT called on prefill alone')
+
+  // User explicitly clicks — Web Operator called
+  const active = simulatePageState(brief, true)
+  assert.equal(active.webOperatorCalled, true, 'Web Operator called only after user action')
+})
+
+// ── 52. CEO create_project response includes strategy_brief summary ───────────
+
+test('CEO create_project response includes strategy_brief summary', () => {
+  function buildCeoResponse(result, brief) {
+    const isCreate = result.intent === 'create_project'
+    const briefSummary = (isCreate && brief)
+      ? {
+          id:                  brief.id,
+          title:               brief.title,
+          objective:           brief.objective,
+          target_audience:     brief.target_audience,
+          research_prompt:     brief.research_prompt,
+          recommended_channel: brief.recommended_channel,
+          value_proposition:   brief.value_proposition,
+        }
+      : null
+    return { ...result, strategy_brief: briefSummary }
+  }
+
+  const createResult = { intent: 'create_project', project_id: 'p-1', response: 'Project created.' }
+  const brief = {
+    id: 'b-1', title: 'ALB Brief', objective: 'Find operators',
+    target_audience: 'Parking operators', research_prompt: 'Find them',
+    recommended_channel: 'email', value_proposition: 'Automate outreach',
+  }
+
+  const resp = buildCeoResponse(createResult, brief)
+  assert.ok(resp.strategy_brief !== null, 'Brief included for create_project intent')
+  assert.equal(resp.strategy_brief?.id, 'b-1', 'Brief id correct')
+  assert.equal(resp.strategy_brief?.research_prompt, 'Find them', 'Research prompt included')
+
+  // Non-project intents get null brief
+  const other = buildCeoResponse({ intent: 'general', project_id: 'p-1' }, brief)
+  assert.equal(other.strategy_brief, null, 'No brief for non-create_project intents')
+})

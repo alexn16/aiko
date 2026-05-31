@@ -513,6 +513,35 @@ Approved leads with email addresses can become Gmail drafts through a named Web 
 - Daily send limits enforced by Operating Mode
 - Single-lead outreach only — no bulk send in this version
 
+## CEO Strategy Brief
+
+When the CEO creates a new project, AÏKO automatically generates a **First Campaign Strategy Brief** using the CEO AI role. The brief is guidance only — it does not research, contact, send, or approve anything.
+
+**What gets generated:**
+- Campaign objective
+- First target audience
+- Suggested research prompt (pre-fills the research field in the First Campaign Flow)
+- Recommended first channel (default: email)
+- Value proposition
+- Risks and assumptions
+- Next actions
+
+**AI generation:** `generateStrategyBriefFromProject()` calls `callAI(role:'ceo')` to produce a JSON brief. If AI fails for any reason, a safe fallback brief is created from the project name and goal.
+
+**Idempotency:** Only one brief per project. Additional calls return the existing brief.
+
+**CEO Chat:** When a project is created, the `strategy_brief` summary (objective, audience, research prompt, channel, value prop) is included in the CEO response alongside `start_campaign_url`.
+
+**Project workspace:** Each project's Overview tab shows a "First Campaign Strategy Brief" strip with the objective, audience, channel, value prop, and a "▶ Open First Campaign Flow" button.
+
+**`/start-campaign` page:** The strategy brief appears as a collapsible card above the launch checklist. The research prompt field (step 3) is pre-filled from the brief. Clicking "↓ Use in Step 3" copies the brief's research prompt into the field. **User edits are never overwritten automatically.**
+
+**API:**
+- `GET /api/projects/[id]/strategy-brief` — returns or creates a brief on demand
+- `PATCH /api/projects/[id]/strategy-brief` — update any field (editing `research_prompt` does NOT trigger research)
+
+**Safety:** Brief is guidance only. It never triggers automation, Web Operator actions, email sends, or any external interaction.
+
 ## Project Launch Template
 
 When the CEO creates a new project, AÏKO automatically creates a **First Campaign Launch Template** — a 9-step checklist that guides the user through the complete marketing loop.

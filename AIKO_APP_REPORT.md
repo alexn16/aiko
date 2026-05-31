@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template)_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template, CEO Strategy Brief)_
 
 ---
 
@@ -31,6 +31,18 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ---
 
 ## 2. Page map
+
+### CEO Strategy Brief (auto-generated on project creation)
+- **Purpose:** AI-generated first-campaign strategy brief created automatically when the CEO creates a project. Guides the First Campaign Flow. Guidance only — never triggers automation.
+- **Key file:** `lib/project-strategy-brief.ts` — `generateStrategyBriefFromProject` (AI + fallback), `createProjectStrategyBrief` (idempotent), `getProjectStrategyBrief`, `updateProjectStrategyBrief`
+- **Migration:** `031_project_strategy_brief.sql` — `project_strategy_briefs` table with unique index per project.
+- **Fields:** title, objective, target_audience, research_prompt, recommended_channel, value_proposition, risks (jsonb), assumptions (jsonb), next_actions (jsonb)
+- **AI generation:** Calls `callAI(role:'ceo')` with a structured JSON prompt. Falls back to a safe template-based brief if AI fails — never throws.
+- **CEO integration:** `generate_strategy_brief_from_project` called in `executeActions` on `create_project`. CEO command route includes `strategy_brief` summary in response.
+- **Project workspace:** `StrategyBriefStrip` on Overview tab shows objective, audience, channel, value prop, and "▶ Open First Campaign Flow" button.
+- **`/start-campaign` page:** `StrategyBriefCard` shows collapsible full brief above the launch checklist. Research prompt field (step 3) pre-filled from brief. "↓ Use in Step 3" button copies prompt. User edits never overwritten automatically.
+- **APIs:** `GET/PATCH /api/projects/[id]/strategy-brief`; `/api/start-campaign/summary` now includes `strategy_brief`.
+- **Safety:** Brief never executes actions. Editing `research_prompt` via PATCH does not trigger Web Operator.
 
 ### Project Launch Template (auto-created on project creation)
 - **Purpose:** 9-step first-campaign checklist created automatically when the CEO creates a project. Guidance only — no automation triggered.

@@ -254,6 +254,18 @@ async function executeActions(
             created_by_role: 'CEO',
           })
         } catch { /* non-fatal — template is optional guidance */ }
+
+        // Generate first-campaign strategy brief (idempotent — guidance only, never executes)
+        try {
+          const { generateStrategyBriefFromProject } = await import('@/lib/project-strategy-brief')
+          await generateStrategyBriefFromProject({
+            project_id:    projectId,
+            project_name:  String(d.name ?? ''),
+            goal:          d.goal          ? String(d.goal)          : null,
+            description:   d.description   ? String(d.description)   : null,
+            target_market: d.target_market ? String(d.target_market) : null,
+          })
+        } catch { /* non-fatal — brief is optional guidance */ }
       }
 
       if (action.type === 'assign_pm') {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { getProjectLaunchTemplate, computeChecklistCompletion } from '@/lib/project-launch-template'
+import { getProjectStrategyBrief } from '@/lib/project-strategy-brief'
 
 export const dynamic = 'force-dynamic'
 
@@ -157,6 +158,14 @@ export async function GET(req: NextRequest) {
       } catch { /* non-fatal */ }
     }
 
+    // 10. Strategy brief (project-scoped only)
+    let strategyBrief = null
+    if (projectId) {
+      try {
+        strategyBrief = await getProjectStrategyBrief(projectId)
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({
       projects:           projectsRes.rows,
       operators:          operatorsRes.rows,
@@ -167,6 +176,7 @@ export async function GET(req: NextRequest) {
       resume_candidates:  resumeCandidatesRes.rows,
       recent_trail:       trailEvents,
       launch_template:    launchTemplate,
+      strategy_brief:     strategyBrief,
     })
   } catch (err) {
     console.error('[start-campaign/summary GET]', err)
