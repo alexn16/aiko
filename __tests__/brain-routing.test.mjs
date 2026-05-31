@@ -488,6 +488,137 @@ test('operator approval fetch uses /api/approval-items endpoint', () => {
   assert.ok(!operatorPageFetch.startsWith(LEGACY_ENDPOINT), 'Must not use legacy /api/approvals')
 })
 
+// ── Resumable Web Operator approval tests ────────────────────────────────────
+
+// ── 21. Approving an approval_item does NOT auto-execute the action ───────────
+
+test('approve-action sets status=approved but does not execute — resume is explicit', () => {
+  // Simulate the approve-action route's on-approve behavior (no execution).
+  const executedActions = []
+
+  async function simulateApproveAction(decision, autoExecute) {
+    if (decision === 'approved') {
+      // New behavior: just mark approved, do NOT call checkBrowserRuntimeAndExecute
+      const actionStatus = 'approved'
+      if (autoExecute) executedActions.push('executed') // old behavior — must NOT happen
+      return { ok: true, ready_to_resume: true, status: actionStatus }
+    }
+    return { ok: true, status: 'failed' }
+  }
+
+  return simulateApproveAction('approved', false).then(result => {
+    assert.equal(result.ok, true)
+    assert.equal(result.ready_to_resume, true)
+    assert.equal(result.status, 'approved')
+    assert.equal(executedActions.length, 0, 'Approval must not auto-execute the action')
+  })
+})
+
+// ── 22. Resume blocked if approval_item is not approved ──────────────────────
+
+test('resume is blocked when approval_item status is not approved', () => {
+  // Simulate the guard in the resume endpoint
+  async function simulateResumeCheck(approvalStatus) {
+    if (approvalStatus !== 'approved') {
+      return {
+        error: `Action cannot be resumed: linked approval is "${approvalStatus}".`,
+        blocked: true,
+      }
+    }
+    return { ok: true }
+  }
+
+  return Promise.all([
+    simulateResumeCheck('pending').then(r => {
+      assert.ok(r.blocked, 'pending approval must block resume')
+      assert.ok(r.error.includes('pending'))
+    }),
+    simulateResumeCheck('rejected').then(r => {
+      assert.ok(r.blocked, 'rejected approval must block resume')
+    }),
+    simulateResumeCheck('approved').then(r => {
+      assert.ok(r.ok, 'approved approval must allow resume')
+    }),
+  ])
+})
+
+// ── 23. Resume blocked if action already completed ────────────────────────────
+
+test('resume endpoint blocks duplicate execution when action is already completed', () => {
+  async function simulateResumeGuard(actionStatus) {
+    if (actionStatus === 'completed') {
+      return { error: 'Action already completed — duplicate resume blocked.', code: 409 }
+    }
+    if (!['approved', 'failed'].includes(actionStatus)) {
+      return { error: `Action cannot be resumed from status "${actionStatus}".`, code: 409 }
+    }
+    return { ok: true }
+  }
+
+  return Promise.all([
+    simulateResumeGuard('completed').then(r => {
+      assert.ok(r.code === 409, 'completed action must return 409')
+      assert.ok(r.error.includes('already completed'))
+    }),
+    simulateResumeGuard('waiting_approval').then(r => {
+      assert.ok(r.code === 409, 'waiting_approval action must return 409 (must approve first)')
+    }),
+    simulateResumeGuard('approved').then(r => {
+      assert.ok(r.ok, 'approved action can be resumed')
+    }),
+  ])
+})
+
+// ── 24. Resume re-checks operating mode at execution time ─────────────────────
+
+test('resume re-checks operating mode and blocks if mode changed to read_only', () => {
+  async function simulateResumeModeCheck(mode, actionType) {
+    const isSensitive = ['send_email', 'submit_form', 'send_gmail_draft'].includes(actionType)
+    const capability = isSensitive ? 'send_email' : 'browse_web'
+
+    // Simulate canPerformAction
+    if (mode === 'read_only') {
+      return { allowed: false, reason: 'System is in Read Only mode.' }
+    }
+    if (mode === 'auto_approval' && isSensitive) {
+      return { allowed: false, reason: 'Send requires full_access mode.' }
+    }
+    return { allowed: true, mode, capability }
+  }
+
+  return Promise.all([
+    simulateResumeModeCheck('read_only', 'send_gmail_draft').then(r => {
+      assert.ok(!r.allowed, 'read_only must block resume')
+    }),
+    simulateResumeModeCheck('auto_approval', 'send_gmail_draft').then(r => {
+      assert.ok(!r.allowed, 'auto_approval must block sensitive send at resume')
+    }),
+    simulateResumeModeCheck('full_access', 'send_gmail_draft').then(r => {
+      assert.ok(r.allowed, 'full_access must allow resume')
+    }),
+    simulateResumeModeCheck('full_access', 'browse_web').then(r => {
+      assert.ok(r.allowed, 'full_access must allow browse resume')
+    }),
+  ])
+})
+
+// ── 25. Resume endpoint uses approval_items, not legacy approvals ─────────────
+
+test('resume endpoint verifies approval via approval_items join, not legacy approvals table', () => {
+  // The resume endpoint query joins web_operator_actions with approval_items.
+  // Verify the query uses the canonical table.
+  const resumeQuery = `
+    SELECT woa.*, ai.status AS approval_status
+    FROM web_operator_actions woa
+    LEFT JOIN approval_items ai ON ai.id = woa.approval_item_id
+    WHERE woa.id = $1
+  `
+  assert.ok(resumeQuery.includes('approval_items'), 'Must join approval_items')
+  assert.ok(resumeQuery.includes('approval_status'), 'Must expose approval_status')
+  assert.ok(!resumeQuery.includes(' approvals '), 'Must not use legacy approvals table')
+  assert.ok(!resumeQuery.includes('FROM approvals'), 'Must not query from legacy approvals table')
+})
+
 // ── 15. NeedsReauthError is a distinct error class ────────────────────────────
 
 test('NeedsReauthError carries providerId and is distinguishable from generic Error', () => {

@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (resumable approvals)_
 
 ---
 
@@ -95,11 +95,16 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Tables:** `leads`
 
 ### /operator — Web Operator Control Room
-- **Purpose:** Manage browser automation sessions, view action log, approve pending browser actions, and check runtime status.
+- **Purpose:** Manage browser automation sessions, view action log, approve pending browser actions, check runtime status, and resume approved actions.
 - **Key components:** `components/web-operator/`
-- **APIs used:** `POST /api/web-operator/session`, `POST /api/web-operator/action`, `GET /api/web-operator/actions`, `POST /api/web-operator/approve-action`, `GET /api/web-operator/status`, `POST /api/web-operator/delegate`, `GET /api/approval-items` (pending operator approvals), `PATCH /api/approval-items/[id]`
+- **APIs used:** `POST /api/web-operator/session`, `POST /api/web-operator/action`, `GET /api/web-operator/actions`, `POST /api/web-operator/approve-action`, `GET /api/web-operator/status`, `POST /api/web-operator/delegate`, `POST /api/web-operator/actions/[id]/resume`, `GET /api/approval-items`, `PATCH /api/approval-items/[id]`
 - **Tables:** `web_operator_sessions`, `web_operator_actions`, `approval_items`
-- **Approval flow:** Risky actions (send_email, click_sensitive) create an `approval_items` row via `lib/web-operator/web-operator.ts:requireOperatorApproval`. Operator pages poll `/api/approval-items?status=pending` (canonical) — not the legacy `/api/approvals`.
+- **Resumable approval flow:**
+  1. Risky action → `approval_items` row created (`item_type=web_operator_action`), action status = `waiting_approval`
+  2. User approves in `/approvals` → `approval_items.status=approved`, action status = `approved` (no auto-execute)
+  3. User clicks **▶ Resume** in `/approvals` or `/operators/[id]`
+  4. `POST /api/web-operator/actions/[id]/resume` re-checks mode, executes via Playwright, logs result
+  5. Duplicate resumes blocked; mode re-checked at resume time; all attempts logged
 
 ### /mode — Operating Mode
 - **Purpose:** Set the global operating mode (Read Only / Auto / Full Access), toggle the pause button, and view the action audit log.

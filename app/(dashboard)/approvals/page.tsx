@@ -22,6 +22,14 @@ interface ApprovalItem {
   project_name?: string
 }
 
+// Linked web_operator_action for resumable items
+interface LinkedAction {
+  id: string
+  status: string
+  action_type: string
+  description: string
+}
+
 type FilterTab = 'all' | 'pending' | 'approved' | 'changes_requested' | 'rejected'
 
 interface Project {
@@ -182,6 +190,109 @@ function AddToCampaignButton({ item, projects }: { item: ApprovalItem; projects:
   )
 }
 
+// ── ResumeOperatorButton ───────────────────────────────────────────────────────
+
+function ResumeOperatorButton({ item }: { item: ApprovalItem }) {
+  const [linkedAction, setLinkedAction] = useState<LinkedAction | null | 'loading'>('loading')
+  const [resuming, setResuming] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  // Only relevant for approved web_operator_action items
+  const isRelevant = item.item_type === 'web_operator_action' && item.status === 'approved'
+
+  useEffect(() => {
+    if (!isRelevant) { setLinkedAction(null); return }
+    let cancelled = false
+    fetch(`/api/web-operator/actions?limit=100&status=approved`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled) return
+        const actions: LinkedAction[] = d.actions ?? []
+        const match = actions.find((a: LinkedAction & { approval_item_id?: string }) =>
+          (a as unknown as { approval_item_id?: string }).approval_item_id === item.id
+        )
+        setLinkedAction(match ?? null)
+      })
+      .catch(() => setLinkedAction(null))
+    return () => { cancelled = true }
+  }, [item.id, item.status, isRelevant])
+
+  if (!isRelevant) return null
+  if (linkedAction === 'loading') return (
+    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>Checking for pending action…</div>
+  )
+  if (!linkedAction) return (
+    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>
+      ✓ Approved — no browser action pending
+    </div>
+  )
+  if (linkedAction.status === 'completed') return (
+    <div style={{ fontSize: 11, color: '#10b981', marginTop: 8 }}>
+      ✓ Operator action completed
+    </div>
+  )
+
+  async function handleResume() {
+    if (!linkedAction || linkedAction === 'loading') return
+    setResuming(true)
+    setResult(null)
+    try {
+      const res = await fetch(`/api/web-operator/actions/${linkedAction.id}/resume`, { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setResult({ ok: true, message: data.message ?? 'Action completed.' })
+        setLinkedAction({ ...linkedAction, status: 'completed' })
+      } else {
+        setResult({ ok: false, message: data.error ?? 'Resume failed.' })
+      }
+    } catch (e) {
+      setResult({ ok: false, message: String(e) })
+    } finally {
+      setResuming(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{
+        background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8,
+        padding: '10px 14px', marginBottom: 8,
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#166534', marginBottom: 4 }}>
+          ✓ Approved — browser action ready to resume
+        </div>
+        <div style={{ fontSize: 11, color: '#166534', marginBottom: 8 }}>
+          <span style={{ fontFamily: 'DM Mono, monospace', background: '#dcfce7', borderRadius: 4, padding: '1px 5px' }}>
+            {linkedAction.action_type}
+          </span>
+          {' '}— {linkedAction.description.slice(0, 80)}{linkedAction.description.length > 80 ? '…' : ''}
+        </div>
+        <button
+          onClick={handleResume}
+          disabled={resuming}
+          style={{
+            fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 6,
+            border: 'none', background: '#16a34a', color: '#ffffff', cursor: 'pointer',
+            opacity: resuming ? 0.6 : 1,
+          }}
+        >
+          {resuming ? 'Resuming…' : '▶ Resume operator action'}
+        </button>
+      </div>
+      {result && (
+        <div style={{
+          fontSize: 11, padding: '6px 10px', borderRadius: 6, marginTop: 4,
+          background: result.ok ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${result.ok ? '#bbf7d0' : '#fecaca'}`,
+          color: result.ok ? '#166534' : '#dc2626',
+        }}>
+          {result.message}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── ApprovalCard ───────────────────────────────────────────────────────────────
 
 function ApprovalCard({
@@ -328,6 +439,9 @@ function ApprovalCard({
           <AddToCampaignButton item={item} projects={projects} />
         </div>
       )}
+
+      {/* Resume operator action — for approved web_operator_action items */}
+      <ResumeOperatorButton item={item} />
 
       {/* Inline confirmation */}
       {confirmedStatus && (

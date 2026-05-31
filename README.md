@@ -254,6 +254,23 @@ External-facing outputs (outreach drafts, campaign proposals, approval items) au
 
 **Safety:** Approving an item is internal permission only. It does not send any external emails or messages. External sends remain a separate explicit action.
 
+**Web Operator approval flow (resumable):**
+1. A risky browser action (e.g. `send_gmail_draft`) is requested.
+2. `runWebOperatorAction` creates an `approval_items` row (`item_type=web_operator_action`) and sets the action status to `waiting_approval`.
+3. The item appears in the Approval Center (`/approvals`). The user reviews and clicks **Approve**.
+4. Approval updates `approval_items.status=approved` and `web_operator_actions.status=approved`. **No action is executed automatically.**
+5. The Approval Center shows a green **"▶ Resume operator action"** button. The user clicks it to execute.
+6. `POST /api/web-operator/actions/[id]/resume` re-checks the operating mode at resume time, then executes via Playwright. The action is logged as `completed` or `failed`.
+7. Every resume attempt is logged. Duplicate resumes are blocked (idempotent guard on `status=completed`).
+
+Also visible from `/operators/[id]` — actions with `status=approved` show a **▶ Resume** button directly in the action log.
+
+**API:**
+- `GET /api/approval-items` — list items (filter by project_id, status, item_type)
+- `POST /api/approval-items` — create manually
+- `PATCH /api/approval-items/[id]` — approve / reject / request changes
+- `POST /api/web-operator/actions/[id]/resume` — execute an approved-but-pending action
+
 **Canonical data model:**
 - Table: `approval_items` (see `lib/db/migrations/012_approval_items.sql`)
 - Library: `lib/approvals.ts` (`createApprovalItem`, `updateApprovalStatus`, `getApprovalSummaryForProject`)

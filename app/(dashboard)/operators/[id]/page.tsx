@@ -23,12 +23,15 @@ interface WebOperator {
 interface Action {
   id: string
   action_type: string
+  description: string
   status: string
   target_url: string | null
   page_title: string | null
   screenshot_url: string | null
   failure_reason: string | null
   is_sensitive: boolean
+  requires_approval: boolean
+  approval_item_id: string | null
   created_at: string
 }
 
@@ -94,6 +97,8 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [extractingLeads, setExtractingLeads] = useState<Record<string, boolean>>({})
   const [extractResult, setExtractResult] = useState<Record<string, number | null>>({})
+  const [resumingAction, setResumingAction] = useState<Record<string, boolean>>({})
+  const [resumeResult, setResumeResult] = useState<Record<string, { ok: boolean; message: string } | null>>({})
 
   const load = useCallback(async () => {
     try {
@@ -186,6 +191,25 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   }
 
   const showResume = operator.status === 'ready_to_resume' || !!operator.pending_action_type
+
+  const handleResumeAction = async (actionId: string) => {
+    setResumingAction(prev => ({ ...prev, [actionId]: true }))
+    setResumeResult(prev => ({ ...prev, [actionId]: null }))
+    try {
+      const res = await fetch(`/api/web-operator/actions/${actionId}/resume`, { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setResumeResult(prev => ({ ...prev, [actionId]: { ok: true, message: data.message ?? 'Action completed.' } }))
+        await load()
+      } else {
+        setResumeResult(prev => ({ ...prev, [actionId]: { ok: false, message: data.error ?? 'Resume failed.' } }))
+      }
+    } catch (err) {
+      setResumeResult(prev => ({ ...prev, [actionId]: { ok: false, message: String(err) } }))
+    } finally {
+      setResumingAction(prev => ({ ...prev, [actionId]: false }))
+    }
+  }
 
   const handleExtractLeads = async (actionId: string) => {
     setExtractingLeads(prev => ({ ...prev, [actionId]: true }))
@@ -434,7 +458,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr>
-                  {['Time', 'Type', 'Status', 'URL / Title', 'Screenshot', 'Failure', ''].map(h => (
+                  {['Time', 'Type', 'Status', 'URL / Title', 'Screenshot', 'Failure', 'Actions'].map(h => (
                     <th key={h} style={{
                       textAlign: 'left', padding: '4px 8px',
                       color: '#94a3b8', fontWeight: 600, fontSize: 9,
@@ -487,7 +511,48 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                     <td style={{ padding: '6px 8px', color: '#ef4444', fontSize: 9 }}>
                       {a.failure_reason ?? ''}
                     </td>
-                    <td style={{ padding: '6px 8px' }}>
+                    <td style={{ padding: '6px 8px', minWidth: 120 }}>
+                      {/* Approved-but-not-executed — show Resume button */}
+                      {a.status === 'approved' && a.approval_item_id && (
+                        <div>
+                          {resumeResult[a.id] ? (
+                            <span style={{
+                              fontSize: 9, fontWeight: 600,
+                              color: resumeResult[a.id]!.ok ? '#10b981' : '#ef4444',
+                            }}>
+                              {resumeResult[a.id]!.ok ? '✓ Done' : '✗ ' + resumeResult[a.id]!.message.slice(0, 40)}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleResumeAction(a.id)}
+                              disabled={!!resumingAction[a.id]}
+                              style={{
+                                background: '#16a34a', color: '#ffffff',
+                                border: 'none', borderRadius: 4,
+                                padding: '4px 9px', fontSize: 9, fontWeight: 600,
+                                cursor: resumingAction[a.id] ? 'not-allowed' : 'pointer',
+                                opacity: resumingAction[a.id] ? 0.6 : 1,
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {resumingAction[a.id] ? 'Resuming…' : '▶ Resume'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {/* Waiting approval — show link to Approval Center */}
+                      {a.status === 'waiting_approval' && a.approval_item_id && (
+                        <a
+                          href="/approvals"
+                          style={{
+                            fontSize: 9, color: '#d97706', fontWeight: 600,
+                            textDecoration: 'none', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          ⏳ Awaiting approval →
+                        </a>
+                      )}
+                      {/* Extract leads for completed research actions */}
                       {a.status === 'completed' && ['search', 'read_page'].includes(a.action_type) && (
                         extractResult[a.id] !== null && extractResult[a.id] !== undefined ? (
                           <span style={{ fontSize: 9, color: '#15803d', fontWeight: 600 }}>
