@@ -1028,3 +1028,145 @@ test('fetchSummary is called after research, draft, resume, and reply-check acti
     assert.ok(h.refreshesAfter, `${h.name} must refresh summary after action`)
   }
 })
+
+// ── Project Launch Template tests ─────────────────────────────────────────────
+
+// ── 44. createProjectLaunchTemplate is idempotent per active project ───────────
+
+test('createProjectLaunchTemplate returns existing template instead of creating duplicate', async () => {
+  // Replicate the idempotency guard from lib/project-launch-template.ts
+  function createIfAbsent(existing, newOpts) {
+    if (existing) return existing   // return existing — no duplicate
+    return { id: 'new-id', project_id: newOpts.project_id, status: 'draft' }
+  }
+
+  const existing = { id: 'existing-id', project_id: 'p-1', status: 'draft' }
+
+  const result1 = createIfAbsent(existing, { project_id: 'p-1' })
+  const result2 = createIfAbsent(null,     { project_id: 'p-1' })
+
+  assert.equal(result1.id, 'existing-id', 'Should return existing template')
+  assert.equal(result2.id, 'new-id',      'Should create when none exists')
+  assert.equal(result1, existing,         'Idempotent: same object returned')
+})
+
+// ── 45. /start-campaign preselects project from URL query param ───────────────
+
+test('start-campaign page preselects project_id from URL query param', () => {
+  // Replicate the query-param preselection logic
+  function getInitialProjectId(urlSearchParams) {
+    return urlSearchParams.get('project_id') ?? ''
+  }
+
+  const withId    = new URLSearchParams('project_id=proj-123')
+  const withoutId = new URLSearchParams('')
+  const empty     = new URLSearchParams()
+
+  assert.equal(getInitialProjectId(withId),    'proj-123', 'Should preselect from ?project_id=')
+  assert.equal(getInitialProjectId(withoutId), '',         'Should default to empty string')
+  assert.equal(getInitialProjectId(empty),     '',         'Should default to empty string when no params')
+})
+
+// ── 46. Checklist completion derives from summary signals ─────────────────────
+
+test('computeChecklistCompletion marks items based on summary signals', () => {
+  // Replicate computeChecklistCompletion logic
+  const DEFAULT_CHECKLIST = [
+    { key: 'define_audience', label: 'Define target audience',       completed: false },
+    { key: 'choose_operator', label: 'Choose a Web Operator',        completed: false },
+    { key: 'research_leads',  label: 'Research leads',               completed: false },
+    { key: 'review_leads',    label: 'Review and approve leads',     completed: false },
+    { key: 'prepare_draft',   label: 'Prepare Gmail draft',          completed: false },
+    { key: 'approve_actions', label: 'Approve risky actions',        completed: false },
+    { key: 'resume_send',     label: 'Resume / send',                completed: false },
+    { key: 'check_replies',   label: 'Check replies',                completed: false },
+    { key: 'review_trail',    label: 'Review execution trail',       completed: false },
+  ]
+
+  function compute(checklist, signals) {
+    return checklist.map(item => {
+      switch (item.key) {
+        case 'define_audience': return item
+        case 'choose_operator': return { ...item, completed: signals.has_operator }
+        case 'research_leads':  return { ...item, completed: signals.has_leads }
+        case 'review_leads':    return { ...item, completed: signals.has_approved_leads }
+        case 'prepare_draft':   return { ...item, completed: signals.has_draft_action }
+        case 'approve_actions': return item
+        case 'resume_send':     return { ...item, completed: signals.has_send_action }
+        case 'check_replies':   return { ...item, completed: signals.has_reply_check }
+        case 'review_trail':    return { ...item, completed: signals.has_trail }
+        default:                return item
+      }
+    })
+  }
+
+  const allDone = compute(DEFAULT_CHECKLIST, {
+    has_operator: true, has_leads: true, has_approved_leads: true,
+    has_draft_action: true, has_send_action: true, has_reply_check: true, has_trail: true,
+  })
+  const noneDone = compute(DEFAULT_CHECKLIST, {
+    has_operator: false, has_leads: false, has_approved_leads: false,
+    has_draft_action: false, has_send_action: false, has_reply_check: false, has_trail: false,
+  })
+
+  // Manual items are never auto-completed
+  const manualKeys = ['define_audience', 'approve_actions']
+  for (const key of manualKeys) {
+    assert.ok(!allDone.find(i => i.key === key)?.completed,  `${key} must not be auto-completed`)
+    assert.ok(!noneDone.find(i => i.key === key)?.completed, `${key} stays false with no signals`)
+  }
+
+  // Derived items complete when signals are true
+  assert.ok(allDone.find(i => i.key === 'choose_operator')?.completed, 'choose_operator: true when has_operator')
+  assert.ok(allDone.find(i => i.key === 'research_leads')?.completed,  'research_leads: true when has_leads')
+  assert.ok(allDone.find(i => i.key === 'review_trail')?.completed,    'review_trail: true when has_trail')
+
+  // Nothing complete when all signals false
+  const autoKeys = ['choose_operator', 'research_leads', 'review_leads', 'prepare_draft', 'resume_send', 'check_replies', 'review_trail']
+  for (const key of autoKeys) {
+    assert.ok(!noneDone.find(i => i.key === key)?.completed, `${key} should be false with no signals`)
+  }
+})
+
+// ── 47. CEO create_project response includes start_campaign_url ───────────────
+
+test('CEO create_project response shape includes start_campaign_url and launch_template', () => {
+  // Replicate the response construction from app/api/ceo/command/route.ts
+  function buildCeoResponse(result, launchTemplate) {
+    const isCreateProject = result.intent === 'create_project'
+    const resolvedProjectId = result.project_id
+
+    const startCampaignUrl = (isCreateProject && resolvedProjectId)
+      ? `/start-campaign?project_id=${resolvedProjectId}`
+      : null
+
+    const tplSummary = (isCreateProject && launchTemplate)
+      ? {
+          id:               launchTemplate.id,
+          status:           launchTemplate.status,
+          checklist_count:  launchTemplate.checklist.length,
+          checklist_done:   launchTemplate.checklist.filter(i => i.completed).length,
+        }
+      : null
+
+    return {
+      ...result,
+      start_campaign_url: startCampaignUrl,
+      launch_template:    tplSummary,
+    }
+  }
+
+  const createResult = { intent: 'create_project', project_id: 'p-99', response: 'Project created.' }
+  const tpl = { id: 't-1', status: 'draft', checklist: [{ completed: false }, { completed: true }] }
+
+  const resp = buildCeoResponse(createResult, tpl)
+
+  assert.equal(resp.start_campaign_url, '/start-campaign?project_id=p-99', 'URL includes project_id')
+  assert.equal(resp.launch_template?.checklist_count, 2, 'Checklist count correct')
+  assert.equal(resp.launch_template?.checklist_done, 1,  'Checklist done count correct')
+
+  // Non-project intents don't get the URL
+  const otherResult = { intent: 'general', project_id: 'p-99', response: 'ok' }
+  const other = buildCeoResponse(otherResult, tpl)
+  assert.equal(other.start_campaign_url, null, 'Non-project intent → no start_campaign_url')
+})

@@ -244,6 +244,16 @@ async function executeActions(
           'INSERT INTO project_memory (project_id) VALUES ($1) ON CONFLICT DO NOTHING',
           [projectId]
         )
+
+        // Create first-campaign launch template (idempotent — guidance only, no automation)
+        try {
+          const { createProjectLaunchTemplate } = await import('@/lib/project-launch-template')
+          await createProjectLaunchTemplate({
+            project_id:    projectId,
+            campaign_goal: d.goal ? String(d.goal) : null,
+            created_by_role: 'CEO',
+          })
+        } catch { /* non-fatal — template is optional guidance */ }
       }
 
       if (action.type === 'assign_pm') {

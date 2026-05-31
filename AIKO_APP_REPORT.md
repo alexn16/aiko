@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow + polish)_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template)_
 
 ---
 
@@ -31,6 +31,15 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ---
 
 ## 2. Page map
+
+### Project Launch Template (auto-created on project creation)
+- **Purpose:** 9-step first-campaign checklist created automatically when the CEO creates a project. Guidance only — no automation triggered.
+- **Key file:** `lib/project-launch-template.ts` — `createProjectLaunchTemplate` (idempotent), `getProjectLaunchTemplate`, `updateProjectLaunchTemplate`, `computeChecklistCompletion`
+- **Migration:** `030_project_launch_template.sql` — `project_launch_templates` table with unique active-template constraint per project.
+- **CEO integration:** CEO command route creates template on `create_project` intent; response includes `start_campaign_url` and `launch_template` summary; "▶ Open First Campaign Flow" chip appears in chat.
+- **Project workspace:** `LaunchTemplateStrip` component on Overview tab shows mini progress bar + "▶ Open First Campaign Flow" button.
+- **APIs:** `GET/PATCH /api/projects/[id]/launch-template`; `/api/start-campaign/summary` now includes `launch_template` with live checklist completion.
+- **URL preselection:** `/start-campaign?project_id=...` preselects the project and shows the checklist card at top.
 
 ### /start-campaign — First Campaign Flow
 - **Purpose:** Guided 9-step page for running the first complete AÏKO marketing workflow. Not new automation — surfaces and connects existing features in one place. Each step shows current status, an action button, and a link to the canonical page.

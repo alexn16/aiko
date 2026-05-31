@@ -157,6 +157,7 @@ export default function CeoPage() {
   const [commands, setCommands]       = useState<CeoCommand[]>([])
   const [lastDelegation, setLastDelegation] = useState<DelegationChip | null>(null)
   const [lastCapabilityGap, setLastCapabilityGap] = useState<CapabilityGap | null>(null)
+  const [lastStartCampaignUrl, setLastStartCampaignUrl] = useState<string | null>(null)
   const bottomRef                     = useRef<HTMLDivElement>(null)
   const inputRef                      = useRef<HTMLTextAreaElement>(null)
 
@@ -260,6 +261,7 @@ export default function CeoPage() {
         setCommands(prev => prev.filter(c => c.id !== optimistic.id))
         if (data.delegation) setLastDelegation(data.delegation)
         if (data.capability_gap) setLastCapabilityGap(data.capability_gap)
+        if (data.start_campaign_url) setLastStartCampaignUrl(data.start_campaign_url)
       }
     } catch {
       const errMsg = 'Could not reach the server. Check your connection.'
@@ -562,6 +564,27 @@ export default function CeoPage() {
                   <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                     <div style={{ width: 32, flexShrink: 0 }} />
                     <DelegationChipView chip={lastDelegation} />
+                  </div>
+                )}
+
+                {/* First Campaign Flow chip — shown when CEO just created a project */}
+                {lastStartCampaignUrl && !loading && (
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 32, flexShrink: 0 }} />
+                    <div style={{ marginTop: 4 }}>
+                      <Link
+                        href={lastStartCampaignUrl}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 6,
+                          fontSize: 11, padding: '5px 12px', borderRadius: 6,
+                          fontWeight: 600, textDecoration: 'none',
+                          background: '#eef2ff', color: '#4338ca',
+                          border: '1px solid #c7d2fe',
+                        }}
+                      >
+                        ▶ Open First Campaign Flow
+                      </Link>
+                    </div>
                   </div>
                 )}
 

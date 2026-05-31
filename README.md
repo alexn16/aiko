@@ -513,6 +513,37 @@ Approved leads with email addresses can become Gmail drafts through a named Web 
 - Daily send limits enforced by Operating Mode
 - Single-lead outreach only — no bulk send in this version
 
+## Project Launch Template
+
+When the CEO creates a new project, AÏKO automatically creates a **First Campaign Launch Template** — a 9-step checklist that guides the user through the complete marketing loop.
+
+**What gets created automatically:**
+- `project_launch_templates` row with `status=draft`
+- Default 9-item checklist: define audience → choose operator → research → review leads → draft → approve → resume → check replies → trail
+
+**Checklist completion** is derived live from the summary data — no manual tracking required:
+- Operator selected → ✓ Choose operator
+- Leads exist → ✓ Research leads
+- Approved leads → ✓ Review leads
+- Completed draft action → ✓ Prepare draft
+- Completed send action → ✓ Resume/send
+- Reply check action exists → ✓ Check replies
+- Trail events exist → ✓ Review trail
+- Two items (define audience, approve actions) remain manual — they require user judgment.
+
+**CEO Chat:** When a project is created, the response includes `start_campaign_url` and the chip **"▶ Open First Campaign Flow"** appears in the chat.
+
+**Project workspace:** Each project's Overview tab shows a "First Campaign Launch Plan" strip with a mini progress bar and the "▶ Open First Campaign Flow" button.
+
+**`/start-campaign?project_id=...`:** The URL query param preselects the project and displays the live checklist at the top of the page.
+
+**API:**
+- `GET /api/projects/[id]/launch-template` — returns or creates the template on demand
+- `PATCH /api/projects/[id]/launch-template` — update status, goal, audience hint, checklist
+- `GET /api/start-campaign/summary?project_id=...` — now includes `launch_template` with computed completion
+
+**Safety:** Template is guidance only. It does not trigger any automation, execution, or sending.
+
 ## First Campaign Flow (`/start-campaign`)
 
 A single guided page that walks the user through the complete AÏKO marketing loop. No new automation — it surfaces and connects existing features in one place.

@@ -220,9 +220,28 @@ export async function POST(request: NextRequest) {
         }).catch(() => null)
       }
 
+      // For new projects: attach start_campaign_url + launch template summary
+      let startCampaignUrl: string | null = null
+      let launchTemplate: Record<string, unknown> | null = null
+      const resolvedProjectId = result.project_id
+      if (String(result.intent) === 'create_project' && resolvedProjectId) {
+        startCampaignUrl = `/start-campaign?project_id=${resolvedProjectId}`
+        try {
+          const { getProjectLaunchTemplate } = await import('@/lib/project-launch-template')
+          const tpl = await getProjectLaunchTemplate(String(resolvedProjectId))
+          if (tpl) {
+            launchTemplate = {
+              id:       tpl.id,
+              status:   tpl.status,
+              checklist_count: tpl.checklist.length,
+              checklist_done:  tpl.checklist.filter(i => i.completed).length,
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       // Check capability gaps for strategy/create_project intents
       let capabilityGap: { missing: string[]; proposal_id: string; score: number } | null = null
-      const resolvedProjectId = result.project_id
       if (['strategy', 'create_project'].includes(String(result.intent)) && resolvedProjectId) {
         const strategyText = command.trim()
         try {
@@ -240,7 +259,9 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         ...result,
-        capability_gap: capabilityGap,
+        capability_gap:      capabilityGap,
+        start_campaign_url:  startCampaignUrl,
+        launch_template:     launchTemplate,
         delegation: delegationResult ? {
           status: delegationResult.status,
           message: delegationResult.message,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
+import { getProjectLaunchTemplate, computeChecklistCompletion } from '@/lib/project-launch-template'
 
 export const dynamic = 'force-dynamic'
 
@@ -116,6 +117,43 @@ export async function GET(req: NextRequest) {
       failure_reason: row.failure_reason ? String(row.failure_reason) : null,
     }))
 
+    // 9. Launch template (project-scoped only)
+    let launchTemplate = null
+    if (projectId) {
+      try {
+        const tpl = await getProjectLaunchTemplate(projectId)
+        if (tpl) {
+          // Derive completion signals from the summary data we already have
+          const hasDraftAction = trailRes.rows.some(r =>
+            ['create_email_draft','fill_gmail_body','fill_gmail_to','fill_gmail_subject'].includes(String(r.action_type)) &&
+            String(r.status) === 'completed'
+          )
+          const hasSendAction = trailRes.rows.some(r =>
+            ['send_email','send_gmail_draft','submit_form'].includes(String(r.action_type)) &&
+            String(r.status) === 'completed'
+          )
+          const hasReplyCheck = trailRes.rows.some(r =>
+            ['check_gmail_reply','search_gmail'].includes(String(r.action_type))
+          )
+          const computedChecklist = computeChecklistCompletion(tpl, {
+            has_operator:       operatorsRes.rows.length > 0, // conservative: any operator exists
+            has_leads:          Object.values(leadCounts).reduce((a, b) => a + b, 0) > 0,
+            has_approved_leads: (leadCounts['approved'] ?? 0) > 0,
+            has_draft_action:   hasDraftAction,
+            has_send_action:    hasSendAction,
+            has_reply_check:    hasReplyCheck,
+            has_trail:          trailRes.rows.length > 0,
+          })
+          launchTemplate = {
+            ...tpl,
+            checklist: computedChecklist,
+            checklist_done: computedChecklist.filter(i => i.completed).length,
+            start_campaign_url: `/start-campaign?project_id=${projectId}`,
+          }
+        }
+      } catch { /* non-fatal */ }
+    }
+
     return NextResponse.json({
       projects:           projectsRes.rows,
       operators:          operatorsRes.rows,
@@ -125,6 +163,7 @@ export async function GET(req: NextRequest) {
       pending_approvals:  pendingApprovalsRes.rows,
       resume_candidates:  resumeCandidatesRes.rows,
       recent_trail:       trailEvents,
+      launch_template:    launchTemplate,
     })
   } catch (err) {
     console.error('[start-campaign/summary GET]', err)

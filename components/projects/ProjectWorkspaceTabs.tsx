@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PMChatPanel } from './PMChatPanel'
 import { PMReportPanel } from './PMReportPanel'
 import { InternalCommsPanel } from '@/components/agents/InternalCommsPanel'
@@ -90,6 +90,71 @@ const LABEL: React.CSSProperties = {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Launch Template Strip ──────────────────────────────────────────────────────
+
+interface ChecklistItem { key: string; label: string; completed: boolean }
+interface LaunchTpl {
+  id: string; status: string; checklist: ChecklistItem[]
+  checklist_done: number; start_campaign_url: string
+  campaign_goal: string | null
+}
+
+function LaunchTemplateStrip({ projectId }: { projectId: string }) {
+  const [tpl, setTpl] = useState<LaunchTpl | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/projects/${projectId}/launch-template`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.template ? setTpl({
+        ...d.template,
+        checklist_done: d.template.checklist?.filter((i: ChecklistItem) => i.completed).length ?? 0,
+        start_campaign_url: `/start-campaign?project_id=${projectId}`,
+      }) : null)
+      .catch(() => null)
+  }, [projectId])
+
+  if (!tpl) return null
+
+  const total = tpl.checklist.length
+  const done  = tpl.checklist_done
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '14px 18px',
+      background: '#fafbff', border: '1px solid #c7d2fe', borderRadius: 10,
+      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#3730a3', marginBottom: 4 }}>
+          🗂 First Campaign Launch Plan
+        </div>
+        {/* Mini progress bar */}
+        <div style={{ height: 4, background: '#e0e7ff', borderRadius: 2, width: 200, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${pct}%`,
+            background: pct === 100 ? '#10b981' : '#6366f1', borderRadius: 2,
+          }} />
+        </div>
+        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>
+          {done}/{total} steps · {tpl.status.replace(/_/g, ' ')}
+          {tpl.campaign_goal && <span style={{ marginLeft: 6, color: '#6366f1' }}>{tpl.campaign_goal}</span>}
+        </div>
+      </div>
+      <a
+        href={tpl.start_campaign_url}
+        style={{
+          background: '#6366f1', color: '#ffffff', textDecoration: 'none',
+          borderRadius: 6, padding: '7px 14px', fontSize: 12, fontWeight: 600,
+          whiteSpace: 'nowrap', flexShrink: 0,
+        }}
+      >
+        ▶ Open First Campaign Flow
+      </a>
+    </div>
+  )
+}
+
 export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity, hasProvider }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
 
@@ -179,6 +244,9 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
                 </div>
               ))}
             </div>
+
+            {/* First Campaign Launch card */}
+            <LaunchTemplateStrip projectId={project.id} />
 
             {/* PM Chat teaser */}
             <div style={{

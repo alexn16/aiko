@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -16,6 +17,14 @@ interface ApprovalRow  { id: string; title: string; created_at: string; action_t
 interface ResumeRow    { id: string; action_type: string; description: string; project_id: string | null; operator_id: string | null; approval_item_id: string }
 interface TrailRow     { action_id: string; action_type: string; description: string; status: string; created_at: string; completed_at: string | null; lead_id: string | null; failure_reason: string | null }
 
+interface ChecklistItem { key: string; label: string; completed: boolean; note?: string }
+interface LaunchTemplate {
+  id: string; project_id: string; status: string
+  target_audience_hint: string | null; campaign_goal: string | null
+  checklist: ChecklistItem[]; checklist_done: number
+  start_campaign_url: string
+}
+
 interface Summary {
   projects:          Project[]
   operators:         Operator[]
@@ -25,6 +34,7 @@ interface Summary {
   pending_approvals: ApprovalRow[]
   resume_candidates: ResumeRow[]
   recent_trail:      TrailRow[]
+  launch_template:   LaunchTemplate | null
 }
 
 // ok | error | loading state for each action
@@ -193,14 +203,124 @@ function Hint({ text }: { text: string }) {
   )
 }
 
+// ── Launch Template Checklist Card ────────────────────────────────────────────
+
+function LaunchTemplateCard({
+  template,
+  projectId,
+}: {
+  template: LaunchTemplate
+  projectId: string
+}) {
+  const done  = template.checklist_done
+  const total = template.checklist.length
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0
+
+  const statusColor: Record<string, string> = {
+    draft:       '#94a3b8',
+    ready:       '#3b82f6',
+    in_progress: '#f59e0b',
+    completed:   '#10b981',
+    archived:    '#cbd5e1',
+  }
+
+  return (
+    <div style={{
+      background: '#fafbff',
+      border: '1px solid #c7d2fe',
+      borderRadius: 10,
+      padding: '16px 20px',
+      marginBottom: 16,
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#3730a3' }}>
+          🗂 First Campaign Launch Plan
+        </span>
+        <span style={{
+          fontSize: 10, fontWeight: 700, borderRadius: 20,
+          padding: '1px 8px', background: '#ede9fe', color: '#5b21b6',
+          border: '1px solid #c4b5fd',
+        }}>
+          {done}/{total} steps complete
+        </span>
+        <span style={{
+          fontSize: 10, fontWeight: 700, borderRadius: 20,
+          padding: '1px 8px',
+          background: '#f1f5f9',
+          color: statusColor[template.status] ?? '#94a3b8',
+          border: `1px solid ${statusColor[template.status] ?? '#e2e8f0'}`,
+          textTransform: 'capitalize',
+        }}>
+          {template.status.replace(/_/g, ' ')}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 4, background: '#e0e7ff', borderRadius: 2, marginBottom: 12, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%',
+          width: `${pct}%`,
+          background: pct === 100 ? '#10b981' : '#6366f1',
+          borderRadius: 2,
+          transition: 'width 0.4s ease',
+        }} />
+      </div>
+
+      {/* Checklist */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {template.checklist.map(item => (
+          <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <span style={{
+              width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+              background: item.completed ? '#6366f1' : '#f1f5f9',
+              color:      item.completed ? '#ffffff'  : '#cbd5e1',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 9, fontWeight: 700,
+            }}>
+              {item.completed ? '✓' : ''}
+            </span>
+            <span style={{
+              color:           item.completed ? '#166534' : '#0f172a',
+              textDecoration:  item.completed ? 'line-through' : 'none',
+              opacity:         item.completed ? 0.7 : 1,
+            }}>
+              {item.label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Context hints */}
+      {(template.target_audience_hint || template.campaign_goal) && (
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #e0e7ff', fontSize: 11, color: '#6366f1' }}>
+          {template.campaign_goal && <div>Goal: {template.campaign_goal}</div>}
+          {template.target_audience_hint && <div>Audience: {template.target_audience_hint}</div>}
+        </div>
+      )}
+
+      <div style={{ marginTop: 10, fontSize: 10, color: '#94a3b8' }}>
+        This checklist is guidance only — it does not trigger any actions.{' '}
+        <Link href={`/projects/${projectId}`} style={{ color: '#6366f1', textDecoration: 'none' }}>
+          View project →
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function StartCampaignPage() {
+  const searchParams = useSearchParams()
+  const urlProjectId = searchParams.get('project_id') ?? ''
+
   const [summary, setSummary]       = useState<Summary | null>(null)
   const [loadError, setLoadError]   = useState(false)
   const [loading, setLoading]       = useState(true)
 
-  const [selectedProject,  setSelectedProject]  = useState('')
+  // Pre-select project from URL query param (?project_id=...)
+  const [selectedProject,  setSelectedProject]  = useState(urlProjectId)
   const [selectedOperator, setSelectedOperator] = useState('')
 
   const [newProjectName, setNewProjectName]     = useState('')
@@ -468,6 +588,11 @@ export default function StartCampaignPage() {
           </div>
         ))}
       </div>
+
+      {/* ── Launch template checklist (shown when project selected + template exists) ── */}
+      {summary.launch_template && selectedProject && (
+        <LaunchTemplateCard template={summary.launch_template} projectId={selectedProject} />
+      )}
 
       {/* ── Step 1: Project ── */}
       <div style={cardStyle(hasProject, false)}>
