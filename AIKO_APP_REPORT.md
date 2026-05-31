@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow)_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow + polish)_
 
 ---
 
@@ -39,6 +39,7 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **APIs used:** `GET /api/start-campaign/summary`, `POST /api/projects`, `POST /api/ceo/command`, `POST /api/leads/[id]/outreach-draft`, `POST /api/web-operator/actions/[id]/resume`, `POST /api/leads/[id]/check-reply`
 - **Summary endpoint:** `GET /api/start-campaign/summary?project_id=...` — aggregates projects, operators, lead counts, approved leads, pending approvals, resume candidates, contacted leads, recent trail (8 events). No business logic duplication.
 - **Safety:** All action buttons go through existing approval/mode rules. Nothing executes automatically.
+- **UX polish:** Progress strip, card left-border color (green = done, amber = needs attention), loading/ok/error action states, disabled button styles (opacity 0.45), empty states with canonical links, prerequisite hints, safety microcopy on every step, auto-refresh after each action, `fetchSummary` failure retry screen.
 - **Nav:** "▶ First Campaign" in sidebar Command section.
 
 ### /ceo — CEO Chat

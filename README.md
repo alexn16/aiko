@@ -532,6 +532,18 @@ A single guided page that walks the user through the complete AÏKO marketing lo
 
 **Nav:** "▶ First Campaign" link appears in the sidebar Command section.
 
+**Safety microcopy on every step:** "Nothing is sent automatically." / "Approval does not send." / "Resume is the explicit execution step." / "All external work happens through Web Operator."
+
+**UX details:**
+- Progress strip at top shows live step completion
+- Each step card has a green left border when done, amber when action is needed
+- All action buttons show loading / success (green) / error (red) state
+- Buttons are `opacity: 0.45` + `cursor: not-allowed` when disabled
+- Empty states guide the user to the right canonical page
+- Hints appear when prerequisites are missing (no project, no operator)
+- Summary auto-refreshes after every action (research, draft, resume, reply check)
+- `fetchSummary` failure shows a retry screen instead of hanging on load
+
 **Safety:** Nothing is sent or executed automatically. Every action button goes through the existing approval/mode rules.
 
 ## Gmail reply-status check workflow
