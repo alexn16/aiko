@@ -89,6 +89,9 @@ interface BrainDiagnostics {
   ceo_provider: { name: string; model: string | null; type: string } | null
   summary: { total: number; connected: number; errored: number }
   ceo_role_assignment?: { provider_id: string | null; last_error?: string | null } | null
+  auth_mode?: 'optional' | 'required'
+  signed_in?: boolean
+  provider_scope?: 'user' | 'global'
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -369,6 +372,23 @@ export default function CeoPage() {
                 CEO brain: {providerLabel(provider)}{provider.model ? <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 400, color: '#64748b', marginLeft: 4 }}>{` · ${provider.model}`}</span> : null}
               </Link>
             ) : null
+          )}
+
+          {/* Local single-user mode badge (optional auth mode, not signed in) */}
+          {diagnostics?.auth_mode === 'optional' && diagnostics?.signed_in === false && (
+            <Link
+              href="/connect-ai"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '4px 10px', borderRadius: 6,
+                background: '#f0f9ff', border: '1px solid #bae6fd',
+                fontSize: 11, fontWeight: 500, color: '#0369a1',
+                textDecoration: 'none',
+              }}
+              title="Running in local single-user mode. Click to manage providers or sign in."
+            >
+              ○ Local mode
+            </Link>
           )}
 
           <button

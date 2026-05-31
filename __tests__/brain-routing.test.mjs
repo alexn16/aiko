@@ -272,26 +272,28 @@ test('optional mode: provider setup allowed without session (user_id = null)', (
   )
 })
 
-// ── 17. AIKO_AUTH_MODE: required blocks protected routes without session ───────
+// ── 17. AIKO_AUTH_MODE: middleware routing logic ───────────────────────────────
 
-test('required mode: protected routes blocked without session', () => {
-  // Simulate middleware authorized() callback
+test('middleware: optional mode allows all routes; required mode blocks dashboard without token', () => {
+  // Simulate middleware authorized() callback (matches middleware.ts)
   function authorized(token, pathname, authMode) {
-    const alwaysPublic = ['/login', '/api/auth/']
-    if (alwaysPublic.some(p => pathname.startsWith(p))) return true
-    const optionalPublic = ['/connect-ai', '/api/providers/']
-    if (authMode !== 'required' && optionalPublic.some(p => pathname.startsWith(p))) return true
+    if (pathname.startsWith('/login')) return true
+    if (pathname.startsWith('/api/auth/')) return true
+    if (authMode !== 'required') return true   // optional = all routes public
     return !!token
   }
 
-  // Optional mode — /connect-ai always public
+  // Optional mode — everything is public (SetupGate guards locally)
   assert.equal(authorized(null, '/connect-ai', 'optional'), true)
+  assert.equal(authorized(null, '/ceo', 'optional'),        true, '/ceo public in optional mode')
+  assert.equal(authorized(null, '/dashboard', 'optional'),  true, '/dashboard public in optional mode')
   assert.equal(authorized(null, '/api/providers/roles', 'optional'), true)
-  assert.equal(authorized(null, '/dashboard', 'optional'), false, 'dashboard still blocked without token')
 
-  // Required mode — /connect-ai also protected
+  // Required mode — dashboard blocked without token
   assert.equal(authorized(null, '/connect-ai', 'required'), false)
-  assert.equal(authorized(null, '/api/providers/roles', 'required'), false)
+  assert.equal(authorized(null, '/ceo', 'required'),        false)
+  assert.equal(authorized(null, '/dashboard', 'required'),  false)
+  assert.equal(authorized({ id: 'u1' }, '/ceo', 'required'), true, 'token present → allowed')
 
   // Always public regardless of mode
   assert.equal(authorized(null, '/login', 'required'), true)

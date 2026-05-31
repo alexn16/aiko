@@ -631,16 +631,19 @@ AIKO_AUTH_MODE=optional   # default — AI provider setup works without Google l
 # AIKO_AUTH_MODE=required # use this for multi-user / hosted deployments
 ```
 
-**`AIKO_AUTH_MODE=optional` (default for local dev)**
-- `/connect-ai` and all provider API routes are accessible without signing in
-- Provider connections and role assignments are stored with `user_id = null` (global/single-user)
-- ChatGPT/Codex OAuth and Claude OAuth do not require Google login
-- Google login is available as optional account identity only
+**`AIKO_AUTH_MODE=optional` (default — local / OpenClaw-style use)**
+- **All routes** are accessible without signing in — this is local single-user mode
+- Connect a brain at `/connect-ai`, then go straight to `/ceo` — no Google account required
+- Provider connections and role assignments are stored with `user_id = null` (global)
+- ChatGPT/Codex OAuth and Claude OAuth flow works without Google login
+- Google login is available at `/login` but never mandatory
+- SetupGate redirects to `/connect-ai` if no CEO brain is configured
+- A "Local mode" badge appears in the CEO top bar when not signed in
 
-**`AIKO_AUTH_MODE=required`**
-- All dashboard routes require a signed-in session
-- Provider connections are scoped to the signed-in user
-- Google login is mandatory before provider setup
+**`AIKO_AUTH_MODE=required` (multi-user / hosted deployments)**
+- All dashboard routes require a signed-in session; unauthenticated requests → `/login`
+- Provider connections are scoped to the signed-in user's `user_id`
+- Google login is mandatory before any dashboard access or provider setup
 
 #### Google login (optional in local mode, required when AIKO_AUTH_MODE=required)
 

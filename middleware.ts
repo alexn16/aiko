@@ -1,14 +1,17 @@
 /**
  * AÏKO Middleware — route protection
  *
- * AIKO_AUTH_MODE=optional (default):
- *   /connect-ai and /api/providers/** are public — AI setup works without login.
- *   All other dashboard routes still require a session.
+ * AIKO_AUTH_MODE=optional (default — local / OpenClaw-style use):
+ *   All routes are accessible without a session.
+ *   SetupGate handles the "no brain → /connect-ai" redirect client-side.
+ *   API routes scope to user_id = null (global providers) when no session.
+ *   Google login is available at /login but never required.
  *
- * AIKO_AUTH_MODE=required:
- *   All dashboard routes require a valid session (original behavior).
+ * AIKO_AUTH_MODE=required (multi-user / hosted deployments):
+ *   All dashboard routes require a valid session.
+ *   Unauthenticated requests are redirected to /login.
  *
- * Always public (no auth required):
+ * Always public (no auth required in either mode):
  *   /login         — sign-in page
  *   /api/auth/**   — NextAuth endpoints
  */
@@ -16,28 +19,20 @@
 import { withAuth } from 'next-auth/middleware'
 import { NextResponse, type NextRequest } from 'next/server'
 
-/** Routes that are always public regardless of auth mode. */
-const ALWAYS_PUBLIC = ['/login', '/api/auth/']
-
-/** Routes that are public when AIKO_AUTH_MODE=optional. */
-const OPTIONAL_MODE_PUBLIC = [
-  '/connect-ai',
-  '/api/providers/',
-  '/api/setup',
-  '/api/auth/diagnostics',
-]
-
 function isPublicPath(pathname: string): boolean {
-  if (ALWAYS_PUBLIC.some(p => pathname.startsWith(p))) return true
+  // Always public regardless of mode
+  if (pathname.startsWith('/login')) return true
+  if (pathname.startsWith('/api/auth/')) return true
+
+  // In optional mode, every route is public — SetupGate guards locally
   const authMode = process.env.AIKO_AUTH_MODE ?? 'optional'
-  if (authMode !== 'required') {
-    if (OPTIONAL_MODE_PUBLIC.some(p => pathname.startsWith(p))) return true
-  }
+  if (authMode !== 'required') return true
+
   return false
 }
 
 export default withAuth(
-  function middleware(req: NextRequest) {
+  function middleware(_req: NextRequest) {
     return NextResponse.next()
   },
   {
