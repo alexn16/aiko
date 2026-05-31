@@ -4,9 +4,10 @@ import { usePathname } from 'next/navigation'
 import { SidebarModeIndicator } from '@/components/mode/SidebarModeIndicator'
 
 const CEO_ITEMS = [
-  { href: '/ceo',        label: 'CEO' },
-  { href: '/projects',   label: 'Projects' },
-  { href: '/connect-ai', label: 'Connect AI' },
+  { href: '/ceo',              label: 'CEO' },
+  { href: '/start-campaign',   label: '▶ First Campaign' },
+  { href: '/projects',         label: 'Projects' },
+  { href: '/connect-ai',       label: 'Connect AI' },
 ]
 
 const NAV_ITEMS = [

@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks)_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow)_
 
 ---
 
@@ -31,6 +31,15 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ---
 
 ## 2. Page map
+
+### /start-campaign — First Campaign Flow
+- **Purpose:** Guided 9-step page for running the first complete AÏKO marketing workflow. Not new automation — surfaces and connects existing features in one place. Each step shows current status, an action button, and a link to the canonical page.
+- **Steps:** (1) Choose/create project, (2) Choose operator, (3) Research leads, (4) Review/approve, (5) Prepare Gmail draft, (6) Approve risky actions, (7) Resume approved actions, (8) Check for replies, (9) View execution trail
+- **Key components:** `app/(dashboard)/start-campaign/page.tsx`
+- **APIs used:** `GET /api/start-campaign/summary`, `POST /api/projects`, `POST /api/ceo/command`, `POST /api/leads/[id]/outreach-draft`, `POST /api/web-operator/actions/[id]/resume`, `POST /api/leads/[id]/check-reply`
+- **Summary endpoint:** `GET /api/start-campaign/summary?project_id=...` — aggregates projects, operators, lead counts, approved leads, pending approvals, resume candidates, contacted leads, recent trail (8 events). No business logic duplication.
+- **Safety:** All action buttons go through existing approval/mode rules. Nothing executes automatically.
+- **Nav:** "▶ First Campaign" in sidebar Command section.
 
 ### /ceo — CEO Chat
 - **Purpose:** Global CEO interface. Create projects, assign PMs, run company reviews, issue strategy commands, and check capability gaps. Two tabs: Chat and Reviews.

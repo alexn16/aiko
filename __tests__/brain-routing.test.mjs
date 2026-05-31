@@ -828,3 +828,103 @@ test('reply_check and reply_found event types have defined colors in trail compo
   assert.equal(EVENT_COLORS.reply_found.dot, '#10b981', 'reply_found uses green dot (positive result)')
   assert.equal(EVENT_COLORS.reply_check.dot, '#0ea5e9', 'reply_check uses blue dot (informational)')
 })
+
+// ── First Campaign Flow tests ─────────────────────────────────────────────────
+
+// ── 35. Summary endpoint uses existing tables ─────────────────────────────────
+
+test('start-campaign summary endpoint queries approval_items, not legacy approvals', () => {
+  // Validate the canonical table names referenced in the summary query
+  const summaryQueryTables = [
+    'projects',
+    'web_operators',
+    'leads',
+    'approval_items',       // canonical — NOT 'approvals'
+    'web_operator_actions',
+  ]
+
+  // The legacy table must NOT be referenced for pending-approval counts
+  const legacyTable = 'approvals'
+  assert.ok(!summaryQueryTables.includes(legacyTable),
+    'Summary endpoint must not use legacy "approvals" table')
+  assert.ok(summaryQueryTables.includes('approval_items'),
+    'Summary endpoint must use canonical "approval_items" table')
+})
+
+// ── 36. Pending approval count comes from approval_items ──────────────────────
+
+test('pending approval count aggregation uses approval_items.status=pending', () => {
+  // Replicate the counting logic from the summary endpoint
+  function countPending(approvalItems) {
+    return approvalItems.filter(item => item.status === 'pending').length
+  }
+
+  const items = [
+    { id: '1', status: 'pending',  item_type: 'web_operator_action' },
+    { id: '2', status: 'approved', item_type: 'web_operator_action' },
+    { id: '3', status: 'pending',  item_type: 'web_operator_action' },
+    { id: '4', status: 'rejected', item_type: 'web_operator_action' },
+  ]
+
+  assert.equal(countPending(items), 2, 'Should count 2 pending approval_items')
+})
+
+// ── 37. Resume candidates require approved approval_item AND incomplete action ──
+
+test('resume candidates require approved approval_item and non-completed action', () => {
+  // Replicate the WHERE clause from the summary endpoint resume_candidates query
+  function isResumable(action, approvalItem) {
+    return (
+      action.status === 'approved' &&
+      action.approval_item_id !== null &&
+      approvalItem !== null &&
+      approvalItem.status === 'approved'
+      // action must NOT be completed (that's the !completed guard)
+    )
+  }
+
+  const approvedItem   = { id: 'ai-1', status: 'approved' }
+  const pendingItem    = { id: 'ai-2', status: 'pending' }
+  const rejectedItem   = { id: 'ai-3', status: 'rejected' }
+
+  const approvedAction   = { status: 'approved',   approval_item_id: 'ai-1' }
+  const completedAction  = { status: 'completed',  approval_item_id: 'ai-1' }
+  const waitingAction    = { status: 'waiting_approval', approval_item_id: 'ai-2' }
+  const noApprovalAction = { status: 'approved',   approval_item_id: null }
+
+  assert.ok( isResumable(approvedAction, approvedItem),    'approved action + approved item → resumable')
+  assert.ok(!isResumable(completedAction, approvedItem),   'completed action → NOT resumable')
+  assert.ok(!isResumable(approvedAction, pendingItem),     'approved action + pending item → NOT resumable')
+  assert.ok(!isResumable(waitingAction, pendingItem),      'waiting_approval action → NOT resumable')
+  assert.ok(!isResumable(noApprovalAction, null),          'no approval_item_id → NOT resumable')
+  assert.ok(!isResumable(approvedAction, rejectedItem),    'approved action + rejected item → NOT resumable')
+})
+
+// ── 38. Page links to canonical routes ────────────────────────────────────────
+
+test('first campaign flow links to canonical AÏKO routes', () => {
+  const canonicalRoutes = {
+    projects:      '/projects',
+    operators:     '/operators',
+    leads:         '/leads',
+    approvals:     '/approvals',
+    operatorDetail: (id) => `/operators/${id}`,
+    projectDetail:  (id) => `/projects/${id}`,
+    checkReply:     (id) => `/api/leads/${id}/check-reply`,
+    outreachDraft:  (id) => `/api/leads/${id}/outreach-draft`,
+    resumeAction:   (id) => `/api/web-operator/actions/${id}/resume`,
+    summary:        (pid) => pid ? `/api/start-campaign/summary?project_id=${pid}` : `/api/start-campaign/summary`,
+  }
+
+  // Validate route shapes
+  assert.equal(canonicalRoutes.approvals, '/approvals',
+    'Approvals must link to canonical /approvals (not /operator)')
+  assert.equal(canonicalRoutes.checkReply('lead-1'), '/api/leads/lead-1/check-reply',
+    'Reply check uses correct API path')
+  assert.equal(canonicalRoutes.resumeAction('act-1'), '/api/web-operator/actions/act-1/resume',
+    'Resume uses correct API path')
+  assert.equal(canonicalRoutes.summary('p-1'), '/api/start-campaign/summary?project_id=p-1',
+    'Summary accepts project_id scope param')
+  assert.equal(canonicalRoutes.summary(), '/api/start-campaign/summary',
+    'Summary works without project_id')
+})

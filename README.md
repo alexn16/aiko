@@ -513,6 +513,27 @@ Approved leads with email addresses can become Gmail drafts through a named Web 
 - Daily send limits enforced by Operating Mode
 - Single-lead outreach only — no bulk send in this version
 
+## First Campaign Flow (`/start-campaign`)
+
+A single guided page that walks the user through the complete AÏKO marketing loop. No new automation — it surfaces and connects existing features in one place.
+
+**9 steps:**
+1. **Project** — select or create a project (scopes all data)
+2. **Operator** — choose a named Web Operator (shows live status)
+3. **Research** — enter a search prompt, delegates to existing CEO command route
+4. **Review leads** — shows discovered/needs_review/approved counts, links to /leads
+5. **Gmail draft** — lists approved leads with email; one-click "Prepare draft" per lead
+6. **Approval** — shows pending `approval_items`, links to Approval Center
+7. **Resume** — shows approved-but-not-resumed actions with "▶ Resume" button
+8. **Reply check** — shows contacted leads, "📬 Check reply" button per lead
+9. **Execution trail** — shows last 8 events from the project's operator actions
+
+**Summary endpoint:** `GET /api/start-campaign/summary?project_id=...` — aggregates projects, operators, lead counts, approved leads, pending approvals, resume candidates, contacted leads, and recent trail events from existing tables. No new business logic.
+
+**Nav:** "▶ First Campaign" link appears in the sidebar Command section.
+
+**Safety:** Nothing is sent or executed automatically. Every action button goes through the existing approval/mode rules.
+
 ## Gmail reply-status check workflow
 
 After outreach is sent, you can check for replies through the browser (no Gmail API, no IMAP):
