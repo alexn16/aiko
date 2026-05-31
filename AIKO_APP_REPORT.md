@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (resumable approvals)_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails)_
 
 ---
 
@@ -84,12 +84,15 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 
 ### /campaigns — Campaign Builder
 - **Purpose:** Build, sequence, and manage marketing campaigns from approved outputs and approval items. AI-generate full campaign plans. View launch readiness.
-- **Key components:** `components/campaigns/`
-- **APIs used:** `GET/POST /api/campaigns`, `GET/PATCH /api/campaigns/[id]`, `POST /api/campaigns/[id]/items`, `PATCH /api/campaigns/[id]/items/[itemId]`, `POST /api/campaigns/generate`, `GET/POST /api/campaigns/[id]/launch-checks`
+- **Key components:** `components/campaigns/` (incl. `CampaignExecutionTrail`)
+- **APIs used:** `GET/POST /api/campaigns`, `GET/PATCH /api/campaigns/[id]`, `POST /api/campaigns/[id]/items`, `PATCH /api/campaigns/[id]/items/[itemId]`, `POST /api/campaigns/generate`, `GET/POST /api/campaigns/[id]/launch-checks`, `GET /api/campaigns/[id]/execution-trail`
 - **Tables:** `campaigns`, `campaign_items`, `campaign_launch_checks`, `approval_items`, `agent_task_outputs`
+- **Execution trail:** Campaign detail page shows chronological operator actions and approvals via `campaign_items → approval_items → web_operator_actions`.
 
 ### /leads — Lead Table
 - **Purpose:** Lead capture, enrichment, and map view.
+- **Execution trail:** Each lead card has an expandable "▼ Execution trail" section (component: `LeadExecutionTrail`). Trail queries `web_operator_actions WHERE lead_id = X` joined to `approval_items`. Data linked via `web_operator_actions.lead_id` (migration 025).
+- **Trail API:** `GET /api/leads/[id]/execution-trail`
 - **Key components:** `components/leads/`, `components/map/`
 - **APIs used:** `GET /api/leads`, `POST /api/leads`
 - **Tables:** `leads`

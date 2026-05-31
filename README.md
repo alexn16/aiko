@@ -420,6 +420,28 @@ AÏKO can send approved campaign emails and follow up within daily limits.
 **UI:** `/mode` — Operating Mode settings and audit log
 **API:** `GET/PATCH /api/mode`, `GET /api/mode/log`
 
+## Execution Trails
+
+Every business object that has Web Operator activity shows a chronological execution trail.
+
+**What the trail shows:**
+- Lead approved → Gmail draft prepared → Approval requested → Approved → Action resumed → Email sent (or failed/blocked)
+- Each step is a separate, distinct event — approval ≠ send
+- Screenshots visible only for non-sensitive actions
+- Links back to Approval Center for pending/approved items
+
+**Accessing trails:**
+- **Lead detail** — expandable "▼ Execution trail" section in `ProjectLeadsPanel` (per lead)
+- **Campaign detail** — "Execution trail" section in campaign view
+- **API:** `GET /api/leads/[id]/execution-trail`, `GET /api/campaigns/[id]/execution-trail`, `GET /api/projects/[id]/execution-trail`
+
+**Data model:** `web_operator_actions.lead_id` links operator actions to specific leads. The trail joins `web_operator_actions` ↔ `approval_items` via `approval_item_id`.
+
+**Safety:**
+- `approval_approved` event ≠ `email_sent` event — always separate
+- Sensitive screenshots (`is_sensitive=true`) are never exposed
+- "Approved — waiting for explicit resume." shown until resume is clicked
+
 ## Web Operator Agent (`/operator`)
 
 The Web Operator is AÏKO's hands on the internet. Instead of building separate native API integrations for every service, the Web Operator can operate websites and web apps through a browser runtime.

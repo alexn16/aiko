@@ -126,6 +126,7 @@ export async function POST(
       approval_item_id: String(row.approval_item_id),
       source_task_id: row.source_task_id ? String(row.source_task_id) : null,
       requested_by_role: row.requested_by_role ? String(row.requested_by_role) : null,
+      lead_id: row.lead_id ? String(row.lead_id) : null,
       created_at: String(row.created_at),
       completed_at: null,
     }

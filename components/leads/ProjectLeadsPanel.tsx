@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import type { Lead } from '@/lib/leads'
+import { LeadExecutionTrail } from '@/components/leads/LeadExecutionTrail'
 
 const SCORE_COLOR = (score: number | null): string => {
   if (score === null) return '#94a3b8'
@@ -388,6 +389,7 @@ export function ProjectLeadsPanel({ projectId }: Props) {
                     {draftResult[lead.id]}
                   </div>
                 )}
+                <LeadExecutionTrail leadId={lead.id} companyName={lead.company_name ?? undefined} />
               </div>
 
               {/* Approve / Reject / Gmail draft buttons */}

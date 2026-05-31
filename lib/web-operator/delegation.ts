@@ -32,6 +32,7 @@ export interface DelegationRequest {
   payload?: Record<string, unknown>
   reason?: string
   taskId?: string
+  leadId?: string          // links the operator action to a specific lead
 }
 
 export type DelegationStatus = 'completed' | 'approval_required' | 'blocked' | 'failed'
@@ -203,6 +204,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     source_task_id: req.taskId,
     requested_by_role: req.requestedByRole,
     operator_id: operator?.id ?? null,
+    lead_id: req.leadId ?? null,
     profileKey,
   })
 
@@ -454,6 +456,7 @@ export async function delegateGmailDraft(opts: {
   projectId?: string
   requestedByRole: string
   operatorName?: string
+  leadId?: string
 }): Promise<DelegationResult> {
   return delegateToWebOperator({
     operatorName: opts.operatorName,
@@ -463,6 +466,7 @@ export async function delegateGmailDraft(opts: {
     instruction: `Prepare Gmail draft to ${opts.to}`,
     payload: { to: opts.to, subject: opts.subject, body: opts.body },
     reason: 'Email draft preparation',
+    leadId: opts.leadId,
   })
 }
 

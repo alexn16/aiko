@@ -49,6 +49,7 @@ export interface WebOperatorAction {
   approval_item_id: string | null
   source_task_id: string | null
   requested_by_role: string | null
+  lead_id: string | null
   created_at: string
   completed_at: string | null
 }
@@ -160,13 +161,14 @@ export async function logWebOperatorAction(params: {
   source_task_id?: string | null
   requested_by_role?: string | null
   operator_id?: string | null
+  lead_id?: string | null
 }): Promise<WebOperatorAction> {
   const result = await db.query(
     `INSERT INTO web_operator_actions
        (session_id, project_id, agent_role, action_type, target_url,
         description, input, status, requires_approval,
-        source_task_id, requested_by_role, operator_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        source_task_id, requested_by_role, operator_id, lead_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      RETURNING *`,
     [
       params.session_id ?? null,
@@ -181,6 +183,7 @@ export async function logWebOperatorAction(params: {
       params.source_task_id ?? null,
       params.requested_by_role ?? null,
       params.operator_id ?? null,
+      params.lead_id ?? null,
     ]
   )
   return rowToAction(result.rows[0])
@@ -282,6 +285,7 @@ export async function runWebOperatorAction(opts: {
   source_task_id?: string | null
   requested_by_role?: string | null
   operator_id?: string | null
+  lead_id?: string | null
   profileKey?: string | null
 }): Promise<{
   success: boolean
@@ -486,6 +490,7 @@ function rowToAction(row: Record<string, unknown>): WebOperatorAction {
     approval_item_id: row.approval_item_id ? String(row.approval_item_id) : null,
     source_task_id: row.source_task_id ? String(row.source_task_id) : null,
     requested_by_role: row.requested_by_role ? String(row.requested_by_role) : null,
+    lead_id: row.lead_id ? String(row.lead_id) : null,
     created_at: String(row.created_at),
     completed_at: row.completed_at ? String(row.completed_at) : null,
   }

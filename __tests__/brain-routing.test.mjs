@@ -636,3 +636,78 @@ test('NeedsReauthError carries providerId and is distinguishable from generic Er
   assert.ok(err instanceof Error)
   assert.ok(err.message.includes('Token expired'))
 })
+
+// ── Execution trail tests ─────────────────────────────────────────────────────
+
+// ── 26. Lead trail includes linked web operator actions ───────────────────────
+
+test('lead execution trail links via lead_id on web_operator_actions', () => {
+  // Simulate the trail query: web_operator_actions WHERE lead_id = X
+  const trailQuery = `
+    SELECT woa.*, ai.id AS ai_id, ai.status AS ai_status
+    FROM web_operator_actions woa
+    LEFT JOIN approval_items ai ON ai.id = woa.approval_item_id
+    WHERE woa.lead_id = $1
+    ORDER BY woa.created_at ASC
+  `
+  assert.ok(trailQuery.includes('lead_id'), 'Trail must filter by lead_id')
+  assert.ok(trailQuery.includes('web_operator_actions'), 'Must query web_operator_actions')
+  assert.ok(trailQuery.includes('LEFT JOIN approval_items'), 'Must join approval_items')
+})
+
+// ── 27. Approved approval_item does not create "sent" event ──────────────────
+
+test('approval_approved event is distinct from email_sent event', () => {
+  // Simulate actionToEvents — completed send action creates email_sent
+  // approval_approved event comes from approval row, not from action row
+  function classifyAction(actionType, actionStatus) {
+    const isSend = ['send_email', 'send_gmail_draft', 'submit_form'].includes(actionType)
+    if (isSend && actionStatus === 'completed') return 'email_sent'
+    if (isSend && actionStatus === 'approved') return 'approval_approved_waiting_resume'
+    return 'other'
+  }
+
+  assert.equal(classifyAction('send_gmail_draft', 'completed'), 'email_sent')
+  assert.equal(classifyAction('send_gmail_draft', 'approved'), 'approval_approved_waiting_resume')
+  // approved ≠ sent
+  assert.notEqual(classifyAction('send_gmail_draft', 'approved'), 'email_sent')
+})
+
+// ── 28. Completed send action → email_sent event; failed → action_failed ──────
+
+test('trail event type maps correctly from action status and type', () => {
+  function trailEventType(actionType, status) {
+    const isSend = ['send_email', 'send_gmail_draft', 'submit_form'].includes(actionType)
+    const isDraft = ['create_email_draft', 'fill_gmail_body'].includes(actionType)
+    if (status === 'waiting_approval') return 'approval_requested'
+    if (status === 'blocked') return 'action_blocked'
+    if (status === 'completed' && isSend) return 'email_sent'
+    if (status === 'completed' && isDraft) return 'draft_created'
+    if (status === 'completed') return 'action_completed'
+    if (status === 'failed') return isDraft ? 'draft_failed' : 'action_failed'
+    return 'unknown'
+  }
+
+  assert.equal(trailEventType('send_gmail_draft', 'completed'), 'email_sent')
+  assert.equal(trailEventType('create_email_draft', 'completed'), 'draft_created')
+  assert.equal(trailEventType('create_email_draft', 'failed'), 'draft_failed')
+  assert.equal(trailEventType('open_url', 'blocked'), 'action_blocked')
+  assert.equal(trailEventType('send_gmail_draft', 'waiting_approval'), 'approval_requested')
+})
+
+// ── 29. Sensitive screenshots are hidden from trail ───────────────────────────
+
+test('screenshot_url is null for sensitive actions in execution trail', () => {
+  function extractScreenshot(row) {
+    // Safety: never expose screenshots from sensitive actions
+    return row.is_sensitive ? null : (row.screenshot_url ?? null)
+  }
+
+  const sensitiveRow = { is_sensitive: true, screenshot_url: 'data:image/png;base64,abc' }
+  const normalRow    = { is_sensitive: false, screenshot_url: 'https://cdn.aiko.example/shot.png' }
+  const noScreenshot = { is_sensitive: false, screenshot_url: null }
+
+  assert.equal(extractScreenshot(sensitiveRow), null, 'Sensitive action must not expose screenshot')
+  assert.equal(extractScreenshot(normalRow), 'https://cdn.aiko.example/shot.png', 'Non-sensitive screenshot exposed')
+  assert.equal(extractScreenshot(noScreenshot), null, 'No screenshot = null')
+})

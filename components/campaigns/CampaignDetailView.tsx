@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { CampaignExecutionTrail } from '@/components/campaigns/CampaignExecutionTrail'
 
 interface Campaign {
   id: string
@@ -688,6 +689,9 @@ export function CampaignDetailView({
           </button>
         )}
       </div>
+
+      {/* Execution trail */}
+      <CampaignExecutionTrail campaignId={campaign.id} />
 
       {/* Safety footer */}
       <div style={{

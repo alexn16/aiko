@@ -170,6 +170,7 @@ export async function delegateLeadToGmailDraft(opts: {
     projectId: opts.project_id ?? lead.project_id ?? undefined,
     requestedByRole: 'Copywriting',
     operatorName: opts.operator_name,
+    leadId: lead.id,   // link action to this lead for execution trail
   })
 
   // 8. Do NOT mark lead as 'contacted' here — draft created ≠ email sent.
