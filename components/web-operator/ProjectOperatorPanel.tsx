@@ -72,7 +72,7 @@ export function ProjectOperatorPanel({ projectId }: Props) {
       const [statusRes, actionsRes, approvalsRes] = await Promise.all([
         fetch('/api/web-operator/status'),
         fetch(`/api/web-operator/actions?project_id=${projectId}&limit=20`),
-        fetch('/api/approvals?status=pending'),
+        fetch('/api/approval-items?status=pending'),
       ])
       if (statusRes.ok) {
         const s = await statusRes.json()
@@ -157,7 +157,7 @@ export function ProjectOperatorPanel({ projectId }: Props) {
           body: JSON.stringify({ action_id: actionForApproval.id, approval_id: item.id, decision }),
         })
       } else {
-        await fetch(`/api/approvals/${item.id}`, {
+        await fetch(`/api/approval-items/${item.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: decision }),

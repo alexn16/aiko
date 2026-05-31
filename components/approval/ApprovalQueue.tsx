@@ -1,3 +1,10 @@
+/**
+ * LEGACY — reads the `approvals` table (lead outreach email drafts).
+ * Not currently mounted anywhere in the app.
+ *
+ * Canonical approval UI: /approvals  (Approval Center)
+ * Canonical component:   components/approvals/ProjectApprovalsPanel.tsx
+ */
 'use client'
 import { useEffect, useState } from 'react'
 import { ApprovalItem } from '@/components/approval/ApprovalItem'

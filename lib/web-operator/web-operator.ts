@@ -259,7 +259,7 @@ export async function requireOperatorApproval(
 ): Promise<ApprovalItem> {
   const approval = await createApprovalItem({
     project_id: opts.project_id ?? null,
-    item_type: 'approval_item',
+    item_type: 'web_operator_action',
     title: `Web Operator: ${opts.title}`,
     content: opts.content,
     requested_by_role: opts.agent_role,

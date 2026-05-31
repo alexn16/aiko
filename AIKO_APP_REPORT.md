@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-30_
+_Generated: 2026-05-24 · Updated: 2026-05-31_
 
 ---
 
@@ -68,15 +68,18 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **APIs used:** `GET /api/projects/[id]`, `POST /api/projects/[id]/pm-chat`, `GET /api/pm-reports`, `GET /api/agent-messages`, `GET /api/agent-tasks`, `GET /api/task-outputs`, `GET /api/campaigns`, `POST /api/projects/[id]/agent-discussion`
 - **Tables:** `projects`, `project_memory`, `project_map`, `project_managers`, `project_manager_chats`, `project_manager_reports`, `agent_messages`, `agent_tasks`, `agent_task_outputs`, `campaigns`, `agents`
 
-### /approvals — Approval Center (new)
-- **Purpose:** Review queue for external-facing outputs (outreach drafts, campaign proposals). Approve, reject, or request changes. On approve, linked output is marked approved and PM notified. On changes requested, a revision task is auto-created.
-- **Key components:** `components/approvals/`
-- **APIs used:** `GET /api/approval-items`, `PATCH /api/approval-items/[id]`
+### /approvals — Approval Center _(canonical)_
+- **Purpose:** Review queue for external-facing outputs (outreach drafts, campaign proposals). Approve, reject, or request changes. On approve, linked output is marked approved and PM notified. On changes requested, a revision task is auto-created. Approving is **internal permission only** — it does not send external messages.
+- **Key components:** `components/approvals/` (`ApprovalSummaryWidget`, `ProjectApprovalsPanel`)
+- **APIs used:** `GET /api/approval-items`, `POST /api/approval-items`, `PATCH /api/approval-items/[id]`
+- **Library:** `lib/approvals.ts`
 - **Tables:** `approval_items`, `agent_task_outputs`, `agent_tasks`, `agent_messages`
 
-### /approval — Approval Center (legacy)
-- **Purpose:** Older approval queue backed by the original `approvals` table (lead + outreach message pairs). Separate from `/approvals` and the `approval_items` system.
-- **APIs used:** `GET /api/approvals`, `PATCH /api/approvals/[id]`
+### /approval — redirects to /approvals
+- **Purpose:** Legacy URL kept for link compatibility. The page calls `redirect('/approvals')` immediately.
+
+### /api/approvals — legacy outreach approvals _(deprecated, do not add callers)_
+- **Purpose:** Backed by the `approvals` table — the older per-lead outreach email approval flow. Separate semantic from `approval_items`: includes `Approve & Send` which dispatches actual outreach. Not part of the canonical Approval Center.
 - **Tables:** `approvals`, `leads`
 
 ### /campaigns — Campaign Builder
@@ -94,8 +97,9 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ### /operator — Web Operator Control Room
 - **Purpose:** Manage browser automation sessions, view action log, approve pending browser actions, and check runtime status.
 - **Key components:** `components/web-operator/`
-- **APIs used:** `POST /api/web-operator/session`, `POST /api/web-operator/action`, `GET /api/web-operator/actions`, `POST /api/web-operator/approve-action`, `GET /api/web-operator/status`, `POST /api/web-operator/delegate`
+- **APIs used:** `POST /api/web-operator/session`, `POST /api/web-operator/action`, `GET /api/web-operator/actions`, `POST /api/web-operator/approve-action`, `GET /api/web-operator/status`, `POST /api/web-operator/delegate`, `GET /api/approval-items` (pending operator approvals), `PATCH /api/approval-items/[id]`
 - **Tables:** `web_operator_sessions`, `web_operator_actions`, `approval_items`
+- **Approval flow:** Risky actions (send_email, click_sensitive) create an `approval_items` row via `lib/web-operator/web-operator.ts:requireOperatorApproval`. Operator pages poll `/api/approval-items?status=pending` (canonical) — not the legacy `/api/approvals`.
 
 ### /mode — Operating Mode
 - **Purpose:** Set the global operating mode (Read Only / Auto / Full Access), toggle the pause button, and view the action audit log.

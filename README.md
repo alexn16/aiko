@@ -92,7 +92,7 @@ Configure roles at `/connect-ai` → "Assign AÏKO brains" section.
 - `/dashboard` — operational overview (metrics, active agents, activity)
 - `/office` — Live Office (run agents, monitor activity, browser stream)
 - `/leads` — lead table, scraping, enrichment
-- `/approval` — approval queue (the sending gate)
+- `/approvals` — **Approval Center** (canonical). Review and approve agent outputs before external use. `/approval` redirects here.
 - `/campaigns` — campaign tracking
 - `/reports` — generated performance summaries
 - `/tools` — Tool Connections (configure web search, website reader, email)
@@ -253,6 +253,13 @@ External-facing outputs (outreach drafts, campaign proposals, approval items) au
 - `PATCH /api/approval-items/[id]` — approve / reject / request changes
 
 **Safety:** Approving an item is internal permission only. It does not send any external emails or messages. External sends remain a separate explicit action.
+
+**Canonical data model:**
+- Table: `approval_items` (see `lib/db/migrations/012_approval_items.sql`)
+- Library: `lib/approvals.ts` (`createApprovalItem`, `updateApprovalStatus`, `getApprovalSummaryForProject`)
+- API: `/api/approval-items` (GET, POST, PATCH /[id])
+
+**Legacy (deprecated):** The `approvals` table and `/api/approvals` route exist for the outreach email "Approve & Send" flow. They are separate from `approval_items` and should not be mixed. Do not add new callers of `/api/approvals`.
 
 ## Campaign Builder (`/campaigns`)
 

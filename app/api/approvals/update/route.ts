@@ -1,3 +1,8 @@
+/**
+ * LEGACY — updates the `approvals` table (lead outreach email drafts).
+ * See /api/approvals/route.ts for the full deprecation notice.
+ * Do not add new callers.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 

@@ -89,7 +89,7 @@ export default function OperatorPage() {
 
   const loadPendingApprovals = useCallback(async () => {
     try {
-      const res = await fetch('/api/approvals?status=pending')
+      const res = await fetch('/api/approval-items?status=pending')
       if (!res.ok) return
       const data = await res.json()
       const all: ApprovalItem[] = data.items ?? []
@@ -208,7 +208,7 @@ export default function OperatorPage() {
         })
       } else {
         // Just update the approval item directly
-        await fetch(`/api/approvals/${item.id}`, {
+        await fetch(`/api/approval-items/${item.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: decision }),

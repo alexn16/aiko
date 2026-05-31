@@ -1,3 +1,10 @@
+/**
+ * LEGACY — renders a single row from the `approvals` table (lead outreach).
+ * Includes "Approve & Send" which dispatches /api/outreach/approve-and-send.
+ * This is a different semantic from approval_items "Approve" (internal only).
+ *
+ * Canonical approval UI: /approvals  (Approval Center)
+ */
 'use client'
 import { useState } from 'react'
 import { Approval } from '@/lib/db/schema'

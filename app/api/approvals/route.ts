@@ -1,3 +1,15 @@
+/**
+ * LEGACY — reads the `approvals` table (lead outreach email drafts).
+ *
+ * This route exists for backward compatibility with the outreach email
+ * "Approve & Send" flow (ApprovalQueue / ApprovalItem components).
+ * It is NOT the canonical approval system.
+ *
+ * Canonical: /api/approval-items  →  approval_items table  →  lib/approvals.ts
+ * Canonical UI: /approvals  (Approval Center)
+ *
+ * Do not add new callers of this route.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 
