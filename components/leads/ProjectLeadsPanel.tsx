@@ -43,6 +43,8 @@ export function ProjectLeadsPanel({ projectId }: Props) {
   const [draftResult, setDraftResult] = useState<Record<string, string>>({})
   const [extractingAction, setExtractingAction] = useState<string | null>(null)
   const [extractResult, setExtractResult] = useState<{ count: number; at: number } | null>(null)
+  const [checkingReplyId, setCheckingReplyId] = useState<string | null>(null)
+  const [replyResult, setReplyResult] = useState<Record<string, string>>({})
   const [showManual, setShowManual] = useState(false)
   const [manualForm, setManualForm] = useState(BLANK_MANUAL)
   const [savingManual, setSavingManual] = useState(false)
@@ -112,6 +114,28 @@ export function ProjectLeadsPanel({ projectId }: Props) {
       setDraftResult(prev => ({ ...prev, [lead.id]: 'Error.' }))
     } finally {
       setDraftingId(null)
+    }
+  }
+
+  async function checkReply(lead: Lead) {
+    setCheckingReplyId(lead.id)
+    setReplyResult(prev => ({ ...prev, [lead.id]: 'Checking Gmail via browser…' }))
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/check-reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setReplyResult(prev => ({ ...prev, [lead.id]: data.error ?? 'Error checking reply.' }))
+      } else {
+        setReplyResult(prev => ({ ...prev, [lead.id]: data.summary ?? (data.has_reply ? '✓ Reply found.' : 'No reply found.') }))
+      }
+    } catch {
+      setReplyResult(prev => ({ ...prev, [lead.id]: 'Error checking reply.' }))
+    } finally {
+      setCheckingReplyId(null)
     }
   }
 
@@ -389,6 +413,11 @@ export function ProjectLeadsPanel({ projectId }: Props) {
                     {draftResult[lead.id]}
                   </div>
                 )}
+                {replyResult[lead.id] && (
+                  <div style={{ fontSize: 10, color: '#0369a1', marginTop: 3, fontStyle: 'italic' }}>
+                    📬 {replyResult[lead.id]}
+                  </div>
+                )}
                 <LeadExecutionTrail leadId={lead.id} companyName={lead.company_name ?? undefined} />
               </div>
 
@@ -454,6 +483,23 @@ export function ProjectLeadsPanel({ projectId }: Props) {
                     }}
                   >
                     {draftingId === lead.id ? '…' : '🔍 Find contact'}
+                  </button>
+                )}
+                {/* Check reply — any lead with an email */}
+                {lead.email && (
+                  <button
+                    onClick={() => checkReply(lead)}
+                    disabled={checkingReplyId === lead.id}
+                    title={`Check Gmail for replies from ${lead.email} (browser-only)`}
+                    style={{
+                      background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd',
+                      borderRadius: 4, padding: '3px 8px', fontSize: 10, fontWeight: 600,
+                      cursor: checkingReplyId === lead.id ? 'not-allowed' : 'pointer',
+                      opacity: checkingReplyId === lead.id ? 0.6 : 1,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                    }}
+                  >
+                    {checkingReplyId === lead.id ? '…' : '📬 Check reply'}
                   </button>
                 )}
                 {/* No email warning for approved leads */}

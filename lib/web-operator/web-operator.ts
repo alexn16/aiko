@@ -13,6 +13,7 @@ export type WebOperatorActionType =
   | 'approval_required' | 'blocked'
   | 'open_gmail' | 'detect_gmail_login'
   | 'fill_gmail_to' | 'fill_gmail_subject' | 'fill_gmail_body' | 'send_gmail_draft'
+  | 'search_gmail' | 'check_gmail_reply'
 
 export interface WebOperatorSession {
   id: string

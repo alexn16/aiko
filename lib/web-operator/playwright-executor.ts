@@ -362,6 +362,104 @@ async function executeSendGmailDraft(opts: { profileKey?: string }): Promise<Exe
   throw new Error('Could not find Gmail Send button — selector_not_found')
 }
 
+// ── Gmail reply-status actions ──────────────────────────────────────────────────
+
+/**
+ * executeSearchGmail — searches Gmail for emails from a specific address.
+ * Safety: does NOT open attachments, does NOT follow external links.
+ * Only reads subject lines and snippet text visible in the thread list.
+ */
+async function executeSearchGmail(opts: {
+  profileKey?: string
+  query: string         // e.g. "from:foo@bar.com" or "subject:..."
+}): Promise<ExecuteResult> {
+  const page = await getOperatorPage(opts.profileKey ?? 'default')
+
+  if (!page.url().includes('mail.google.com')) {
+    await page.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 20000 })
+  }
+
+  // Use Gmail's search box
+  const searchSelectors = ['input[aria-label="Search mail"]', 'input[name="q"]', '#gs']
+  let searched = false
+  for (const sel of searchSelectors) {
+    const el = page.locator(sel).first()
+    if (await el.count() > 0) {
+      await el.click()
+      await el.fill(opts.query)
+      await page.keyboard.press('Enter')
+      await page.waitForTimeout(2000)
+      searched = true
+      break
+    }
+  }
+  if (!searched) {
+    throw new Error('Could not find Gmail search box — selector_not_found')
+  }
+
+  // Capture result list (subject + snippet only, no message body)
+  const threads = await page.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('tr.zA'))
+    return rows.slice(0, 10).map(row => {
+      const subject = (row.querySelector('span.bog') as HTMLElement)?.innerText ?? ''
+      const snippet = (row.querySelector('span.y2') as HTMLElement)?.innerText ?? ''
+      const sender  = (row.querySelector('span.yP, span.zF') as HTMLElement)?.innerText ?? ''
+      const date    = (row.querySelector('td.xW span') as HTMLElement)?.title ?? (row.querySelector('td.xW span') as HTMLElement)?.innerText ?? ''
+      const isUnread = row.classList.contains('zE')
+      return { subject, snippet, sender, date, unread: isUnread }
+    })
+  })
+
+  const state = await capturePageState(page)
+  return {
+    output: { query: opts.query, thread_count: threads.length, threads },
+    _page: state,
+  }
+}
+
+/**
+ * executeCheckGmailReply — opens Gmail, searches for emails from a lead,
+ * and returns whether a reply exists.
+ * Safety rules enforced:
+ *   - Does NOT open attachments.
+ *   - Does NOT click external links in emails.
+ *   - Only reads subject + snippet from the thread list view.
+ *   - Does NOT open individual emails (avoids read-receipts and content exposure).
+ */
+async function executeCheckGmailReply(opts: {
+  profileKey?: string
+  lead_email: string
+  subject_hint?: string
+}): Promise<ExecuteResult> {
+  const query = `from:${opts.lead_email}`
+  const searchResult = await executeSearchGmail({ profileKey: opts.profileKey, query })
+  const threads = (searchResult.output.threads ?? []) as Array<{
+    subject: string; snippet: string; sender: string; date: string; unread: boolean
+  }>
+
+  const hasReply = threads.length > 0
+  const latestThread = threads[0] ?? null
+
+  // Match against subject hint if provided (case-insensitive partial match)
+  const relevantThreads = opts.subject_hint
+    ? threads.filter(t => t.subject.toLowerCase().includes(opts.subject_hint!.toLowerCase()))
+    : threads
+
+  return {
+    output: {
+      lead_email: opts.lead_email,
+      has_reply: hasReply,
+      relevant_thread_count: relevantThreads.length,
+      latest_thread: latestThread,
+      // Summary for display — derived only from visible thread list, no email body opened
+      summary: hasReply
+        ? `${threads.length} email(s) from ${opts.lead_email}. Latest: "${latestThread?.subject}" (${latestThread?.date})`
+        : `No emails from ${opts.lead_email} found in inbox.`,
+    },
+    _page: searchResult._page,
+  }
+}
+
 // ── Main executor ───────────────────────────────────────────────────────────────
 
 export async function executeWebAction(
@@ -542,6 +640,23 @@ export async function executeWebAction(
       case 'send_gmail_draft': {
         await cleanup()
         return executeSendGmailDraft({ profileKey: opts.profileKey })
+      }
+
+      case 'search_gmail': {
+        await cleanup()
+        return executeSearchGmail({
+          profileKey: opts.profileKey,
+          query: String(opts.input?.query ?? ''),
+        })
+      }
+
+      case 'check_gmail_reply': {
+        await cleanup()
+        return executeCheckGmailReply({
+          profileKey: opts.profileKey,
+          lead_email: String(opts.input?.lead_email ?? ''),
+          subject_hint: opts.input?.subject_hint ? String(opts.input.subject_hint) : undefined,
+        })
       }
 
       default:

@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails)_
+_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks)_
 
 ---
 
@@ -93,9 +93,10 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Purpose:** Lead capture, enrichment, and map view.
 - **Execution trail:** Each lead card has an expandable "▼ Execution trail" section (component: `LeadExecutionTrail`). Trail queries `web_operator_actions WHERE lead_id = X` joined to `approval_items`. Data linked via `web_operator_actions.lead_id` (migration 025).
 - **Trail API:** `GET /api/leads/[id]/execution-trail`
+- **Gmail reply check:** "📬 Check reply" button on any lead with an email. Calls `POST /api/leads/[id]/check-reply`. Web Operator opens Gmail, searches `from:<lead_email>`, returns thread count + latest subject/snippet. No Gmail API, no IMAP, no email body opened. Result recorded in trail (`reply_found` / `reply_check` events) and persisted to `leads.reply_summary`. CEO Chat: "Check for replies from our leads" triggers the same flow.
 - **Key components:** `components/leads/`, `components/map/`
-- **APIs used:** `GET /api/leads`, `POST /api/leads`
-- **Tables:** `leads`
+- **APIs used:** `GET /api/leads`, `POST /api/leads`, `POST /api/leads/[id]/check-reply`, `GET /api/leads/[id]/check-reply`
+- **Tables:** `leads` (fields: `last_checked_at`, `last_reply_at`, `reply_summary` added in migration 029)
 
 ### /operator — Web Operator Control Room
 - **Purpose:** Manage browser automation sessions, view action log, approve pending browser actions, check runtime status, and resume approved actions.
@@ -372,7 +373,7 @@ The `jobs` table (migration 003) tracks a "job evaluation → approval → execu
 
 - **Email Sending** (`email_sending`, seeded as `missing`): No SMTP or SendGrid sending implementation exists in the codebase. The `settings` table stores SMTP config and `nodemailer` is in `package.json`, but no `lib/email/sender.ts` or equivalent was found. Outreach campaigns reach `approved` status but have no path to external delivery. This is the most significant gap between the current state and real marketing operation.
 
-- **Reply Tracking** (`reply_tracking`, seeded as `missing`): No inbox polling, IMAP integration, or email reply classifier exists. Without this, the Sales Validation Agent and Reporting Agent cannot measure campaign performance. Full-loop marketing automation is impossible without reply data.
+- **Reply Tracking** (`reply_tracking`): Browser-based Gmail reply check is now implemented. Web Operator searches Gmail for emails from a lead's address, returns thread count + snippet. Persisted to `leads.reply_summary` and visible in execution trail. No Gmail API or IMAP — entirely browser-driven. Full-loop reply classification (interested / not_interested) and campaign-wide reply roll-up are future work.
 
 ### Important (needed for full operation)
 

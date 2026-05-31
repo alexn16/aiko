@@ -176,6 +176,40 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch { /* non-fatal */ }
+      } else if (
+        !!(command.trim().match(/check.*(repl(y|ied|ies)|response|inbox).*lead/i)) ||
+        !!(command.trim().match(/has.*(lead|anyone|they).*(repl(ied|ies)|responded)/i)) ||
+        !!(command.trim().match(/any.*(repl(y|ies)|response).*(from|gmail)/i))
+      ) {
+        // Check Gmail reply status for a lead via Web Operator (browser-only)
+        try {
+          const { listLeads } = await import('@/lib/leads')
+          const { checkLeadReplyViaOperator } = await import('@/lib/outreach/reply-status')
+          const projectIdForLeads = result.project_id as string | undefined
+          const leads = await listLeads({
+            project_id: projectIdForLeads,
+            limit: 10,
+          })
+          // Find most recent lead with email — prefer any that's been contacted
+          const target = leads.find(l => l.email && l.status === 'contacted')
+            ?? leads.find(l => l.email)
+          if (target) {
+            const checkResult = await checkLeadReplyViaOperator({
+              lead_id:    target.id,
+              project_id: projectIdForLeads,
+            })
+            delegationResult = {
+              status:   checkResult.error ? 'blocked' : 'completed',
+              message:  checkResult.summary,
+              actionId: checkResult.action_id,
+            }
+          } else {
+            delegationResult = {
+              status:  'blocked',
+              message: 'No leads with email addresses found to check for replies.',
+            }
+          }
+        } catch { /* non-fatal */ }
       } else if (needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({

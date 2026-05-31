@@ -16,6 +16,8 @@ const EVENT_COLORS: Record<string, { dot: string; bg: string; text: string }> = 
   action_failed:              { dot: '#ef4444', bg: '#fef2f2', text: '#dc2626' },
   action_blocked:             { dot: '#94a3b8', bg: '#f8fafc', text: '#475569' },
   waiting_approval:           { dot: '#f59e0b', bg: '#fffbeb', text: '#92400e' },
+  reply_check:                { dot: '#0ea5e9', bg: '#f0f9ff', text: '#0369a1' },
+  reply_found:                { dot: '#10b981', bg: '#f0fdf4', text: '#166534' },
 }
 const defaultColor = { dot: '#94a3b8', bg: '#f8fafc', text: '#475569' }
 

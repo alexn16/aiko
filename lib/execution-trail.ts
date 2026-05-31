@@ -31,6 +31,8 @@ export type TrailEventType =
   | 'action_blocked'
   | 'waiting_approval'
   | 'waiting_user'
+  | 'reply_check'
+  | 'reply_found'
 
 export interface TrailEvent {
   timestamp: string
@@ -86,8 +88,31 @@ function actionToEvents(row: Record<string, unknown>): TrailEvent[] {
   } else if (status === 'running' || status === 'completed' || status === 'failed') {
     const isDraft = ['create_email_draft', 'fill_gmail_body', 'fill_gmail_subject', 'fill_gmail_to'].includes(actionType)
     const isSend = ['send_email', 'send_gmail_draft', 'submit_form'].includes(actionType)
+    const isReplyCheck = ['check_gmail_reply', 'search_gmail'].includes(actionType)
 
-    if (isDraft && status === 'completed') {
+    if (isReplyCheck && status === 'completed') {
+      const output = (row.output ?? {}) as Record<string, unknown>
+      const hasReply = Boolean(output.has_reply)
+      events.push({
+        ...baseEvent,
+        timestamp: completedAt ?? createdAt,
+        type: hasReply ? 'reply_found' : 'reply_check',
+        title: hasReply ? `Reply found from lead` : `No reply found`,
+        detail: typeof output.summary === 'string' ? output.summary : description.slice(0, 120),
+        status: 'completed',
+      })
+      return events
+    } else if (isReplyCheck && status === 'failed') {
+      events.push({
+        ...baseEvent,
+        timestamp: completedAt ?? createdAt,
+        type: 'action_failed',
+        title: `Reply check failed`,
+        detail: String((row.output as Record<string, unknown>)?.error ?? row.failure_reason ?? 'Unknown error'),
+        status: 'failed',
+      })
+      return events
+    } else if (isDraft && status === 'completed') {
       events.push({
         ...baseEvent,
         timestamp: completedAt ?? createdAt,
@@ -387,6 +412,8 @@ export function formatTrailEventType(type: TrailEventType): string {
     action_blocked: 'Action blocked',
     waiting_approval: 'Awaiting approval',
     waiting_user: 'Waiting for user',
+    reply_check: 'Reply checked — no reply',
+    reply_found: 'Reply found',
   }
   return labels[type] ?? type.replace(/_/g, ' ')
 }

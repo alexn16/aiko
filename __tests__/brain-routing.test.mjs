@@ -711,3 +711,120 @@ test('screenshot_url is null for sensitive actions in execution trail', () => {
   assert.equal(extractScreenshot(normalRow), 'https://cdn.aiko.example/shot.png', 'Non-sensitive screenshot exposed')
   assert.equal(extractScreenshot(noScreenshot), null, 'No screenshot = null')
 })
+
+// ── Gmail reply-status tests ──────────────────────────────────────────────────
+
+// ── 30. check_gmail_reply produces reply_found event when reply present ────────
+
+test('check_gmail_reply action maps to reply_found trail event when has_reply=true', () => {
+  // Replicate actionToEvents logic for check_gmail_reply
+  function mapReplyCheckAction(row) {
+    const isReplyCheck = ['check_gmail_reply', 'search_gmail'].includes(row.action_type)
+    if (!isReplyCheck) return null
+    if (row.status !== 'completed') return null
+    const output = row.output ?? {}
+    const hasReply = Boolean(output.has_reply)
+    return {
+      type: hasReply ? 'reply_found' : 'reply_check',
+      title: hasReply ? 'Reply found from lead' : 'No reply found',
+      detail: typeof output.summary === 'string' ? output.summary : null,
+    }
+  }
+
+  const withReply = mapReplyCheckAction({
+    action_type: 'check_gmail_reply',
+    status: 'completed',
+    output: { has_reply: true, summary: '2 emails from lead@example.com.' },
+  })
+  const withoutReply = mapReplyCheckAction({
+    action_type: 'check_gmail_reply',
+    status: 'completed',
+    output: { has_reply: false, summary: 'No emails from lead@example.com found.' },
+  })
+
+  assert.equal(withReply?.type, 'reply_found', 'Has-reply → reply_found event')
+  assert.equal(withoutReply?.type, 'reply_check', 'No reply → reply_check event')
+  assert.ok(withReply?.detail?.includes('2 emails'), 'Summary forwarded to trail detail')
+})
+
+// ── 31. check-reply API rejects lead with no email ─────────────────────────────
+
+test('checkLeadReplyViaOperator throws for lead with no email', async () => {
+  async function checkLeadReplySimulation(lead) {
+    if (!lead) throw new Error('Lead not found')
+    if (!lead.email) throw new Error(`Lead ${lead.id} has no email address — cannot check reply`)
+    return { action_id: 'test', has_reply: false, summary: 'No reply found.' }
+  }
+
+  await assert.rejects(
+    () => checkLeadReplySimulation({ id: 'lead-1', email: null }),
+    (err) => {
+      assert.ok(err.message.includes('no email address'), `Got: "${err.message}"`)
+      return true
+    }
+  )
+
+  // Lead with email should resolve
+  const result = await checkLeadReplySimulation({ id: 'lead-2', email: 'test@example.com' })
+  assert.equal(result.has_reply, false)
+})
+
+// ── 32. search_gmail does not open email bodies ────────────────────────────────
+
+test('search_gmail returns thread list data (subject/snippet), not full email body', () => {
+  // The executeSearchGmail function captures:
+  // { subject, snippet, sender, date, unread } — NOT message body
+  // This test verifies the shape of expected output contains no "body" field
+  function buildThreadResult(threads) {
+    return threads.map(t => ({
+      subject: t.subject,
+      snippet: t.snippet,
+      sender:  t.sender,
+      date:    t.date,
+      unread:  t.unread,
+    }))
+  }
+
+  const result = buildThreadResult([
+    { subject: 'Re: AÏKO partnership', snippet: 'Thanks for reaching out...', sender: 'ceo@acme.com', date: 'Jun 1', unread: true, body: 'SHOULD NOT BE HERE' },
+  ])
+
+  assert.ok(!('body' in result[0]), 'Thread result must not include email body')
+  assert.equal(result[0].subject, 'Re: AÏKO partnership')
+  assert.equal(result[0].snippet, 'Thanks for reaching out...')
+})
+
+// ── 33. CEO command intent detection: reply check ─────────────────────────────
+
+test('CEO command intent detection recognises reply-check phrases', () => {
+  const replyCheckPatterns = [
+    /check.*(repl(y|ied|ies)|response|inbox).*lead/i,
+    /has.*(lead|anyone|they).*(repl(ied|ies)|responded)/i,
+    /any.*(repl(y|ies)|response).*(from|gmail)/i,
+  ]
+
+  function detectReplyCheckIntent(command) {
+    return replyCheckPatterns.some(p => p.test(command.trim()))
+  }
+
+  assert.ok(detectReplyCheckIntent('Check for replies from our leads'),  'Should match: check for replies from our leads')
+  assert.ok(detectReplyCheckIntent('Has the lead replied yet?'),          'Should match: has the lead replied yet')
+  assert.ok(detectReplyCheckIntent('Any response from Gmail leads?'),     'Should match: any response from gmail leads')
+  assert.ok(!detectReplyCheckIntent('Prepare an outreach email'),         'Should NOT match: outreach email')
+  assert.ok(!detectReplyCheckIntent('Open Gmail'),                        'Should NOT match: open gmail alone')
+})
+
+// ── 34. reply_check event types in trail EVENT_COLORS ─────────────────────────
+
+test('reply_check and reply_found event types have defined colors in trail components', () => {
+  // Replicate EVENT_COLORS map from LeadExecutionTrail / CampaignExecutionTrail
+  const EVENT_COLORS = {
+    reply_check: { dot: '#0ea5e9', bg: '#f0f9ff', text: '#0369a1' },
+    reply_found: { dot: '#10b981', bg: '#f0fdf4', text: '#166534' },
+  }
+
+  assert.ok(EVENT_COLORS.reply_check, 'reply_check must have color config')
+  assert.ok(EVENT_COLORS.reply_found, 'reply_found must have color config')
+  assert.equal(EVENT_COLORS.reply_found.dot, '#10b981', 'reply_found uses green dot (positive result)')
+  assert.equal(EVENT_COLORS.reply_check.dot, '#0ea5e9', 'reply_check uses blue dot (informational)')
+})

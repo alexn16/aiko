@@ -513,6 +513,32 @@ Approved leads with email addresses can become Gmail drafts through a named Web 
 - Daily send limits enforced by Operating Mode
 - Single-lead outreach only — no bulk send in this version
 
+## Gmail reply-status check workflow
+
+After outreach is sent, you can check for replies through the browser (no Gmail API, no IMAP):
+
+1. Click **"📬 Check reply"** on any lead that has an email address (Project workspace → Leads tab)
+2. Web Operator opens Gmail, searches for emails from that lead's address
+3. Returns a summary: how many threads found, latest subject + snippet
+4. Result is shown inline and recorded in the lead's execution trail
+5. CEO Chat: *"Check for replies from our leads"* — AÏKO checks the most recently contacted lead
+
+**Safety constraints:**
+- Browser-only — no Gmail API, no IMAP, no SMTP
+- Reads only subject line + snippet from thread-list view — no full message body opened
+- Does NOT open individual emails (prevents read-receipts and content exposure)
+- Does NOT open attachments
+- Does NOT follow external links in email content
+- Sensitive screenshots (login pages) are automatically suppressed
+- User handles login / 2-FA prompts manually (Web Operator detects login-required state and pauses)
+- One lead at a time — no bulk inbox scraping
+
+**New DB fields on `leads`:** `last_checked_at`, `last_reply_at`, `reply_summary`
+
+**API:** `POST /api/leads/[id]/check-reply` — triggers check; `GET /api/leads/[id]/check-reply` — reads current reply status
+
+**New action types:** `check_gmail_reply`, `search_gmail`
+
 ### Agent delegation
 
 Agents do not browse directly — they delegate to the Web Operator:
