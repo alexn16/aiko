@@ -177,6 +177,9 @@ function LaunchTemplateStrip({ projectId }: { projectId: string }) {
 interface StrategyBriefData {
   id: string; title: string; objective: string; target_audience: string
   recommended_channel: string; value_proposition: string; research_prompt: string
+  recommended_operator_id:   string | null
+  recommended_operator_name: string | null
+  operator_reason:           string | null
 }
 
 function StrategyBriefStrip({ projectId }: { projectId: string }) {
@@ -228,6 +231,21 @@ function StrategyBriefStrip({ projectId }: { projectId: string }) {
           <div style={{ fontSize: 11, color: '#374151' }}>
             <span style={{ color: '#15803d', fontWeight: 600 }}>Channel: </span>
             {brief.recommended_channel}
+          </div>
+        )}
+        {brief.recommended_operator_name && (
+          <div style={{ fontSize: 11, color: '#374151' }}>
+            <span style={{ color: '#15803d', fontWeight: 600 }}>Operator: </span>
+            {brief.recommended_operator_name}
+            {brief.operator_reason && (
+              <span style={{ color: '#6b7280', marginLeft: 4 }}>({brief.operator_reason})</span>
+            )}
+          </div>
+        )}
+        {!brief.recommended_operator_name && (
+          <div style={{ fontSize: 11, color: '#92400e' }}>
+            <span style={{ fontWeight: 600 }}>Operator: </span>
+            None yet — <a href="/operators" style={{ color: '#6366f1' }}>create one</a>
           </div>
         )}
       </div>

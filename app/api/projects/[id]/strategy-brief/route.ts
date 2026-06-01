@@ -3,6 +3,7 @@ import {
   getProjectStrategyBrief,
   generateStrategyBriefFromProject,
   updateProjectStrategyBrief,
+  recommendOperatorForStrategyBrief,
   type UpdateBriefFields,
 } from '@/lib/project-strategy-brief'
 import { db } from '@/lib/db/client'
@@ -12,8 +13,16 @@ export const dynamic = 'force-dynamic'
 /**
  * GET /api/projects/[id]/strategy-brief
  *
- * Returns the strategy brief for a project.
+ * Returns the strategy brief for a project, including operator recommendation.
  * Creates a fallback brief on first access if none exists yet.
+ *
+ * Response shape:
+ *   { brief, operator_available: boolean }
+ *
+ * If a recommendation has not been saved yet, computes it on-demand
+ * and saves it (non-fatal). If no operators exist, returns
+ * operator_available=false without creating any operator.
+ *
  * Brief is guidance only — does not trigger any automation.
  */
 export async function GET(
@@ -24,7 +33,7 @@ export async function GET(
   try {
     let brief = await getProjectStrategyBrief(projectId)
     if (!brief) {
-      // Fetch project name for fallback generation
+      // Fetch project for fallback generation
       const projRes = await db.query(
         'SELECT name, goal, description, target_market FROM projects WHERE id=$1',
         [projectId]
@@ -36,12 +45,36 @@ export async function GET(
       brief = await generateStrategyBriefFromProject({
         project_id:    projectId,
         project_name:  String(p.name),
-        goal:          p.goal   ? String(p.goal)        : null,
+        goal:          p.goal        ? String(p.goal)        : null,
         description:   p.description ? String(p.description) : null,
         target_market: p.target_market ? String(p.target_market) : null,
       })
     }
-    return NextResponse.json({ brief })
+
+    // If recommendation not yet saved, compute and persist it now (non-fatal)
+    let operator_available = !!brief.recommended_operator_id
+    if (!brief.recommended_operator_id) {
+      try {
+        const rec = await recommendOperatorForStrategyBrief(projectId)
+        operator_available = rec.available
+        if (rec.available) {
+          const updated = await updateProjectStrategyBrief(brief.id, {
+            recommended_operator_id:   rec.operator_id,
+            recommended_operator_name: rec.operator_name,
+            operator_reason:           rec.reason,
+          })
+          if (updated) brief = updated
+        } else {
+          // Surface the reason even without persisting
+          brief = {
+            ...brief,
+            operator_reason: rec.reason,
+          }
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    return NextResponse.json({ brief, operator_available })
   } catch (err) {
     console.error(`[projects/${projectId}/strategy-brief GET]`, err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
@@ -52,7 +85,9 @@ export async function GET(
  * PATCH /api/projects/[id]/strategy-brief
  *
  * Partial update for any editable field.
- * Editing the research_prompt here does NOT auto-trigger research.
+ * Accepts recommended_operator_id — updates name and reason automatically.
+ * Editing research_prompt does NOT auto-trigger research.
+ * Setting recommended_operator_id does NOT trigger any Web Operator action.
  */
 export async function PATCH(
   req: NextRequest,
@@ -60,7 +95,7 @@ export async function PATCH(
 ) {
   const projectId = params.id
   try {
-    const body = await req.json() as Partial<UpdateBriefFields>
+    const body = await req.json() as Partial<UpdateBriefFields> & { recommended_operator_id?: string | null }
 
     let brief = await getProjectStrategyBrief(projectId)
     if (!brief) {
@@ -75,22 +110,43 @@ export async function PATCH(
       brief = await generateStrategyBriefFromProject({
         project_id:    projectId,
         project_name:  String(p.name),
-        goal:          p.goal   ? String(p.goal)        : null,
+        goal:          p.goal        ? String(p.goal)        : null,
         description:   p.description ? String(p.description) : null,
         target_market: p.target_market ? String(p.target_market) : null,
       })
     }
 
+    // If caller is setting a new recommended_operator_id, resolve name + reason
+    let operatorName = body.recommended_operator_name
+    let operatorReason = body.operator_reason
+    if (body.recommended_operator_id !== undefined && body.recommended_operator_id !== null) {
+      if (!operatorName || !operatorReason) {
+        try {
+          const opRes = await db.query(
+            'SELECT name, status FROM web_operators WHERE id=$1',
+            [body.recommended_operator_id]
+          )
+          if (opRes.rows[0]) {
+            operatorName  = operatorName  ?? String(opRes.rows[0].name)
+            operatorReason = operatorReason ?? `${opRes.rows[0].name} selected manually.`
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+
     const updated = await updateProjectStrategyBrief(brief.id, {
-      title:               body.title,
-      objective:           body.objective,
-      target_audience:     body.target_audience,
-      research_prompt:     body.research_prompt,
-      recommended_channel: body.recommended_channel,
-      value_proposition:   body.value_proposition,
-      risks:               body.risks,
-      assumptions:         body.assumptions,
-      next_actions:        body.next_actions,
+      title:                     body.title,
+      objective:                 body.objective,
+      target_audience:           body.target_audience,
+      research_prompt:           body.research_prompt,
+      recommended_channel:       body.recommended_channel,
+      value_proposition:         body.value_proposition,
+      risks:                     body.risks,
+      assumptions:               body.assumptions,
+      next_actions:              body.next_actions,
+      recommended_operator_id:   body.recommended_operator_id,
+      recommended_operator_name: operatorName,
+      operator_reason:           operatorReason,
     })
     return NextResponse.json({ brief: updated })
   } catch (err) {

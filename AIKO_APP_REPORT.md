@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-05-31 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template, CEO Strategy Brief)_
+_Generated: 2026-05-24 · Updated: 2026-06-01 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template, CEO Strategy Brief, strategy-driven operator recommendation)_
 
 ---
 
@@ -32,17 +32,18 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 
 ## 2. Page map
 
-### CEO Strategy Brief (auto-generated on project creation)
-- **Purpose:** AI-generated first-campaign strategy brief created automatically when the CEO creates a project. Guides the First Campaign Flow. Guidance only — never triggers automation.
-- **Key file:** `lib/project-strategy-brief.ts` — `generateStrategyBriefFromProject` (AI + fallback), `createProjectStrategyBrief` (idempotent), `getProjectStrategyBrief`, `updateProjectStrategyBrief`
-- **Migration:** `031_project_strategy_brief.sql` — `project_strategy_briefs` table with unique index per project.
-- **Fields:** title, objective, target_audience, research_prompt, recommended_channel, value_proposition, risks (jsonb), assumptions (jsonb), next_actions (jsonb)
+### CEO Strategy Brief + Operator Recommendation (auto-generated on project creation)
+- **Purpose:** AI-generated first-campaign strategy brief with operator recommendation. Created automatically when CEO creates a project. Guidance only — never triggers automation.
+- **Key file:** `lib/project-strategy-brief.ts` — `generateStrategyBriefFromProject` (AI + fallback), `createProjectStrategyBrief` (idempotent), `getProjectStrategyBrief`, `updateProjectStrategyBrief`, `recommendOperatorForStrategyBrief`, `updateStrategyBriefOperatorRecommendation`
+- **Migrations:** `031_project_strategy_brief.sql` (table), `032_strategy_brief_operator.sql` (adds `recommended_operator_id`, `recommended_operator_name`, `operator_reason` columns)
+- **Fields:** title, objective, target_audience, research_prompt, recommended_channel, value_proposition, risks (jsonb), assumptions (jsonb), next_actions (jsonb), recommended_operator_id (FK, nullable), recommended_operator_name (text), operator_reason (text)
 - **AI generation:** Calls `callAI(role:'ceo')` with a structured JSON prompt. Falls back to a safe template-based brief if AI fails — never throws.
-- **CEO integration:** `generate_strategy_brief_from_project` called in `executeActions` on `create_project`. CEO command route includes `strategy_brief` summary in response.
-- **Project workspace:** `StrategyBriefStrip` on Overview tab shows objective, audience, channel, value prop, and "▶ Open First Campaign Flow" button.
-- **`/start-campaign` page:** `StrategyBriefCard` shows collapsible full brief above the launch checklist. Research prompt field (step 3) pre-filled from brief. "↓ Use in Step 3" button copies prompt. User edits never overwritten automatically.
-- **APIs:** `GET/PATCH /api/projects/[id]/strategy-brief`; `/api/start-campaign/summary` now includes `strategy_brief`.
-- **Safety:** Brief never executes actions. Editing `research_prompt` via PATCH does not trigger Web Operator.
+- **Operator recommendation priority:** (1) project-assigned → (2) idle → (3) Default → (4) any → (5) none (available=false). Computed at generation time; lazily computed on GET if not yet set.
+- **CEO integration:** CEO command route includes `strategy_brief` summary (with operator fields) in response. If an operator is recommended, CEO response text includes "I recommend <Name> as the first Web Operator for this campaign."
+- **Project workspace:** `StrategyBriefStrip` shows objective, audience, channel, **operator recommendation + reason**, value prop, and "▶ Open First Campaign Flow" button. No operator → "create one" link.
+- **`/start-campaign` page:** `StrategyBriefCard` shows collapsible full brief. Operator panel always visible (green if operator found, amber if not). "Use this operator" button calls `setSelectedOperator(id)` — no API call, no browser action. Research prompt pre-filled. User edits never overwritten.
+- **APIs:** `GET/PATCH /api/projects/[id]/strategy-brief` (GET returns `operator_available` boolean); `/api/start-campaign/summary` includes `strategy_brief`.
+- **Safety:** Recommendation is display-only. "Use this operator" sets UI state only. No Web Operator action is ever triggered by recommendation or selection.
 
 ### Project Launch Template (auto-created on project creation)
 - **Purpose:** 9-step first-campaign checklist created automatically when the CEO creates a project. Guidance only — no automation triggered.

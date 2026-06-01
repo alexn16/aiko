@@ -18,66 +18,87 @@ import { db } from '@/lib/db/client'
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface ProjectStrategyBrief {
-  id:                  string
-  project_id:          string
-  title:               string
-  objective:           string
-  target_audience:     string
-  research_prompt:     string
-  recommended_channel: string
-  value_proposition:   string
-  risks:               string[]
-  assumptions:         string[]
-  next_actions:        string[]
-  created_by_role:     string
-  created_at:          string
-  updated_at:          string
+  id:                       string
+  project_id:               string
+  title:                    string
+  objective:                string
+  target_audience:          string
+  research_prompt:          string
+  recommended_channel:      string
+  value_proposition:        string
+  risks:                    string[]
+  assumptions:              string[]
+  next_actions:             string[]
+  created_by_role:          string
+  created_at:               string
+  updated_at:               string
+  // Operator recommendation (guidance only — never triggers execution)
+  recommended_operator_id:   string | null
+  recommended_operator_name: string | null
+  operator_reason:           string | null
 }
 
 export interface CreateBriefOptions {
-  project_id:          string
-  title?:              string
-  objective?:          string
-  target_audience?:    string
-  research_prompt?:    string
-  recommended_channel?: string
-  value_proposition?:  string
-  risks?:              string[]
-  assumptions?:        string[]
-  next_actions?:       string[]
-  created_by_role?:    string
+  project_id:                string
+  title?:                    string
+  objective?:                string
+  target_audience?:          string
+  research_prompt?:          string
+  recommended_channel?:      string
+  value_proposition?:        string
+  risks?:                    string[]
+  assumptions?:              string[]
+  next_actions?:             string[]
+  created_by_role?:          string
+  recommended_operator_id?:  string | null
+  recommended_operator_name?: string | null
+  operator_reason?:          string | null
 }
 
 export interface UpdateBriefFields {
-  title?:              string
-  objective?:          string
-  target_audience?:    string
-  research_prompt?:    string
-  recommended_channel?: string
-  value_proposition?:  string
-  risks?:              string[]
-  assumptions?:        string[]
-  next_actions?:       string[]
+  title?:                    string
+  objective?:                string
+  target_audience?:          string
+  research_prompt?:          string
+  recommended_channel?:      string
+  value_proposition?:        string
+  risks?:                    string[]
+  assumptions?:              string[]
+  next_actions?:             string[]
+  recommended_operator_id?:  string | null
+  recommended_operator_name?: string | null
+  operator_reason?:          string | null
+}
+
+/** Computed operator recommendation (not persisted as a separate object) */
+export interface OperatorRecommendation {
+  operator_id:   string | null
+  operator_name: string | null
+  reason:        string
+  available:     boolean   // false = no operators exist, user should create one
 }
 
 // ── Row mapper ─────────────────────────────────────────────────────────────────
 
 function rowToBrief(row: Record<string, unknown>): ProjectStrategyBrief {
   return {
-    id:                  String(row.id),
-    project_id:          String(row.project_id),
-    title:               String(row.title ?? ''),
-    objective:           String(row.objective ?? ''),
-    target_audience:     String(row.target_audience ?? ''),
-    research_prompt:     String(row.research_prompt ?? ''),
-    recommended_channel: String(row.recommended_channel ?? 'email'),
-    value_proposition:   String(row.value_proposition ?? ''),
-    risks:               Array.isArray(row.risks)       ? row.risks as string[]       : [],
-    assumptions:         Array.isArray(row.assumptions) ? row.assumptions as string[] : [],
-    next_actions:        Array.isArray(row.next_actions)? row.next_actions as string[] : [],
-    created_by_role:     String(row.created_by_role ?? 'CEO'),
-    created_at:          String(row.created_at),
-    updated_at:          String(row.updated_at),
+    id:                       String(row.id),
+    project_id:               String(row.project_id),
+    title:                    String(row.title ?? ''),
+    objective:                String(row.objective ?? ''),
+    target_audience:          String(row.target_audience ?? ''),
+    research_prompt:          String(row.research_prompt ?? ''),
+    recommended_channel:      String(row.recommended_channel ?? 'email'),
+    value_proposition:        String(row.value_proposition ?? ''),
+    risks:                    Array.isArray(row.risks)       ? row.risks as string[]       : [],
+    assumptions:              Array.isArray(row.assumptions) ? row.assumptions as string[] : [],
+    next_actions:             Array.isArray(row.next_actions)? row.next_actions as string[] : [],
+    created_by_role:          String(row.created_by_role ?? 'CEO'),
+    created_at:               String(row.created_at),
+    updated_at:               String(row.updated_at),
+    recommended_operator_id:  row.recommended_operator_id ? String(row.recommended_operator_id) : null,
+    recommended_operator_name: row.recommended_operator_name ? String(row.recommended_operator_name) : null,
+    operator_reason:          row.operator_reason ? String(row.operator_reason) : null,
   }
 }
 
@@ -98,21 +119,24 @@ export async function createProjectStrategyBrief(
     `INSERT INTO project_strategy_briefs
        (project_id, title, objective, target_audience, research_prompt,
         recommended_channel, value_proposition, risks, assumptions, next_actions,
-        created_by_role)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        created_by_role, recommended_operator_id, recommended_operator_name, operator_reason)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING *`,
     [
       opts.project_id,
-      opts.title               ?? '',
-      opts.objective           ?? '',
-      opts.target_audience     ?? '',
-      opts.research_prompt     ?? '',
-      opts.recommended_channel ?? 'email',
-      opts.value_proposition   ?? '',
+      opts.title                  ?? '',
+      opts.objective              ?? '',
+      opts.target_audience        ?? '',
+      opts.research_prompt        ?? '',
+      opts.recommended_channel    ?? 'email',
+      opts.value_proposition      ?? '',
       JSON.stringify(opts.risks        ?? []),
       JSON.stringify(opts.assumptions  ?? []),
       JSON.stringify(opts.next_actions ?? ['Open First Campaign Flow']),
-      opts.created_by_role     ?? 'CEO',
+      opts.created_by_role        ?? 'CEO',
+      opts.recommended_operator_id   ?? null,
+      opts.recommended_operator_name ?? null,
+      opts.operator_reason           ?? null,
     ]
   )
 
@@ -156,6 +180,9 @@ export async function updateProjectStrategyBrief(
   if (fields.risks               !== undefined) add('risks',               JSON.stringify(fields.risks))
   if (fields.assumptions         !== undefined) add('assumptions',         JSON.stringify(fields.assumptions))
   if (fields.next_actions        !== undefined) add('next_actions',        JSON.stringify(fields.next_actions))
+  if (fields.recommended_operator_id   !== undefined) add('recommended_operator_id',   fields.recommended_operator_id)
+  if (fields.recommended_operator_name !== undefined) add('recommended_operator_name', fields.recommended_operator_name)
+  if (fields.operator_reason           !== undefined) add('operator_reason',           fields.operator_reason)
 
   if (sets.length === 1) return null // nothing to update
 
@@ -166,6 +193,121 @@ export async function updateProjectStrategyBrief(
   )
   if (!res.rows[0]) return null
   return rowToBrief(res.rows[0])
+}
+
+// ── Operator recommendation ────────────────────────────────────────────────────
+
+/**
+ * Compute the best Web Operator recommendation for a project's first campaign.
+ *
+ * Priority order:
+ *   1. Operator already assigned to this project (project_id match)
+ *   2. Any idle operator
+ *   3. Any operator named "Default" (browser_profile_key='default')
+ *   4. No recommendation — return available=false
+ *
+ * This function is read-only and never triggers any browser or external action.
+ */
+export async function recommendOperatorForStrategyBrief(
+  project_id: string
+): Promise<OperatorRecommendation> {
+  const res = await db.query(
+    `SELECT id, name, status, project_id, browser_profile_key
+     FROM web_operators
+     ORDER BY created_at ASC`,
+    []
+  )
+  const operators = res.rows as Array<{
+    id: string; name: string; status: string
+    project_id: string | null; browser_profile_key: string
+  }>
+
+  if (operators.length === 0) {
+    return {
+      operator_id:   null,
+      operator_name: null,
+      reason:        'No operator exists yet. Create one before running research.',
+      available:     false,
+    }
+  }
+
+  // 1. Project-assigned operator
+  const assigned = operators.find(o => o.project_id === project_id)
+  if (assigned) {
+    return {
+      operator_id:   assigned.id,
+      operator_name: assigned.name,
+      reason:        `${assigned.name} is already assigned to this project.`,
+      available:     true,
+    }
+  }
+
+  // 2. Idle operator
+  const idle = operators.find(o => o.status === 'idle')
+  if (idle) {
+    return {
+      operator_id:   idle.id,
+      operator_name: idle.name,
+      reason:        `${idle.name} is idle and available for the first research task.`,
+      available:     true,
+    }
+  }
+
+  // 3. Default operator (any status)
+  const dflt = operators.find(
+    o => o.browser_profile_key === 'default' || o.name.toLowerCase() === 'default'
+  )
+  if (dflt) {
+    return {
+      operator_id:   dflt.id,
+      operator_name: dflt.name,
+      reason:        `${dflt.name} is available as a fallback.`,
+      available:     true,
+    }
+  }
+
+  // 4. Any operator (not idle, not default, not assigned)
+  const any = operators[0]
+  return {
+    operator_id:   any.id,
+    operator_name: any.name,
+    reason:        `${any.name} is the only available operator (currently ${any.status}).`,
+    available:     true,
+  }
+}
+
+/**
+ * Compute the recommendation and persist it to the brief if an operator is available.
+ * If no operator exists, does not modify the brief (operator_available=false returned).
+ * Idempotent: if brief already has a recommendation, skips the update.
+ *
+ * Never throws — errors are swallowed and the brief is returned unchanged.
+ */
+export async function updateStrategyBriefOperatorRecommendation(
+  project_id: string
+): Promise<{ brief: ProjectStrategyBrief; operator_available: boolean }> {
+  const brief = await getProjectStrategyBrief(project_id)
+  if (!brief) throw new Error(`No strategy brief found for project ${project_id}`)
+
+  // Already has a recommendation — skip
+  if (brief.recommended_operator_id) {
+    return { brief, operator_available: true }
+  }
+
+  const rec = await recommendOperatorForStrategyBrief(project_id)
+
+  if (!rec.available) {
+    return { brief, operator_available: false }
+  }
+
+  // Persist the recommendation
+  const updated = await updateProjectStrategyBrief(brief.id, {
+    recommended_operator_id:   rec.operator_id,
+    recommended_operator_name: rec.operator_name,
+    operator_reason:           rec.reason,
+  })
+
+  return { brief: updated ?? brief, operator_available: true }
 }
 
 // ── AI generation ──────────────────────────────────────────────────────────────
@@ -245,7 +387,23 @@ Respond with this exact JSON structure (all fields required, use empty string if
     brief = buildFallbackBrief(opts)
   }
 
-  return createProjectStrategyBrief(brief)
+  // Create the brief, then attempt to attach an operator recommendation
+  const created = await createProjectStrategyBrief(brief)
+
+  // Compute + persist operator recommendation (non-fatal)
+  try {
+    const rec = await recommendOperatorForStrategyBrief(opts.project_id)
+    if (rec.available) {
+      const updated = await updateProjectStrategyBrief(created.id, {
+        recommended_operator_id:   rec.operator_id,
+        recommended_operator_name: rec.operator_name,
+        operator_reason:           rec.reason,
+      })
+      if (updated) return updated
+    }
+  } catch { /* non-fatal */ }
+
+  return created
 }
 
 // ── Fallback brief ─────────────────────────────────────────────────────────────

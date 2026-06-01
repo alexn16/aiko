@@ -525,22 +525,36 @@ When the CEO creates a new project, AÏKO automatically generates a **First Camp
 - Value proposition
 - Risks and assumptions
 - Next actions
+- **Recommended Web Operator** (see below)
 
 **AI generation:** `generateStrategyBriefFromProject()` calls `callAI(role:'ceo')` to produce a JSON brief. If AI fails for any reason, a safe fallback brief is created from the project name and goal.
 
 **Idempotency:** Only one brief per project. Additional calls return the existing brief.
 
-**CEO Chat:** When a project is created, the `strategy_brief` summary (objective, audience, research prompt, channel, value prop) is included in the CEO response alongside `start_campaign_url`.
+**CEO Chat:** When a project is created, the `strategy_brief` summary (including recommended operator name) is included in the CEO response alongside `start_campaign_url`. If an operator is recommended, the CEO response text includes: `"I recommend <Name> as the first Web Operator for this campaign."`
 
-**Project workspace:** Each project's Overview tab shows a "First Campaign Strategy Brief" strip with the objective, audience, channel, value prop, and a "▶ Open First Campaign Flow" button.
+**Project workspace:** Each project's Overview tab shows a "First Campaign Strategy Brief" strip with the objective, audience, channel, **operator recommendation**, value prop, and a "▶ Open First Campaign Flow" button. If no operator exists, a "create one" link is shown.
 
-**`/start-campaign` page:** The strategy brief appears as a collapsible card above the launch checklist. The research prompt field (step 3) is pre-filled from the brief. Clicking "↓ Use in Step 3" copies the brief's research prompt into the field. **User edits are never overwritten automatically.**
+**`/start-campaign` page:** The strategy brief appears as a collapsible card above the launch checklist. The research prompt field (step 3) is pre-filled from the brief. Clicking "↓ Use in Step 3" copies the brief's research prompt into the field. **User edits are never overwritten automatically.** The recommended operator section shows the name, reason, and a "Use this operator" button that selects it in Step 2 without triggering any action.
 
 **API:**
-- `GET /api/projects/[id]/strategy-brief` — returns or creates a brief on demand
-- `PATCH /api/projects/[id]/strategy-brief` — update any field (editing `research_prompt` does NOT trigger research)
+- `GET /api/projects/[id]/strategy-brief` — returns or creates a brief on demand; computes operator recommendation on-demand if not yet saved; returns `operator_available` boolean
+- `PATCH /api/projects/[id]/strategy-brief` — update any field (editing `research_prompt` does NOT trigger research; setting `recommended_operator_id` does NOT trigger any Web Operator action)
 
 **Safety:** Brief is guidance only. It never triggers automation, Web Operator actions, email sends, or any external interaction.
+
+## Operator Recommendation
+
+The Strategy Brief includes an operator recommendation computed at brief-generation time (and lazily on first GET if missed).
+
+**Priority order:**
+1. Operator already assigned to this project (`project_id` match) → "Kevin is already assigned to this project."
+2. Any idle operator → "Kevin is idle and available for the first research task."
+3. Any operator named/keyed "Default" → "Default Operator is available as a fallback."
+4. Any other operator (not idle, not default) → mentions name and current status.
+5. No operators exist → `operator_available=false`, reason: "No operator exists yet. Create one before running research."
+
+**"Use this operator" button** in `/start-campaign`: calls `setSelectedOperator(id)` in local React state only. No API call, no browser session, no Web Operator action triggered. It simply pre-selects the operator in Step 2's dropdown.
 
 ## Project Launch Template
 

@@ -30,6 +30,9 @@ interface StrategyBrief {
   title: string; objective: string; target_audience: string
   research_prompt: string; recommended_channel: string; value_proposition: string
   risks: string[]; assumptions: string[]; next_actions: string[]
+  recommended_operator_id:   string | null
+  recommended_operator_name: string | null
+  operator_reason:           string | null
 }
 
 interface Summary {
@@ -322,11 +325,17 @@ function LaunchTemplateCard({
 function StrategyBriefCard({
   brief,
   onUseResearchPrompt,
+  onUseOperator,
 }: {
   brief: StrategyBrief
   onUseResearchPrompt: (prompt: string) => void
+  onUseOperator: (operatorId: string) => void
 }) {
   const [expanded, setExpanded] = React.useState(false)
+
+  const hasOperator     = !!brief.recommended_operator_id
+  const operatorName    = brief.recommended_operator_name
+  const operatorReason  = brief.operator_reason
 
   return (
     <div style={{
@@ -337,7 +346,7 @@ function StrategyBriefCard({
       marginBottom: 16,
     }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: expanded ? 12 : 0, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#14532d', flex: 1 }}>
           📋 {brief.title || 'First Campaign Strategy Brief'}
         </span>
@@ -353,21 +362,56 @@ function StrategyBriefCard({
       </div>
 
       {/* Compact summary (always visible) */}
-      {!expanded && brief.objective && (
-        <div style={{ fontSize: 11, color: '#166534', marginTop: 4, fontStyle: 'italic' }}>
+      {brief.objective && (
+        <div style={{ fontSize: 11, color: '#166534', marginBottom: 8, fontStyle: 'italic' }}>
           {brief.objective}
         </div>
       )}
 
+      {/* Operator recommendation (always visible) */}
+      <div style={{
+        background: hasOperator ? '#dcfce7' : '#fef9c3',
+        border: `1px solid ${hasOperator ? '#86efac' : '#fde047'}`,
+        borderRadius: 8, padding: '10px 12px', marginBottom: expanded ? 10 : 0,
+        display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', marginBottom: 2,
+            color: hasOperator ? '#15803d' : '#854d0e' }}>
+            Recommended Operator
+          </div>
+          {hasOperator ? (
+            <div style={{ fontSize: 12, color: '#0f172a', fontWeight: 600 }}>
+              {operatorName}
+              {operatorReason && (
+                <span style={{ fontWeight: 400, color: '#374151', marginLeft: 6 }}>
+                  — {operatorReason}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: '#92400e' }}>
+              No operator available yet.{' '}
+              <Link href="/operators" style={{ color: '#6366f1', fontWeight: 600 }}>
+                Create operator →
+              </Link>
+            </div>
+          )}
+        </div>
+        {hasOperator && brief.recommended_operator_id && (
+          <button
+            onClick={() => onUseOperator(brief.recommended_operator_id!)}
+            style={btnStyle('primary')}
+            title="Selects this operator in Step 2. Does not run any browser action."
+          >
+            Use this operator
+          </button>
+        )}
+      </div>
+
       {/* Expanded content */}
       {expanded && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {brief.objective && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Objective</div>
-              <div style={{ fontSize: 12, color: '#0f172a' }}>{brief.objective}</div>
-            </div>
-          )}
           {brief.target_audience && (
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 2 }}>Target Audience</div>
@@ -758,6 +802,7 @@ function StartCampaignInner() {
         <StrategyBriefCard
           brief={summary.strategy_brief}
           onUseResearchPrompt={setResearchQuery}
+          onUseOperator={setSelectedOperator}
         />
       )}
 

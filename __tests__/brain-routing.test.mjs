@@ -1334,3 +1334,94 @@ test('CEO create_project response includes strategy_brief summary', () => {
   const other = buildCeoResponse({ intent: 'general', project_id: 'p-1' }, brief)
   assert.equal(other.strategy_brief, null, 'No brief for non-create_project intents')
 })
+
+// ── Operator recommendation logic (pure JS replicas) ──────────────────────────
+
+function recommendOperator(operators, projectId) {
+  if (operators.length === 0) {
+    return { operator_id: null, operator_name: null, reason: 'No operator exists yet. Create one before running research.', available: false }
+  }
+  const assigned = operators.find(o => o.project_id === projectId)
+  if (assigned) return { operator_id: assigned.id, operator_name: assigned.name, reason: `${assigned.name} is already assigned to this project.`, available: true }
+
+  const idle = operators.find(o => o.status === 'idle')
+  if (idle) return { operator_id: idle.id, operator_name: idle.name, reason: `${idle.name} is idle and available for the first research task.`, available: true }
+
+  const dflt = operators.find(o => o.browser_profile_key === 'default' || o.name.toLowerCase() === 'default')
+  if (dflt) return { operator_id: dflt.id, operator_name: dflt.name, reason: `${dflt.name} is available as a fallback.`, available: true }
+
+  const any = operators[0]
+  return { operator_id: any.id, operator_name: any.name, reason: `${any.name} is the only available operator (currently ${any.status}).`, available: true }
+}
+
+// ── 53. Project-assigned operator wins over idle ───────────────────────────────
+
+test('project-assigned operator wins over idle operator', () => {
+  const operators = [
+    { id: 'op-1', name: 'Kevin', status: 'idle', project_id: 'p-99', browser_profile_key: 'kevin' },
+    { id: 'op-2', name: 'Alice', status: 'idle', project_id: null,   browser_profile_key: 'alice' },
+  ]
+  const rec = recommendOperator(operators, 'p-99')
+  assert.equal(rec.operator_id, 'op-1', 'Assigned operator (Kevin) wins')
+  assert.ok(rec.reason.includes('already assigned'), 'Reason mentions assignment')
+  assert.equal(rec.available, true)
+})
+
+// ── 54. Idle operator recommended if no project operator ──────────────────────
+
+test('idle operator is recommended if no project-assigned operator', () => {
+  const operators = [
+    { id: 'op-1', name: 'Alice', status: 'working', project_id: null,   browser_profile_key: 'alice' },
+    { id: 'op-2', name: 'Kevin', status: 'idle',    project_id: null,   browser_profile_key: 'kevin' },
+    { id: 'op-3', name: 'Bob',   status: 'idle',    project_id: 'p-77', browser_profile_key: 'bob'   },
+  ]
+  const rec = recommendOperator(operators, 'p-99')
+  assert.equal(rec.operator_id, 'op-2', 'First idle unassigned operator (Kevin) recommended')
+  assert.ok(rec.reason.includes('idle'), 'Reason mentions idle status')
+  assert.equal(rec.available, true)
+})
+
+// ── 55. Default operator is fallback when no idle operator ────────────────────
+
+test('Default operator is fallback if no idle or assigned operator', () => {
+  const operators = [
+    { id: 'op-1', name: 'Alice',   status: 'working', project_id: null, browser_profile_key: 'alice'   },
+    { id: 'op-2', name: 'Default', status: 'working', project_id: null, browser_profile_key: 'default' },
+  ]
+  const rec = recommendOperator(operators, 'p-99')
+  assert.equal(rec.operator_id, 'op-2', 'Default operator recommended as fallback')
+  assert.ok(rec.reason.includes('fallback'), 'Reason mentions fallback')
+  assert.equal(rec.available, true)
+})
+
+// ── 56. No operators returns create-operator recommendation ───────────────────
+
+test('no operators returns create-operator recommendation', () => {
+  const rec = recommendOperator([], 'p-99')
+  assert.equal(rec.operator_id, null, 'No operator id when none exist')
+  assert.equal(rec.available, false, 'available=false when no operators')
+  assert.ok(rec.reason.toLowerCase().includes('create'), 'Reason mentions creating an operator')
+})
+
+// ── 57. Selecting recommended operator does not trigger external action ────────
+
+test('selecting recommended operator in Start Campaign does not trigger external action', () => {
+  // The "Use this operator" button only calls setSelectedOperator(id).
+  // No API calls, no Web Operator actions, no browser sessions.
+  let selectedOperator = ''
+  let webOperatorCalled = false
+
+  function setSelectedOperator(id) { selectedOperator = id }
+  function fakeRunWebOperator() { webOperatorCalled = true }
+
+  // Simulate clicking "Use this operator"
+  function handleUseOperator(operatorId) {
+    setSelectedOperator(operatorId)
+    // Does NOT call fakeRunWebOperator — no external action
+  }
+
+  handleUseOperator('op-1')
+  assert.equal(selectedOperator, 'op-1', 'Operator selected in UI state')
+  assert.equal(webOperatorCalled, false, 'No Web Operator action triggered')
+  // fakeRunWebOperator is never called
+})

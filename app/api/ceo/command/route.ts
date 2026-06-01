@@ -244,13 +244,16 @@ export async function POST(request: NextRequest) {
           const brief = await getProjectStrategyBrief(String(resolvedProjectId))
           if (brief) {
             strategyBrief = {
-              id:                  brief.id,
-              title:               brief.title,
-              objective:           brief.objective,
-              target_audience:     brief.target_audience,
-              research_prompt:     brief.research_prompt,
-              recommended_channel: brief.recommended_channel,
-              value_proposition:   brief.value_proposition,
+              id:                       brief.id,
+              title:                    brief.title,
+              objective:                brief.objective,
+              target_audience:          brief.target_audience,
+              research_prompt:          brief.research_prompt,
+              recommended_channel:      brief.recommended_channel,
+              value_proposition:        brief.value_proposition,
+              recommended_operator_id:  brief.recommended_operator_id,
+              recommended_operator_name: brief.recommended_operator_name,
+              operator_reason:          brief.operator_reason,
             }
           }
         } catch { /* non-fatal */ }
@@ -273,8 +276,24 @@ export async function POST(request: NextRequest) {
         } catch { /* non-fatal */ }
       }
 
+      // If a recommended operator exists, append a mention to the CEO response
+      let responseText = String(result.response ?? '')
+      if (
+        String(result.intent) === 'create_project' &&
+        strategyBrief &&
+        typeof strategyBrief === 'object' &&
+        'recommended_operator_name' in strategyBrief &&
+        strategyBrief.recommended_operator_name
+      ) {
+        const opName = strategyBrief.recommended_operator_name
+        if (!responseText.toLowerCase().includes(opName.toString().toLowerCase())) {
+          responseText += ` I recommend ${opName} as the first Web Operator for this campaign.`
+        }
+      }
+
       return NextResponse.json({
         ...result,
+        response:            responseText,
         capability_gap:      capabilityGap,
         start_campaign_url:  startCampaignUrl,
         launch_template:     launchTemplate,
