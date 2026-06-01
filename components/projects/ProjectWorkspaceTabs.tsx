@@ -245,7 +245,10 @@ function StrategyBriefStrip({ projectId }: { projectId: string }) {
         {!brief.recommended_operator_name && (
           <div style={{ fontSize: 11, color: '#92400e' }}>
             <span style={{ fontWeight: 600 }}>Operator: </span>
-            None yet — <a href="/operators" style={{ color: '#6366f1' }}>create one</a>
+            None yet —{' '}
+            <a href="/operators" style={{ color: '#6366f1', fontWeight: 600 }}>
+              create one first
+            </a>
           </div>
         )}
       </div>

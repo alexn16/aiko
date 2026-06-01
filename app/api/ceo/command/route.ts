@@ -285,9 +285,12 @@ export async function POST(request: NextRequest) {
         'recommended_operator_name' in strategyBrief &&
         strategyBrief.recommended_operator_name
       ) {
-        const opName = strategyBrief.recommended_operator_name
-        if (!responseText.toLowerCase().includes(opName.toString().toLowerCase())) {
-          responseText += ` I recommend ${opName} as the first Web Operator for this campaign.`
+        const opName = String(strategyBrief.recommended_operator_name)
+        if (!responseText.toLowerCase().includes(opName.toLowerCase())) {
+          // Ensure a clean sentence boundary (trim trailing whitespace first)
+          const base = responseText.trimEnd()
+          const separator = base.endsWith('.') || base.endsWith('!') || base.endsWith('?') ? ' ' : '. '
+          responseText = base + separator + `I recommend ${opName} as the first Web Operator for this campaign.`
         }
       }
 

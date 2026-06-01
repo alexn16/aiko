@@ -324,18 +324,33 @@ function LaunchTemplateCard({
 
 function StrategyBriefCard({
   brief,
+  liveOperators,
   onUseResearchPrompt,
   onUseOperator,
 }: {
   brief: StrategyBrief
+  liveOperators: Operator[]
   onUseResearchPrompt: (prompt: string) => void
   onUseOperator: (operatorId: string) => void
 }) {
-  const [expanded, setExpanded] = React.useState(false)
+  const [expanded, setExpanded]     = React.useState(false)
+  const [opApplied, setOpApplied]   = React.useState(false)
 
-  const hasOperator     = !!brief.recommended_operator_id
+  // Cross-reference against live operators — if the brief's operator was deleted,
+  // the FK sets recommended_operator_id=NULL, but guard here too for stale cache.
+  const operatorStillExists = brief.recommended_operator_id
+    ? liveOperators.some(o => o.id === brief.recommended_operator_id)
+    : false
+  const hasOperator     = !!brief.recommended_operator_id && operatorStillExists
   const operatorName    = brief.recommended_operator_name
   const operatorReason  = brief.operator_reason
+
+  function handleUseOperator() {
+    if (!brief.recommended_operator_id) return
+    onUseOperator(brief.recommended_operator_id)
+    setOpApplied(true)
+    setTimeout(() => setOpApplied(false), 2500)
+  }
 
   return (
     <div style={{
@@ -391,21 +406,30 @@ function StrategyBriefCard({
             </div>
           ) : (
             <div style={{ fontSize: 12, color: '#92400e' }}>
-              No operator available yet.{' '}
+              No operator yet — create one in{' '}
               <Link href="/operators" style={{ color: '#6366f1', fontWeight: 600 }}>
-                Create operator →
+                Operators
               </Link>
+              {' '}to continue.
             </div>
           )}
         </div>
         {hasOperator && brief.recommended_operator_id && (
-          <button
-            onClick={() => onUseOperator(brief.recommended_operator_id!)}
-            style={btnStyle('primary')}
-            title="Selects this operator in Step 2. Does not run any browser action."
-          >
-            Use this operator
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <button
+              onClick={handleUseOperator}
+              style={btnStyle(opApplied ? 'secondary' : 'primary')}
+              disabled={opApplied}
+              title="Selects this operator in Step 2. Does not run any browser action."
+            >
+              {opApplied ? '✓ Applied to Step 2' : 'Use this operator'}
+            </button>
+            {opApplied && (
+              <div style={{ fontSize: 10, color: '#15803d', fontStyle: 'italic' }}>
+                Scroll down to Step 2 to confirm.
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -801,6 +825,7 @@ function StartCampaignInner() {
       {summary.strategy_brief && selectedProject && (
         <StrategyBriefCard
           brief={summary.strategy_brief}
+          liveOperators={summary.operators}
           onUseResearchPrompt={setResearchQuery}
           onUseOperator={setSelectedOperator}
         />
