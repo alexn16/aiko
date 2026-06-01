@@ -133,7 +133,9 @@ export async function listActiveProjectNames(): Promise<string[]> {
 export async function getProjectContext(projectId: string): Promise<ProjectContext | null> {
   // Core project + PM
   const projRes = await db.query(
-    `SELECT p.id, p.name, p.goal, p.description, p.status, p.created_at,
+    `SELECT p.id, p.name, p.goal, p.description,
+            CASE WHEN p.active THEN 'active' ELSE 'inactive' END AS status,
+            p.created_at,
             pm.name AS pm_name, pm.current_focus AS pm_focus
      FROM projects p
      LEFT JOIN project_managers pm ON pm.id = p.assigned_pm_id

@@ -519,6 +519,8 @@ const RECALL_PATTERNS: RegExp[] = [
   /what\s+has\s+\w+\s+done\s+(for|on)\s+/i,
   /tell\s+me\s+about\s+/i,
   /what.*(happening|going\s+on)\s+(with|for|on)\s+/i,
+  /what\s+decisions?\s+(have\s+been\s+made|were\s+made|has\s+been\s+made)\s+(for|on)\s+/i,
+  /why\s+(did\s+we|are\s+we)\s+/i,
 ]
 
 function isRecallIntent(command: string): boolean {
@@ -550,6 +552,8 @@ function extractRecallProjectName(command: string): string {
     [/^next\s+step\s+(for|on)\s+/i,                          ''],
     [/^tell\s+me\s+about\s+/i,                               ''],
     [/^summarize\s+/i,                                       ''],
+    [/^what\s+decisions?\s+(have\s+been\s+made|were\s+made|has\s+been\s+made)\s+(for|on)\s+/i, ''],
+    [/^why\s+(did\s+we|are\s+we)\s+(choose|pick|select|use|assign|recommend)\s+\w+\s+(for|on)\s+/i, ''],
   ]
   for (const [pat, rep] of anchored) {
     const replaced = command.replace(pat, rep as string)
