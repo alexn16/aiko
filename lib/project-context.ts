@@ -53,6 +53,7 @@ export interface ProjectContext {
     status: string
     description: string
     completed_at: string | null
+    operator_name: string | null
   }>
   // Execution trail (last 5)
   recent_trail: Array<{
@@ -60,6 +61,7 @@ export interface ProjectContext {
     status: string
     description: string
     created_at: string
+    operator_name: string | null
   }>
 }
 
@@ -184,20 +186,24 @@ export async function getProjectContext(projectId: string): Promise<ProjectConte
   )
   const pendingApprovals = Number(approvalRes.rows[0]?.n ?? 0)
 
-  // Recent Web Operator actions
+  // Recent Web Operator actions (joined with operator name for "what has X done?" queries)
   const actionsRes = await db.query(
-    `SELECT action_type, status, description, completed_at
-     FROM web_operator_actions
-     WHERE project_id=$1
-     ORDER BY COALESCE(completed_at, created_at) DESC
-     LIMIT 5`,
+    `SELECT woa.action_type, woa.status, woa.description, woa.completed_at,
+            wo.name AS operator_name
+     FROM web_operator_actions woa
+     LEFT JOIN web_operators wo ON wo.id = woa.operator_id
+     WHERE woa.project_id=$1
+     ORDER BY COALESCE(woa.completed_at, woa.created_at) DESC
+     LIMIT 8`,
     [projectId]
   )
 
-  // Recent execution trail
+  // Recent execution trail (same join, deduplicated from actions above)
   const trailRes = await db.query(
-    `SELECT woa.action_type, woa.status, woa.description, woa.created_at
+    `SELECT woa.action_type, woa.status, woa.description, woa.created_at,
+            wo.name AS operator_name
      FROM web_operator_actions woa
+     LEFT JOIN web_operators wo ON wo.id = woa.operator_id
      WHERE woa.project_id=$1
      ORDER BY COALESCE(woa.completed_at, woa.created_at) DESC
      LIMIT 5`,
@@ -243,16 +249,18 @@ export async function getProjectContext(projectId: string): Promise<ProjectConte
     lead_replied:   leadCounts['replied']   ?? 0,
     pending_approvals: pendingApprovals,
     recent_actions: actionsRes.rows.map(r => ({
-      action_type:  String(r.action_type),
-      status:       String(r.status),
-      description:  String(r.description ?? ''),
-      completed_at: r.completed_at ? String(r.completed_at) : null,
+      action_type:   String(r.action_type),
+      status:        String(r.status),
+      description:   String(r.description ?? ''),
+      completed_at:  r.completed_at ? String(r.completed_at) : null,
+      operator_name: r.operator_name ? String(r.operator_name) : null,
     })),
     recent_trail: trailRes.rows.map(r => ({
-      action_type: String(r.action_type),
-      status:      String(r.status),
-      description: String(r.description ?? ''),
-      created_at:  String(r.created_at),
+      action_type:   String(r.action_type),
+      status:        String(r.status),
+      description:   String(r.description ?? ''),
+      created_at:    String(r.created_at),
+      operator_name: r.operator_name ? String(r.operator_name) : null,
     })),
   }
 }
@@ -286,7 +294,8 @@ export function getProjectExecutiveSummary(ctx: ProjectContext): string {
   if (ctx.recent_actions.length > 0) {
     lines.push(`Recent operator actions (${ctx.recent_actions.length}):`)
     for (const a of ctx.recent_actions.slice(0, 3)) {
-      lines.push(`  - [${a.status}] ${a.action_type}: ${a.description.slice(0, 80)}`)
+      const by = a.operator_name ? ` (${a.operator_name})` : ''
+      lines.push(`  - [${a.status}] ${a.action_type}${by}: ${a.description.slice(0, 80)}`)
     }
   }
   return lines.join('\n')

@@ -411,43 +411,76 @@ function isRecallIntent(command: string): boolean {
 
 /**
  * Extract the project name hint from a recall command.
- * Strips the leading verb phrase to isolate the project name.
+ *
+ * Strategy:
+ * 1. Try specific start-anchored patterns (fast path for simple forms).
+ * 2. Fallback: find the last "for|on|about|of|with" preposition and take
+ *    everything after it — handles "What is the next step for X?",
+ *    "What is the campaign strategy for X?", etc.
+ * 3. Last resort: strip common question-word preamble.
  */
 function extractRecallProjectName(command: string): string {
-  const cleaned = command
-    .replace(/^what\s+are\s+we\s+doing\s+(for|on|with)\s+/i, '')
-    .replace(/^summarize\s+/i, '')
-    .replace(/^summary\s+(of|for)\s+/i, '')
-    .replace(/^status\s+(of|for|on)\s+/i, '')
-    .replace(/^who\s+is\s+assigned\s+to\s+/i, '')
-    .replace(/^next\s+step\s+(for|on)\s+/i, '')
-    .replace(/^tell\s+me\s+about\s+/i, '')
-    .replace(/^what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i, '')
-    .replace(/^what\s+has\s+\w+\s+done\s+(for|on)\s+/i, '')
-    .replace(/^what.*(happening|going\s+on)\s+(with|for|on)\s+/i, '')
-    .trim()
-    // Strip trailing punctuation
-    .replace(/[?.!]+$/, '')
-    .trim()
-  return cleaned
+  const strip = (s: string) => s.trim().replace(/[?.!,]+$/, '').trim()
+
+  // 1. Start-anchored specific patterns (order matters — longest first)
+  const anchored: [RegExp, string][] = [
+    [/^what\s+are\s+we\s+doing\s+(for|on|with)\s+/i,         ''],
+    [/^what\s+has\s+\w+\s+done\s+(for|on)\s+/i,              ''],
+    [/^what.*(happening|going\s+on)\s+(with|for|on)\s+/i,    ''],
+    [/^what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i, ''],
+    [/^summary\s+(of|for)\s+/i,                              ''],
+    [/^status\s+(of|for|on)\s+/i,                            ''],
+    [/^who\s+is\s+assigned\s+to\s+/i,                        ''],
+    [/^next\s+step\s+(for|on)\s+/i,                          ''],
+    [/^tell\s+me\s+about\s+/i,                               ''],
+    [/^summarize\s+/i,                                       ''],
+  ]
+  for (const [pat, rep] of anchored) {
+    const replaced = command.replace(pat, rep as string)
+    if (replaced !== command) return strip(replaced)
+  }
+
+  // 2. Fallback: extract last preposition clause — handles mid-sentence forms
+  //    "What is the next step for ALB Parking?" → "ALB Parking"
+  //    "What is the campaign strategy for Foreman?" → "Foreman"
+  const prepMatch = command.match(/\b(?:for|about|on|of|with)\s+([^?!.]+?)(?:\s*[?.!]|$)/i)
+  if (prepMatch) {
+    const candidate = strip(prepMatch[1])
+    // Sanity: reject if it looks like a generic filler phrase
+    if (candidate.length >= 2 && !/^(this|that|it|us|me|you|the project)$/i.test(candidate)) {
+      return candidate
+    }
+  }
+
+  // 3. Last resort: strip leading question preamble
+  return strip(
+    command.replace(
+      /^(what|who|where|when|how|why)\s+(is|are|was|were|has|have|had|can|do|does|did)\s+(the\s+|a\s+)?(first\s+|last\s+|current\s+)?/i,
+      ''
+    )
+  )
 }
 
-const RECALL_SYSTEM_PROMPT = `You are the CEO of AÏKO. You have been given detailed context about a specific project.
+/**
+ * If the command asks "what has X done", extract the operator name.
+ * Returns null if no operator name found.
+ */
+function extractMentionedOperatorName(command: string): string | null {
+  const m = command.match(/what\s+has\s+(\w+)\s+done/i)
+  return m ? m[1] : null
+}
 
-Answer the user's question in a natural, conversational CEO voice (2-6 sentences).
-- Speak in first person
-- Be specific — use the actual data provided
-- If something is missing or unknown, say so clearly ("We don't have that data yet")
-- Do not make up leads, actions, or status that aren't in the context
-- Do not suggest running any external action or browser task unless asked
-- This is a read-only status check — do not create anything
+const RECALL_SYSTEM_PROMPT = `You are the CEO of AÏKO. Answer the user's question about a project.
+
+Rules:
+- 2-4 sentences maximum. Be direct and specific.
+- Use only the data provided — never invent leads, actions, or status.
+- If data is missing, say "We don't have that yet."
+- Do not suggest running external actions unless the user asked.
+- First person. No bullet points in the response field.
 
 Return ONLY valid JSON:
-{
-  "response": "Your natural-language answer",
-  "intent": "project_recall",
-  "project_id": "<the project id from context or null>"
-}`
+{"response":"Your answer (2-4 sentences max)","intent":"project_recall","project_id":"<id or null>"}`
 
 async function runRecallQuery(command: string, projectName: string): Promise<CEOCommandResult> {
   const {
@@ -486,17 +519,23 @@ async function runRecallQuery(command: string, projectName: string): Promise<CEO
   const summary  = getProjectExecutiveSummary(ctx)
   const nextStep = getProjectNextStep(ctx)
 
+  // If user asked "what has X done", add a focused hint so AI can filter
+  const mentionedOperator = extractMentionedOperatorName(command)
+  const operatorHint = mentionedOperator
+    ? `\n\nNote: The user is asking specifically about operator "${mentionedOperator}". Focus on recent actions attributed to that operator if any are listed.`
+    : ''
+
   const raw = await callAI({
     role: 'ceo',
     messages: [
       { role: 'system', content: RECALL_SYSTEM_PROMPT },
       {
         role: 'user',
-        content: `Project context:\n${summary}\n\nSuggested next step: ${nextStep}\n\nUser question: ${command}`,
+        content: `Project context:\n${summary}\n\nSuggested next step: ${nextStep}${operatorHint}\n\nUser question: ${command}`,
       },
     ],
     jsonMode: true,
-    maxTokens: 600,
+    maxTokens: 500,
   })
 
   let parsed: Record<string, unknown>
