@@ -386,12 +386,164 @@ async function executeActions(
   return resolvedProjectId
 }
 
+// ── Recall intent detection ────────────────────────────────────────────────────
+
+/**
+ * Patterns that signal a project recall question.
+ * Matched case-insensitively before full CEO agent call.
+ */
+const RECALL_PATTERNS: RegExp[] = [
+  /what\s+are\s+we\s+doing\s+(for|on|with)\s+/i,
+  /summarize\s+/i,
+  /summary\s+(of|for)\s+/i,
+  /status\s+(of|for|on)\s+/i,
+  /who\s+is\s+assigned\s+to\s+/i,
+  /next\s+step\s+(for|on)\s+/i,
+  /what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i,
+  /what\s+has\s+\w+\s+done\s+(for|on)\s+/i,
+  /tell\s+me\s+about\s+/i,
+  /what.*(happening|going\s+on)\s+(with|for|on)\s+/i,
+]
+
+function isRecallIntent(command: string): boolean {
+  return RECALL_PATTERNS.some(p => p.test(command))
+}
+
+/**
+ * Extract the project name hint from a recall command.
+ * Strips the leading verb phrase to isolate the project name.
+ */
+function extractRecallProjectName(command: string): string {
+  const cleaned = command
+    .replace(/^what\s+are\s+we\s+doing\s+(for|on|with)\s+/i, '')
+    .replace(/^summarize\s+/i, '')
+    .replace(/^summary\s+(of|for)\s+/i, '')
+    .replace(/^status\s+(of|for|on)\s+/i, '')
+    .replace(/^who\s+is\s+assigned\s+to\s+/i, '')
+    .replace(/^next\s+step\s+(for|on)\s+/i, '')
+    .replace(/^tell\s+me\s+about\s+/i, '')
+    .replace(/^what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i, '')
+    .replace(/^what\s+has\s+\w+\s+done\s+(for|on)\s+/i, '')
+    .replace(/^what.*(happening|going\s+on)\s+(with|for|on)\s+/i, '')
+    .trim()
+    // Strip trailing punctuation
+    .replace(/[?.!]+$/, '')
+    .trim()
+  return cleaned
+}
+
+const RECALL_SYSTEM_PROMPT = `You are the CEO of AÏKO. You have been given detailed context about a specific project.
+
+Answer the user's question in a natural, conversational CEO voice (2-6 sentences).
+- Speak in first person
+- Be specific — use the actual data provided
+- If something is missing or unknown, say so clearly ("We don't have that data yet")
+- Do not make up leads, actions, or status that aren't in the context
+- Do not suggest running any external action or browser task unless asked
+- This is a read-only status check — do not create anything
+
+Return ONLY valid JSON:
+{
+  "response": "Your natural-language answer",
+  "intent": "project_recall",
+  "project_id": "<the project id from context or null>"
+}`
+
+async function runRecallQuery(command: string, projectName: string): Promise<CEOCommandResult> {
+  const {
+    findProjectByNameOrAlias,
+    listActiveProjectNames,
+    getProjectContext,
+    getProjectExecutiveSummary,
+    getProjectNextStep,
+  } = await import('@/lib/project-context')
+
+  const project = await findProjectByNameOrAlias(projectName)
+
+  if (!project) {
+    const allNames = await listActiveProjectNames()
+    const list = allNames.length > 0
+      ? `Active projects: ${allNames.join(', ')}.`
+      : 'No active projects found.'
+    return {
+      response: `I don't have a project matching "${projectName}". ${list}`,
+      intent: 'project_recall',
+      actions: [],
+      project_id: null,
+    }
+  }
+
+  const ctx = await getProjectContext(project.id)
+  if (!ctx) {
+    return {
+      response: `I found the project "${project.name}" but couldn't load its context right now.`,
+      intent: 'project_recall',
+      actions: [],
+      project_id: project.id,
+    }
+  }
+
+  const summary  = getProjectExecutiveSummary(ctx)
+  const nextStep = getProjectNextStep(ctx)
+
+  const raw = await callAI({
+    role: 'ceo',
+    messages: [
+      { role: 'system', content: RECALL_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Project context:\n${summary}\n\nSuggested next step: ${nextStep}\n\nUser question: ${command}`,
+      },
+    ],
+    jsonMode: true,
+    maxTokens: 600,
+  })
+
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return {
+      response: raw.slice(0, 500),
+      intent: 'project_recall',
+      actions: [],
+      project_id: project.id,
+    }
+  }
+
+  // Log the command
+  await db.query(
+    `INSERT INTO ceo_commands (command, response, intent, actions, project_id)
+     VALUES ($1,$2,$3,$4,$5)`,
+    [command, String(parsed.response ?? ''), 'project_recall', '[]', project.id]
+  )
+
+  return {
+    response:   String(parsed.response ?? ''),
+    intent:     'project_recall',
+    actions:    [],
+    project_id: project.id,
+  }
+}
+
 export async function runCeoCommandAgent(
   command: string,
   // modelConfig is kept for backward-compatibility but is no longer used.
   // callAI() resolves the provider from the role assignment table.
   _modelConfig?: unknown
 ): Promise<CEOCommandResult> {
+  // ── Fast-path: project recall questions bypass the full CEO agent ────────────
+  if (isRecallIntent(command)) {
+    const projectName = extractRecallProjectName(command)
+    if (projectName.length >= 2) {
+      try {
+        return await runRecallQuery(command, projectName)
+      } catch {
+        // Fall through to normal agent if recall fails
+      }
+    }
+  }
+
   const context = await buildCompanyContext()
 
   const raw = await callAI({

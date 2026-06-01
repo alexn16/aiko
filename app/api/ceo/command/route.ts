@@ -294,6 +294,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // For project recall: attach quick-navigation chips
+      let recallChips: Array<{ label: string; href: string }> | null = null
+      if (String(result.intent) === 'project_recall' && result.project_id) {
+        const pid = String(result.project_id)
+        recallChips = [
+          { label: '📁 Open project',             href: `/projects/${pid}` },
+          { label: '▶ First Campaign Flow',        href: `/start-campaign?project_id=${pid}` },
+          { label: '👥 Leads',                     href: `/leads?project_id=${pid}` },
+        ]
+      }
+
       return NextResponse.json({
         ...result,
         response:            responseText,
@@ -301,6 +312,7 @@ export async function POST(request: NextRequest) {
         start_campaign_url:  startCampaignUrl,
         launch_template:     launchTemplate,
         strategy_brief:      strategyBrief,
+        recall_chips:        recallChips,
         delegation: delegationResult ? {
           status: delegationResult.status,
           message: delegationResult.message,

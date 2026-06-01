@@ -158,6 +158,7 @@ export default function CeoPage() {
   const [lastDelegation, setLastDelegation] = useState<DelegationChip | null>(null)
   const [lastCapabilityGap, setLastCapabilityGap] = useState<CapabilityGap | null>(null)
   const [lastStartCampaignUrl, setLastStartCampaignUrl] = useState<string | null>(null)
+  const [lastRecallChips, setLastRecallChips] = useState<Array<{ label: string; href: string }> | null>(null)
   const bottomRef                     = useRef<HTMLDivElement>(null)
   const inputRef                      = useRef<HTMLTextAreaElement>(null)
 
@@ -224,6 +225,7 @@ export default function CeoPage() {
     setLastDelegation(null)
     setLastCapabilityGap(null)
     setLastStartCampaignUrl(null)   // clear previous chip when a new command starts
+    setLastRecallChips(null)
     setLoading(true)
 
     // Optimistic user message
@@ -263,6 +265,7 @@ export default function CeoPage() {
         if (data.delegation) setLastDelegation(data.delegation)
         if (data.capability_gap) setLastCapabilityGap(data.capability_gap)
         if (data.start_campaign_url) setLastStartCampaignUrl(data.start_campaign_url)
+        if (data.recall_chips?.length) setLastRecallChips(data.recall_chips)
       }
     } catch {
       const errMsg = 'Could not reach the server. Check your connection.'
@@ -605,6 +608,30 @@ export default function CeoPage() {
                       >
                         ⚠ {lastCapabilityGap.missing.length} {lastCapabilityGap.missing.length === 1 ? 'capability' : 'capabilities'} missing — improvement proposal created
                       </Link>
+                    </div>
+                  </div>
+                )}
+
+                {/* Project recall chips — shown after recall answers */}
+                {lastRecallChips && !loading && (
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    <div style={{ width: 32, flexShrink: 0 }} />
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                      {lastRecallChips.map(chip => (
+                        <Link
+                          key={chip.href}
+                          href={chip.href}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: 11, padding: '4px 10px', borderRadius: 6,
+                            fontWeight: 500, textDecoration: 'none',
+                            background: '#f0fdf4', color: '#15803d',
+                            border: '1px solid #86efac',
+                          }}
+                        >
+                          {chip.label}
+                        </Link>
+                      ))}
                     </div>
                   </div>
                 )}

@@ -1,6 +1,6 @@
 # AÏKO App Report
 
-_Generated: 2026-05-24 · Updated: 2026-06-01 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template, CEO Strategy Brief, strategy-driven operator recommendation)_
+_Generated: 2026-05-24 · Updated: 2026-06-01 (execution trails, Gmail reply-status checks, First Campaign Flow, Project Launch Template, CEO Strategy Brief, strategy-driven operator recommendation, CEO project recall)_
 
 ---
 
@@ -31,6 +31,16 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 ---
 
 ## 2. Page map
+
+### CEO Project Recall
+- **Purpose:** CEO Chat can answer natural-language questions about existing projects using real DB data. Read-only — no mutations, no new tasks, no operator actions.
+- **Key file:** `lib/project-context.ts` — `findProjectByNameOrAlias` (case-insensitive exact+partial), `getProjectContext` (aggregates project, PM, memory, strategy brief, launch template, leads, approvals, recent operator actions), `getProjectExecutiveSummary` (compact plaintext), `getProjectNextStep` (priority: blockers → approvals → next checklist step → no leads → unapproved leads → uncontacted leads → check replies → memory next steps)
+- **Recall detection:** `isRecallIntent()` + `extractRecallProjectName()` in `ceo-command-agent.ts` — pattern-matched before full CEO agent, fast-path to `runRecallQuery()`
+- **AI call:** `callAI(role:'ceo')` with `RECALL_SYSTEM_PROMPT` + project summary text + next step. `maxTokens: 600`. Falls through to full agent if recall throws.
+- **Response shape:** `{ response, intent:'project_recall', actions:[], project_id }` — always zero actions
+- **Chips:** `recall_chips` array in CEO command route response → rendered as green quick-nav links (Open project, First Campaign Flow, Leads)
+- **APIs:** `GET /api/projects/[id]/context`, `GET /api/projects/search?q=`
+- **Safety:** No writes. Missing data → CEO says explicitly it is missing. No project found → lists active project names.
 
 ### CEO Strategy Brief + Operator Recommendation (auto-generated on project creation)
 - **Purpose:** AI-generated first-campaign strategy brief with operator recommendation. Created automatically when CEO creates a project. Guidance only — never triggers automation.

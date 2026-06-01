@@ -513,6 +513,51 @@ Approved leads with email addresses can become Gmail drafts through a named Web 
 - Daily send limits enforced by Operating Mode
 - Single-lead outreach only — no bulk send in this version
 
+## CEO Project Recall
+
+The CEO Chat can answer questions about existing projects using real project data — no hallucination, no fake status.
+
+**Trigger phrases** (detected automatically, before calling the full CEO agent):
+- "What are we doing for ALB Parking?"
+- "Summarize Foreman."
+- "Status of ALB Parking"
+- "Who is assigned to ALB Parking?"
+- "Next step for ALB Parking"
+- "Tell me about Foreman"
+- "What has Kevin done for ALB Parking?"
+
+**Data sources used** (read-only, no mutations):
+- `projects` — name, goal, status
+- `project_managers` — assigned PM and focus
+- `project_memory` — notes, next steps, blockers
+- `project_strategy_briefs` — objective, audience, channel, value prop, operator recommendation
+- `project_launch_templates` — checklist progress and next uncompleted step
+- `leads` — total, approved, contacted, replied counts
+- `approval_items` + `web_operator_actions` — pending approvals and recent actions
+- Execution trail events
+
+**How it works:**
+1. Command matches a recall pattern → extract project name hint
+2. `findProjectByNameOrAlias()` searches by exact then partial match (case-insensitive)
+3. `getProjectContext()` aggregates all data above into a single object
+4. `getProjectExecutiveSummary()` formats it as compact plaintext
+5. `getProjectNextStep()` derives the most actionable next step
+6. `callAI(role:'ceo')` generates a concise conversational answer from the context
+7. Response includes quick-navigation chips: Open project · First Campaign Flow · Leads
+
+**If no project found:** Returns a clear message listing all active project names.
+
+**Quick navigation chips** appear after recall answers:
+- 📁 Open project → `/projects/[id]`
+- ▶ First Campaign Flow → `/start-campaign?project_id=[id]`
+- 👥 Leads → `/leads?project_id=[id]`
+
+**APIs:**
+- `GET /api/projects/[id]/context` — full project context + executive summary text + next step
+- `GET /api/projects/search?q=` — find project by name (exact or partial)
+
+**Safety:** Read-only. No mutations. No new tasks, operators, or projects created. If data is missing, the CEO says so explicitly.
+
 ## CEO Strategy Brief
 
 When the CEO creates a new project, AÏKO automatically generates a **First Campaign Strategy Brief** using the CEO AI role. The brief is guidance only — it does not research, contact, send, or approve anything.

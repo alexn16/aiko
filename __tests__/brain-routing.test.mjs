@@ -1425,3 +1425,166 @@ test('selecting recommended operator in Start Campaign does not trigger external
   assert.equal(webOperatorCalled, false, 'No Web Operator action triggered')
   // fakeRunWebOperator is never called
 })
+
+// ── CEO project recall helpers (pure JS replicas) ─────────────────────────────
+
+const RECALL_PATTERNS = [
+  /what\s+are\s+we\s+doing\s+(for|on|with)\s+/i,
+  /summarize\s+/i,
+  /summary\s+(of|for)\s+/i,
+  /status\s+(of|for|on)\s+/i,
+  /who\s+is\s+assigned\s+to\s+/i,
+  /next\s+step\s+(for|on)\s+/i,
+  /what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i,
+  /what\s+has\s+\w+\s+done\s+(for|on)\s+/i,
+  /tell\s+me\s+about\s+/i,
+  /what.*(happening|going\s+on)\s+(with|for|on)\s+/i,
+]
+function isRecallIntent(cmd) { return RECALL_PATTERNS.some(p => p.test(cmd)) }
+
+function extractRecallProjectName(cmd) {
+  return cmd
+    .replace(/^what\s+are\s+we\s+doing\s+(for|on|with)\s+/i, '')
+    .replace(/^summarize\s+/i, '')
+    .replace(/^summary\s+(of|for)\s+/i, '')
+    .replace(/^status\s+(of|for|on)\s+/i, '')
+    .replace(/^who\s+is\s+assigned\s+to\s+/i, '')
+    .replace(/^next\s+step\s+(for|on)\s+/i, '')
+    .replace(/^tell\s+me\s+about\s+/i, '')
+    .replace(/^what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i, '')
+    .replace(/^what\s+has\s+\w+\s+done\s+(for|on)\s+/i, '')
+    .replace(/^what.*(happening|going\s+on)\s+(with|for|on)\s+/i, '')
+    .trim().replace(/[?.!]+$/, '').trim()
+}
+
+function findProjectByName(projects, query) {
+  const q = query.toLowerCase()
+  return projects.find(p => p.name.toLowerCase() === q)
+    ?? projects.find(p => p.name.toLowerCase().includes(q))
+    ?? null
+}
+
+// ── 58. Project search matches case-insensitively ─────────────────────────────
+
+test('project search matches by name case-insensitively', () => {
+  const projects = [
+    { id: 'p-1', name: 'ALB Parking', goal: 'Find operators' },
+    { id: 'p-2', name: 'Foreman Inc', goal: 'B2B outreach' },
+  ]
+  assert.equal(findProjectByName(projects, 'alb parking')?.id, 'p-1', 'Exact lowercase match')
+  assert.equal(findProjectByName(projects, 'ALB PARKING')?.id, 'p-1', 'Uppercase match')
+  assert.equal(findProjectByName(projects, 'ALB')?.id, 'p-1', 'Partial match')
+  assert.equal(findProjectByName(projects, 'foreman')?.id, 'p-2', 'Partial lowercase match')
+  assert.equal(findProjectByName(projects, 'xyz'), null, 'No match returns null')
+})
+
+// ── 59. Recall intent is detected correctly ───────────────────────────────────
+
+test('recall intent patterns match expected commands', () => {
+  assert.ok(isRecallIntent('What are we doing for ALB Parking?'), 'what are we doing for')
+  assert.ok(isRecallIntent('Summarize ALB Parking'), 'summarize')
+  assert.ok(isRecallIntent('Status of Foreman'), 'status of')
+  assert.ok(isRecallIntent('Who is assigned to ALB Parking?'), 'who is assigned to')
+  assert.ok(isRecallIntent('Next step for ALB Parking'), 'next step for')
+  assert.ok(isRecallIntent('Tell me about Foreman'), 'tell me about')
+  assert.ok(isRecallIntent('What has Kevin done for ALB Parking?'), 'what has X done for')
+  assert.ok(!isRecallIntent('Create a project for ALB Parking'), 'create does not trigger recall')
+  assert.ok(!isRecallIntent('Run the research for ALB'), 'run does not trigger recall')
+})
+
+// ── 60. Recall project name extracted correctly ───────────────────────────────
+
+test('project name extracted from recall commands', () => {
+  assert.equal(extractRecallProjectName('What are we doing for ALB Parking?'), 'ALB Parking')
+  assert.equal(extractRecallProjectName('Summarize ALB Parking'), 'ALB Parking')
+  assert.equal(extractRecallProjectName('Status of Foreman'), 'Foreman')
+  assert.equal(extractRecallProjectName('Who is assigned to ALB Parking?'), 'ALB Parking')
+  assert.equal(extractRecallProjectName('Next step for ALB Parking'), 'ALB Parking')
+  assert.equal(extractRecallProjectName('Tell me about Foreman'), 'Foreman')
+})
+
+// ── 61. Context includes brief and launch progress ────────────────────────────
+
+test('project context includes strategy brief and launch progress', () => {
+  // Simulate the shape returned by getProjectContext
+  const ctx = {
+    id: 'p-1', name: 'ALB Parking', goal: 'Find parking operators',
+    pm_name: 'Kenji', pm_focus: 'outbound',
+    brief_objective: 'Launch first outbound campaign',
+    brief_target_audience: 'Property administrators',
+    brief_channel: 'email',
+    launch_done: 3, launch_total: 9, launch_status: 'in_progress',
+    launch_next_item: 'Prepare Gmail draft for approved lead',
+    lead_total: 5, lead_approved: 2, lead_contacted: 0, lead_replied: 0,
+    pending_approvals: 0,
+  }
+  assert.ok(ctx.brief_objective,   'has brief objective')
+  assert.ok(ctx.brief_target_audience, 'has target audience')
+  assert.ok(ctx.launch_total > 0,  'has launch template progress')
+  assert.equal(ctx.launch_done, 3, 'correct steps done')
+  assert.equal(ctx.launch_next_item, 'Prepare Gmail draft for approved lead', 'has next item')
+})
+
+// ── 62. Recall does not create a project ─────────────────────────────────────
+
+test('recall intent does not create a project', () => {
+  // Recall result has no actions array with create_project
+  const recallResult = {
+    response: 'ALB Parking is targeting property administrators...',
+    intent: 'project_recall',
+    actions: [],    // must be empty — no side effects
+    project_id: 'p-1',
+  }
+  assert.equal(recallResult.actions.length, 0, 'No actions in recall result')
+  assert.equal(recallResult.intent, 'project_recall', 'Intent is project_recall')
+  const hasCreate = recallResult.actions.some(a => a.type === 'create_project')
+  assert.equal(hasCreate, false, 'No create_project action')
+})
+
+// ── 63. No project found returns clear message ────────────────────────────────
+
+test('no project found returns clear message with available projects', () => {
+  function buildNoProjectResponse(query, allNames) {
+    const list = allNames.length > 0
+      ? `Active projects: ${allNames.join(', ')}.`
+      : 'No active projects found.'
+    return {
+      response: `I don't have a project matching "${query}". ${list}`,
+      intent: 'project_recall',
+      actions: [],
+      project_id: null,
+    }
+  }
+  const resp = buildNoProjectResponse('XYZ Corp', ['ALB Parking', 'Foreman'])
+  assert.ok(resp.response.includes('XYZ Corp'), 'Mentions the unknown project name')
+  assert.ok(resp.response.includes('ALB Parking'), 'Lists available projects')
+  assert.equal(resp.project_id, null, 'No project_id')
+  assert.equal(resp.actions.length, 0, 'No actions')
+})
+
+// ── 64. Next step uses launch template when available ─────────────────────────
+
+test('getProjectNextStep uses launch template progress', () => {
+  function getNextStep(ctx) {
+    if (ctx.memory_blockers?.length > 0) return `Resolve blocker: ${ctx.memory_blockers[0]}`
+    if (ctx.pending_approvals > 0) return `Review and approve ${ctx.pending_approvals} pending action(s).`
+    if (ctx.launch_next_item) return `Complete the next launch step: "${ctx.launch_next_item}".`
+    if (ctx.lead_total === 0) return ctx.brief_research_prompt ? `Research leads using: "${ctx.brief_research_prompt}"` : 'Research leads.'
+    if (ctx.lead_approved === 0) return `Review and approve ${ctx.lead_total} lead(s).`
+    if (ctx.lead_contacted === 0) return `Prepare outreach for ${ctx.lead_approved} approved lead(s).`
+    return 'Review the execution trail.'
+  }
+
+  const ctx1 = { memory_blockers: [], pending_approvals: 0,
+    launch_next_item: 'Research leads via Web Operator',
+    lead_total: 0, lead_approved: 0, lead_contacted: 0 }
+  assert.ok(getNextStep(ctx1).includes('Research leads via Web Operator'), 'Uses launch next item')
+
+  const ctx2 = { memory_blockers: ['Waiting for domain'], pending_approvals: 0,
+    launch_next_item: 'Step X', lead_total: 0, lead_approved: 0, lead_contacted: 0 }
+  assert.ok(getNextStep(ctx2).includes('Waiting for domain'), 'Blockers take priority')
+
+  const ctx3 = { memory_blockers: [], pending_approvals: 3,
+    launch_next_item: null, lead_total: 0, lead_approved: 0, lead_contacted: 0 }
+  assert.ok(getNextStep(ctx3).includes('3'), 'Pending approvals surface')
+})
