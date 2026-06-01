@@ -8,6 +8,7 @@
  */
 
 import { db } from '@/lib/db/client'
+import { listProjectDecisions, type ProjectDecision } from '@/lib/project-decisions'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,14 @@ export interface ProjectContext {
     description: string
     created_at: string
     operator_name: string | null
+  }>
+  // Decision log (last 6)
+  recent_decisions: Array<{
+    decision_type: string
+    title: string
+    summary: string | null
+    decided_by_role: string | null
+    created_at: string
   }>
 }
 
@@ -210,6 +219,12 @@ export async function getProjectContext(projectId: string): Promise<ProjectConte
     [projectId]
   )
 
+  // Recent decisions (last 6)
+  let recentDecisions: ProjectDecision[] = []
+  try {
+    recentDecisions = await listProjectDecisions(projectId, { limit: 6 })
+  } catch { /* non-fatal — table may not exist yet */ }
+
   const safeArray = (v: unknown): string[] => {
     if (Array.isArray(v)) return v.map(String)
     if (typeof v === 'string') {
@@ -262,6 +277,13 @@ export async function getProjectContext(projectId: string): Promise<ProjectConte
       created_at:    String(r.created_at),
       operator_name: r.operator_name ? String(r.operator_name) : null,
     })),
+    recent_decisions: recentDecisions.map(d => ({
+      decision_type:   d.decision_type,
+      title:           d.title,
+      summary:         d.summary,
+      decided_by_role: d.decided_by_role,
+      created_at:      d.created_at,
+    })),
   }
 }
 
@@ -296,6 +318,13 @@ export function getProjectExecutiveSummary(ctx: ProjectContext): string {
     for (const a of ctx.recent_actions.slice(0, 3)) {
       const by = a.operator_name ? ` (${a.operator_name})` : ''
       lines.push(`  - [${a.status}] ${a.action_type}${by}: ${a.description.slice(0, 80)}`)
+    }
+  }
+  if (ctx.recent_decisions.length > 0) {
+    lines.push(`Key decisions (${ctx.recent_decisions.length}):`)
+    for (const d of ctx.recent_decisions.slice(0, 4)) {
+      const when = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      lines.push(`  - [${when}] ${d.title}${d.summary ? `: ${d.summary.slice(0, 80)}` : ''}`)
     }
   }
   return lines.join('\n')

@@ -589,3 +589,17 @@ CEO/PM Chat
 - Safe retry for search/open_url/read_page/copy_data
 - Structured failure reasons
 - /operator page shows screenshots and page state
+
+### Project Decision Log — 2026-06-01
+- `lib/db/migrations/033_project_decisions.sql` — `project_decisions` table with type, title, summary, actor role, related entity, metadata, timestamp
+- `lib/project-decisions.ts` — `recordProjectDecision()`, `recordDecisionIfNotExists()` (idempotent), `listProjectDecisions()`, `getDecisionSummaryForProject()`
+- `GET /api/projects/[id]/decisions` — returns decisions newest-first with limit/offset/types filters
+- `POST /api/projects/[id]/decisions` — record a decision; pass `idempotent: true` to deduplicate
+- Integrated at: project creation (project_created, strategy_brief_created, launch_template_created), PM assignment (pm_assigned), operator recommendation (operator_recommended), operator change (operator_changed), research prompt save (research_prompt_changed), approval item status (approval_approved/rejected/changes_requested), lead approval/rejection (lead_approved/lead_rejected)
+- `getProjectContext()` now fetches last 6 decisions and includes them in `recent_decisions`
+- `getProjectExecutiveSummary()` appends key decisions to the CEO recall prompt
+- CEO can answer: "Why did we choose Kevin?", "What decisions have been made for ALB Parking?"
+- Project workspace: new "Decision Log" tab with type badges, title, summary, actor, timestamp
+- Safety: read-only memory; does not trigger automation, Web Operator, or any external action
+- Idempotency: automatic creation events (project_created, brief, launch template) use recordDecisionIfNotExists — no duplicate spam
+- Tests 70–75 added (75 total, all passing)

@@ -266,6 +266,34 @@ async function executeActions(
             target_market: d.target_market ? String(d.target_market) : null,
           })
         } catch { /* non-fatal — brief is optional guidance */ }
+
+        // Record project_created decision (idempotent)
+        try {
+          const { recordDecisionIfNotExists } = await import('@/lib/project-decisions')
+          await recordDecisionIfNotExists({
+            project_id:      projectId,
+            decision_type:   'project_created',
+            title:           `Project "${d.name}" created`,
+            summary:         d.goal ? `Goal: ${d.goal}` : 'Project created by CEO.',
+            decided_by_role: 'ceo',
+            metadata:        { name: d.name, goal: d.goal ?? null, description: d.description ?? null },
+          })
+          // Also record strategy_brief_created and launch_template_created
+          await recordDecisionIfNotExists({
+            project_id:      projectId,
+            decision_type:   'strategy_brief_created',
+            title:           'First-campaign strategy brief generated',
+            summary:         'AI generated an initial strategy brief based on the project goal and target market.',
+            decided_by_role: 'system',
+          })
+          await recordDecisionIfNotExists({
+            project_id:      projectId,
+            decision_type:   'launch_template_created',
+            title:           'First-campaign launch checklist created',
+            summary:         'A 9-step launch checklist was created to guide the first campaign.',
+            decided_by_role: 'system',
+          })
+        } catch { /* non-fatal */ }
       }
 
       if (action.type === 'assign_pm') {
@@ -291,6 +319,19 @@ async function executeActions(
           [projectId, d.focus ?? '', pmId]
         )
         resolvedProjectId = resolvedProjectId ?? projectId
+
+        // Record pm_assigned decision
+        try {
+          const { recordProjectDecision } = await import('@/lib/project-decisions')
+          await recordProjectDecision({
+            project_id:      projectId,
+            decision_type:   'pm_assigned',
+            title:           `${pmName} assigned as Project Manager`,
+            summary:         d.focus ? `Focus: ${d.focus}` : `${pmName} is now managing this project.`,
+            decided_by_role: 'ceo',
+            metadata:        { pm_name: pmName, pm_id: pmId, focus: d.focus ?? null },
+          })
+        } catch { /* non-fatal */ }
 
         // Notify the assigned PM via internal messaging
         try {

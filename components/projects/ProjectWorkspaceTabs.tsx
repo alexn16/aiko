@@ -63,7 +63,7 @@ interface Props {
   hasProvider: boolean
 }
 
-type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'leads' | 'operator'
+type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'leads' | 'operator' | 'decisions'
 
 const STATUS_DOT: Record<string, string> = {
   active: '#10b981', browsing: '#3b82f6', writing: '#f59e0b',
@@ -275,6 +275,127 @@ function StrategyBriefStrip({ projectId }: { projectId: string }) {
   )
 }
 
+// ── Decision Log Panel ─────────────────────────────────────────────────────────
+
+interface ProjectDecisionRow {
+  id: string
+  decision_type: string
+  title: string
+  summary: string | null
+  decided_by_role: string | null
+  created_at: string
+}
+
+const DECISION_BADGE: Record<string, { bg: string; color: string; label: string }> = {
+  project_created:           { bg: '#dbeafe', color: '#1d4ed8', label: 'Project' },
+  pm_assigned:               { bg: '#fce7f3', color: '#9d174d', label: 'PM' },
+  strategy_brief_created:    { bg: '#ede9fe', color: '#5b21b6', label: 'Brief' },
+  operator_recommended:      { bg: '#d1fae5', color: '#065f46', label: 'Operator' },
+  operator_changed:          { bg: '#d1fae5', color: '#065f46', label: 'Operator' },
+  launch_template_created:   { bg: '#fef3c7', color: '#92400e', label: 'Launch' },
+  lead_approved:             { bg: '#dcfce7', color: '#166534', label: 'Lead ✓' },
+  lead_rejected:             { bg: '#fee2e2', color: '#991b1b', label: 'Lead ✗' },
+  approval_approved:         { bg: '#dcfce7', color: '#166534', label: 'Approved' },
+  approval_rejected:         { bg: '#fee2e2', color: '#991b1b', label: 'Rejected' },
+  approval_changes_requested:{ bg: '#fef3c7', color: '#92400e', label: 'Changes' },
+  campaign_approved:         { bg: '#dbeafe', color: '#1e40af', label: 'Campaign' },
+  research_prompt_changed:   { bg: '#f3f4f6', color: '#374151', label: 'Research' },
+  next_step_changed:         { bg: '#f3f4f6', color: '#374151', label: 'Next Step' },
+}
+
+function DecisionLogPanel({ projectId }: { projectId: string }) {
+  const [decisions, setDecisions] = useState<ProjectDecisionRow[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/projects/${projectId}/decisions?limit=50`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(d => setDecisions(d.decisions ?? []))
+      .catch(() => setError('Could not load decision log.'))
+      .finally(() => setLoading(false))
+  }, [projectId])
+
+  if (loading) {
+    return <div style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>Loading decision log…</div>
+  }
+  if (error) {
+    return <div style={{ color: '#ef4444', fontSize: 13 }}>{error}</div>
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>📋 Decision Log</div>
+        <div style={{ fontSize: 12, color: '#64748b' }}>
+          Important decisions made for this project — read-only memory. Does not trigger any action.
+        </div>
+      </div>
+
+      {decisions.length === 0 && (
+        <div style={{
+          padding: '28px 20px', textAlign: 'center',
+          background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0',
+          color: '#94a3b8', fontSize: 13,
+        }}>
+          No decisions recorded yet. They appear automatically as you create projects, approve leads, and run campaigns.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {decisions.map(d => {
+          const badge = DECISION_BADGE[d.decision_type] ?? { bg: '#f1f5f9', color: '#475569', label: d.decision_type }
+          const when = new Date(d.created_at).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', year: 'numeric',
+          })
+          const time = new Date(d.created_at).toLocaleTimeString('en-US', {
+            hour: '2-digit', minute: '2-digit',
+          })
+          return (
+            <div key={d.id} style={{
+              padding: '14px 18px',
+              background: '#ffffff', borderRadius: 10,
+              border: '1px solid #f1f5f9',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              display: 'flex', gap: 14, alignItems: 'flex-start',
+            }}>
+              {/* Badge */}
+              <div style={{
+                background: badge.bg, color: badge.color,
+                borderRadius: 6, padding: '3px 10px',
+                fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+                textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2,
+              }}>
+                {badge.label}
+              </div>
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>
+                  {d.title}
+                </div>
+                {d.summary && (
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                    {d.summary}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                  {d.decided_by_role && (
+                    <span style={{ marginRight: 8, textTransform: 'capitalize' }}>
+                      {d.decided_by_role}
+                    </span>
+                  )}
+                  {when} · {time}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity, hasProvider }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
 
@@ -294,6 +415,7 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
     { id: 'research',  label: 'Research' },
     { id: 'leads',     label: 'Leads' },
     { id: 'operator',  label: 'Operator' },
+    { id: 'decisions', label: 'Decision Log' },
   ]
 
   return (
@@ -664,6 +786,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
             <div style={{ maxWidth: 760 }}>
               <ProjectOperatorPanel projectId={project.id} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Decision Log ─────────────────────────────────────────────────── */}
+        {tab === 'decisions' && (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
+            <div style={{ maxWidth: 760 }}>
+              <DecisionLogPanel projectId={project.id} />
             </div>
           </div>
         )}

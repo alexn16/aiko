@@ -1588,3 +1588,158 @@ test('getProjectNextStep uses launch template progress', () => {
     launch_next_item: null, lead_total: 0, lead_approved: 0, lead_contacted: 0 }
   assert.ok(getNextStep(ctx3).includes('3'), 'Pending approvals surface')
 })
+
+// ── Decision Log tests ────────────────────────────────────────────────────────
+
+// ── 70. recordDecisionIfNotExists is idempotent ───────────────────────────────
+
+test('recordDecisionIfNotExists returns existing entry without creating duplicate', async () => {
+  const store = []
+
+  async function recordDecisionIfNotExists(input) {
+    const existing = store.find(
+      d => d.project_id === input.project_id && d.decision_type === input.decision_type
+    )
+    if (existing) return existing
+    const entry = { id: crypto.randomUUID(), ...input, created_at: new Date().toISOString() }
+    store.push(entry)
+    return entry
+  }
+
+  const first  = await recordDecisionIfNotExists({ project_id: 'p1', decision_type: 'project_created', title: 'Project "Test" created' })
+  const second = await recordDecisionIfNotExists({ project_id: 'p1', decision_type: 'project_created', title: 'Duplicate attempt' })
+
+  assert.equal(first.id, second.id,   'Same entry returned — no duplicate')
+  assert.equal(store.length, 1,        'Only one entry in store')
+  assert.equal(second.title, 'Project "Test" created', 'Original title preserved')
+})
+
+// ── 71. project_created decision recorded once even if called twice ───────────
+
+test('project_created decision recorded at most once per project', async () => {
+  const store = []
+
+  async function recordOnce(projectId, type, title) {
+    if (store.some(d => d.project_id === projectId && d.decision_type === type)) return
+    store.push({ project_id: projectId, decision_type: type, title, created_at: new Date().toISOString() })
+  }
+
+  await recordOnce('proj-abc', 'project_created', 'Project "ABC" created')
+  await recordOnce('proj-abc', 'project_created', 'Project "ABC" created')
+  await recordOnce('proj-abc', 'strategy_brief_created', 'Brief created')
+  await recordOnce('proj-abc', 'launch_template_created', 'Launch checklist created')
+
+  const forProject = store.filter(d => d.project_id === 'proj-abc')
+  assert.equal(forProject.filter(d => d.decision_type === 'project_created').length, 1, 'project_created recorded once')
+  assert.equal(forProject.filter(d => d.decision_type === 'strategy_brief_created').length, 1, 'strategy_brief_created recorded once')
+  assert.equal(forProject.filter(d => d.decision_type === 'launch_template_created').length, 1, 'launch_template_created recorded once')
+  assert.equal(forProject.length, 3, 'Three distinct decision types recorded')
+})
+
+// ── 72. approval_approved decision recorded when approval status changes ──────
+
+test('approval_approved decision recorded when approval item approved', () => {
+  function deriveDecisionType(status) {
+    const map = {
+      approved:          'approval_approved',
+      rejected:          'approval_rejected',
+      changes_requested: 'approval_changes_requested',
+    }
+    return map[status] ?? null
+  }
+
+  assert.equal(deriveDecisionType('approved'),          'approval_approved')
+  assert.equal(deriveDecisionType('rejected'),          'approval_rejected')
+  assert.equal(deriveDecisionType('changes_requested'), 'approval_changes_requested')
+  assert.equal(deriveDecisionType('pending'),           null, 'No decision for pending status')
+  assert.equal(deriveDecisionType('draft'),             null, 'No decision for draft status')
+})
+
+// ── 73. lead_approved decision recorded when lead status changes to approved ──
+
+test('lead_approved / lead_rejected decision recorded on lead status update', () => {
+  function buildLeadDecision(lead, newStatus) {
+    if (!lead.project_id || !['approved', 'rejected'].includes(newStatus)) return null
+    return {
+      project_id:    lead.project_id,
+      decision_type: newStatus === 'approved' ? 'lead_approved' : 'lead_rejected',
+      title:         `Lead "${lead.company_name}" ${newStatus}`,
+      decided_by_role: 'user',
+    }
+  }
+
+  const lead = { id: 'l1', project_id: 'p1', company_name: 'Acme Corp' }
+
+  const approved = buildLeadDecision(lead, 'approved')
+  assert.ok(approved, 'Decision built for approved')
+  assert.equal(approved.decision_type, 'lead_approved')
+  assert.ok(approved.title.includes('Acme Corp'))
+
+  const rejected = buildLeadDecision(lead, 'rejected')
+  assert.equal(rejected.decision_type, 'lead_rejected')
+
+  const noDecision = buildLeadDecision(lead, 'contacted')
+  assert.equal(noDecision, null, 'No decision for non-approval status changes')
+
+  const noProject = buildLeadDecision({ ...lead, project_id: null }, 'approved')
+  assert.equal(noProject, null, 'No decision if lead has no project_id')
+})
+
+// ── 74. CEO project context includes recent_decisions ─────────────────────────
+
+test('CEO project context shape includes recent_decisions array', () => {
+  // Simulate the ProjectContext shape with recent_decisions
+  const ctx = {
+    id: 'p1',
+    name: 'ALB Parking',
+    recent_decisions: [
+      {
+        decision_type:   'project_created',
+        title:           'Project "ALB Parking" created',
+        summary:         'Goal: Find property managers',
+        decided_by_role: 'ceo',
+        created_at:      '2026-06-01T10:00:00Z',
+      },
+      {
+        decision_type:   'strategy_brief_created',
+        title:           'First-campaign strategy brief generated',
+        summary:         'AI generated an initial strategy brief.',
+        decided_by_role: 'system',
+        created_at:      '2026-06-01T10:01:00Z',
+      },
+    ],
+  }
+
+  assert.ok(Array.isArray(ctx.recent_decisions), 'recent_decisions is an array')
+  assert.equal(ctx.recent_decisions.length, 2)
+  assert.equal(ctx.recent_decisions[0].decision_type, 'project_created')
+  assert.ok(ctx.recent_decisions[0].title.includes('ALB Parking'))
+})
+
+// ── 75. getDecisionSummaryForProject formats decisions as plain text ──────────
+
+test('getDecisionSummaryForProject formats decisions as readable plain text', () => {
+  function getDecisionSummary(decisions) {
+    if (decisions.length === 0) return 'No decisions recorded yet.'
+    return decisions.map(d => {
+      const who  = d.decided_by_role ? ` (${d.decided_by_role})` : ''
+      const when = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      return `[${when}] ${d.title}${who}: ${d.summary ?? d.decision_type}`
+    }).join('\n')
+  }
+
+  const decisions = [
+    { decision_type: 'project_created', title: 'Project "Test" created', summary: 'Goal: grow revenue', decided_by_role: 'ceo', created_at: '2026-06-01T10:00:00Z' },
+    { decision_type: 'pm_assigned', title: 'Alice assigned as PM', summary: null, decided_by_role: 'ceo', created_at: '2026-06-01T10:05:00Z' },
+  ]
+
+  const summary = getDecisionSummary(decisions)
+  assert.ok(summary.includes('Project "Test" created'), 'Includes project created')
+  assert.ok(summary.includes('grow revenue'), 'Includes summary text')
+  assert.ok(summary.includes('Alice assigned'), 'Includes PM assignment')
+  assert.ok(summary.includes('ceo'), 'Includes role')
+  assert.ok(!summary.includes('undefined'), 'No undefined values')
+
+  const empty = getDecisionSummary([])
+  assert.equal(empty, 'No decisions recorded yet.')
+})

@@ -1015,3 +1015,33 @@ docker compose up -d
 
 - `AIKO_MAP.md` — structural map of the system
 - `AIKO_FUNCTIONS.md` — capability and behavior reference
+
+## Project Decision Log
+
+AÏKO records important project decisions so the CEO can explain why the project is moving in a certain direction.
+
+**What is recorded automatically:**
+- `project_created` — when the CEO creates a new project (idempotent, once per project)
+- `strategy_brief_created` — when the first-campaign brief is generated (idempotent)
+- `launch_template_created` — when the launch checklist is created (idempotent)
+- `operator_recommended` — when a Web Operator is recommended for the first campaign (idempotent)
+- `pm_assigned` — each time the CEO assigns a Project Manager
+- `operator_changed` — when the user manually changes the recommended operator in the brief
+- `research_prompt_changed` — when the user saves an updated research prompt in the brief
+- `approval_approved / approval_rejected / approval_changes_requested` — when the user acts on an approval item
+- `lead_approved / lead_rejected` — when the user approves or rejects a lead
+
+**What is NOT recorded:** page loads, read-only views, internal polls, Web Operator browsing steps.
+
+**CEO Recall:** The Decision Log is included in `getProjectContext()` and `getProjectExecutiveSummary()` so the CEO can answer questions like:
+- "Why are we targeting property administrators?"
+- "Why did we choose Kevin as operator?"
+- "What decisions have been made for ALB Parking?"
+
+**UI:** Each project workspace has a "Decision Log" tab showing a chronological list with type badges, title, summary, actor role, and timestamp.
+
+**API:**
+- `GET /api/projects/[id]/decisions` — returns decisions (newest first). Query params: `limit`, `offset`, `types` (comma-separated).
+- `POST /api/projects/[id]/decisions` — record a new decision. Pass `idempotent: true` to skip if the type already exists.
+
+**Safety:** The Decision Log is read-only memory. It does not execute any action, trigger the Web Operator, or send any message.

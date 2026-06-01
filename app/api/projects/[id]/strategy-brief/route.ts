@@ -64,6 +64,18 @@ export async function GET(
             operator_reason:           rec.reason,
           })
           if (updated) brief = updated
+          // Record operator recommendation decision (idempotent)
+          try {
+            const { recordDecisionIfNotExists } = await import('@/lib/project-decisions')
+            await recordDecisionIfNotExists({
+              project_id:      projectId,
+              decision_type:   'operator_recommended',
+              title:           `${rec.operator_name} recommended as first Web Operator`,
+              summary:         rec.reason,
+              decided_by_role: 'system',
+              metadata:        { operator_id: rec.operator_id, operator_name: rec.operator_name },
+            })
+          } catch { /* non-fatal */ }
         } else {
           // Surface the reason even without persisting
           brief = {
@@ -134,6 +146,9 @@ export async function PATCH(
       }
     }
 
+    const prevResearchPrompt = brief.research_prompt
+    const prevOperatorId     = brief.recommended_operator_id
+
     const updated = await updateProjectStrategyBrief(brief.id, {
       title:                     body.title,
       objective:                 body.objective,
@@ -148,6 +163,40 @@ export async function PATCH(
       recommended_operator_name: operatorName,
       operator_reason:           operatorReason,
     })
+
+    // Record decisions for meaningful field changes (non-fatal)
+    try {
+      const { recordProjectDecision } = await import('@/lib/project-decisions')
+      // Operator changed manually
+      if (
+        body.recommended_operator_id !== undefined &&
+        body.recommended_operator_id !== prevOperatorId
+      ) {
+        await recordProjectDecision({
+          project_id:      projectId,
+          decision_type:   'operator_changed',
+          title:           `Recommended operator changed to ${operatorName ?? 'none'}`,
+          summary:         operatorReason ?? `Operator manually updated.`,
+          decided_by_role: 'user',
+          metadata:        { prev_operator_id: prevOperatorId, new_operator_id: body.recommended_operator_id, operator_name: operatorName },
+        })
+      }
+      // Research prompt saved/changed
+      if (
+        body.research_prompt !== undefined &&
+        body.research_prompt !== prevResearchPrompt
+      ) {
+        await recordProjectDecision({
+          project_id:      projectId,
+          decision_type:   'research_prompt_changed',
+          title:           'Research prompt updated',
+          summary:         `New prompt: ${String(body.research_prompt ?? '').slice(0, 120)}`,
+          decided_by_role: 'user',
+          metadata:        { prev: prevResearchPrompt, next: body.research_prompt },
+        })
+      }
+    } catch { /* non-fatal */ }
+
     return NextResponse.json({ brief: updated })
   } catch (err) {
     console.error(`[projects/${projectId}/strategy-brief PATCH]`, err)
