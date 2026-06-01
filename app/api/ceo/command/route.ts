@@ -305,6 +305,16 @@ export async function POST(request: NextRequest) {
         ]
       }
 
+      // For executive report: attach report + project chips
+      if (String(result.intent) === 'executive_report' && result.project_id) {
+        const pid = String(result.project_id)
+        recallChips = [
+          { label: '📊 View reports',              href: `/projects/${pid}?tab=reports` },
+          { label: '📁 Open project',              href: `/projects/${pid}` },
+          { label: '▶ First Campaign Flow',        href: `/start-campaign?project_id=${pid}` },
+        ]
+      }
+
       return NextResponse.json({
         ...result,
         response:            responseText,

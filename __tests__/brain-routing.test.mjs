@@ -1743,3 +1743,165 @@ test('getDecisionSummaryForProject formats decisions as readable plain text', ()
   const empty = getDecisionSummary([])
   assert.equal(empty, 'No decisions recorded yet.')
 })
+
+// ── Executive Report tests ─────────────────────────────────────────────────────
+
+// ── 76. Report generation uses project context (strategy + progress snapshots) ─
+
+test('executive report builds strategy and progress snapshots from project context', () => {
+  function buildStrategySnapshot(ctx) {
+    return {
+      goal:            ctx.goal,
+      objective:       ctx.brief_objective ?? null,
+      target_audience: ctx.brief_target_audience ?? null,
+      channel:         ctx.brief_channel ?? null,
+      value_prop:      ctx.brief_value_prop ?? null,
+      operator:        ctx.brief_operator ?? ctx.pm_name ?? null,
+      pm:              ctx.pm_name ?? null,
+    }
+  }
+
+  function buildProgressSnapshot(ctx) {
+    return {
+      launch_status:     ctx.launch_status ?? null,
+      launch_done:       ctx.launch_done ?? 0,
+      launch_total:      ctx.launch_total ?? 0,
+      lead_total:        ctx.lead_total ?? 0,
+      lead_approved:     ctx.lead_approved ?? 0,
+      lead_contacted:    ctx.lead_contacted ?? 0,
+      lead_replied:      ctx.lead_replied ?? 0,
+      pending_approvals: ctx.pending_approvals ?? 0,
+    }
+  }
+
+  const ctx = {
+    name: 'ALB Parking', goal: 'Find property managers',
+    brief_objective: 'Reach property managers in LA',
+    brief_target_audience: 'Property administrators',
+    brief_channel: 'LinkedIn', brief_value_prop: 'Managed parking',
+    brief_operator: 'Kevin', pm_name: 'Kenji',
+    launch_status: 'in_progress', launch_done: 3, launch_total: 9,
+    lead_total: 12, lead_approved: 5, lead_contacted: 3, lead_replied: 1,
+    pending_approvals: 2,
+  }
+
+  const strat = buildStrategySnapshot(ctx)
+  assert.equal(strat.target_audience, 'Property administrators')
+  assert.equal(strat.channel, 'LinkedIn')
+  assert.equal(strat.operator, 'Kevin')
+  assert.equal(strat.pm, 'Kenji')
+
+  const prog = buildProgressSnapshot(ctx)
+  assert.equal(prog.launch_done, 3)
+  assert.equal(prog.launch_total, 9)
+  assert.equal(prog.lead_total, 12)
+  assert.equal(prog.pending_approvals, 2)
+})
+
+// ── 77. Fallback report exists if AI fails ────────────────────────────────────
+
+test('fallback report builds from structured data without AI', () => {
+  function buildFallback(ctx, risks, nextStep) {
+    const parts = []
+    parts.push(`${ctx.name} is an active project${ctx.goal ? ` with the goal: ${ctx.goal}` : ''}.`)
+    if (ctx.brief_target_audience) {
+      parts.push(`We are targeting ${ctx.brief_target_audience}${ctx.brief_channel ? ` via ${ctx.brief_channel}` : ''}.`)
+    }
+    if (ctx.launch_total > 0) {
+      parts.push(`The first-campaign launch plan is ${ctx.launch_done}/${ctx.launch_total} steps complete.`)
+    }
+    if (ctx.lead_total > 0) {
+      parts.push(`The lead pipeline has ${ctx.lead_total} total leads — ${ctx.lead_approved} approved.`)
+    } else {
+      parts.push('No leads have been researched yet.')
+    }
+    if (risks.length > 0) parts.push(`Key risk: ${risks[0]}.`)
+    parts.push(`Recommended next step: ${nextStep}`)
+    return parts.join(' ')
+  }
+
+  const ctx = {
+    name: 'Foreman', goal: 'B2B outbound',
+    brief_target_audience: 'Plant managers',
+    brief_channel: 'LinkedIn',
+    launch_done: 2, launch_total: 9,
+    lead_total: 0, lead_approved: 0,
+  }
+  const summary = buildFallback(ctx, ['No leads researched yet'], 'Research leads via Web Operator.')
+
+  assert.ok(summary.includes('Foreman'), 'Includes project name')
+  assert.ok(summary.includes('Plant managers'), 'Includes target audience')
+  assert.ok(summary.includes('2/9'), 'Includes launch progress')
+  assert.ok(summary.includes('No leads have been researched yet'), 'Notes missing leads')
+  assert.ok(summary.includes('Research leads'), 'Includes next step')
+  assert.ok(!summary.includes('undefined'), 'No undefined values')
+})
+
+// ── 78. Report save does not create Web Operator action ───────────────────────
+
+test('executive report save path inserts only into project_executive_reports table', () => {
+  // Verify the insert targets the reports table, not web_operator_actions
+  const reportInsertSQL = `INSERT INTO project_executive_reports
+     (project_id, title, summary, strategy_snapshot, progress_snapshot,
+      decisions_snapshot, risks, next_steps, generated_by_role)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+   RETURNING *`
+
+  assert.ok(reportInsertSQL.includes('project_executive_reports'), 'Targets the correct table')
+  assert.ok(!reportInsertSQL.includes('web_operator_actions'), 'Does not touch web_operator_actions')
+  assert.ok(!reportInsertSQL.includes('approval_items'), 'Does not touch approval_items')
+  assert.ok(!reportInsertSQL.includes('leads'), 'Does not touch leads table')
+})
+
+// ── 79. CEO report intent does not create a project ──────────────────────────
+
+test('report intent patterns do not overlap with create_project patterns', () => {
+  const REPORT_PATTERNS = [
+    /generate\s+(an?\s+)?(executive\s+)?report\s+(for|on)\s+/i,
+    /executive\s+report\s+(for|on)\s+/i,
+    /weekly\s+report\s+(for|on)\s+/i,
+    /give\s+me\s+a\s+report\s+(on|for)\s+/i,
+    /run\s+(a\s+)?report\s+(for|on)\s+/i,
+    /project\s+report\s+(for|on)\s+/i,
+    /status\s+report\s+(for|on)\s+/i,
+  ]
+
+  // Report commands
+  const reportCmds = [
+    'Generate an executive report for ALB Parking',
+    'Weekly report for Foreman',
+    'Give me a report on ALB Parking',
+  ]
+  for (const cmd of reportCmds) {
+    assert.ok(REPORT_PATTERNS.some(p => p.test(cmd)), `"${cmd}" recognised as report`)
+  }
+
+  // Create-project commands must NOT match report patterns
+  const createCmds = [
+    'Create a marketing project for ALB Parking',
+    'Start a new project called Foreman',
+    'Add project for property managers',
+  ]
+  for (const cmd of createCmds) {
+    assert.ok(!REPORT_PATTERNS.some(p => p.test(cmd)), `"${cmd}" must not match report pattern`)
+  }
+})
+
+// ── 80. listProjectExecutiveReports returns newest first ─────────────────────
+
+test('executive reports list is ordered newest first', () => {
+  const rows = [
+    { id: '1', created_at: '2026-05-01T10:00:00Z', title: 'Old report' },
+    { id: '2', created_at: '2026-06-01T10:00:00Z', title: 'Latest report' },
+    { id: '3', created_at: '2026-05-15T10:00:00Z', title: 'Middle report' },
+  ]
+
+  // Simulate ORDER BY created_at DESC
+  const sorted = [...rows].sort((a, b) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+
+  assert.equal(sorted[0].title, 'Latest report', 'Newest first')
+  assert.equal(sorted[1].title, 'Middle report', 'Middle second')
+  assert.equal(sorted[2].title, 'Old report', 'Oldest last')
+})

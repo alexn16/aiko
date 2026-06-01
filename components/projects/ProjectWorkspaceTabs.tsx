@@ -275,6 +275,231 @@ function StrategyBriefStrip({ projectId }: { projectId: string }) {
   )
 }
 
+// ── Executive Report Panel ────────────────────────────────────────────────────
+
+interface ExecReport {
+  id: string
+  title: string
+  summary: string | null
+  risks: string[]
+  next_steps: string[]
+  strategy_snapshot: {
+    goal: string | null
+    objective: string | null
+    target_audience: string | null
+    channel: string | null
+    value_prop: string | null
+    operator: string | null
+    pm: string | null
+  }
+  progress_snapshot: {
+    launch_done: number
+    launch_total: number
+    launch_status: string | null
+    lead_total: number
+    lead_approved: number
+    lead_contacted: number
+    lead_replied: number
+    pending_approvals: number
+  }
+  created_at: string
+}
+
+function ExecReportCard({ report }: { report: ExecReport }) {
+  const [open, setOpen] = useState(false)
+  const when = new Date(report.created_at).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
+  const p = report.progress_snapshot
+
+  return (
+    <div style={{
+      background: '#ffffff', borderRadius: 10,
+      border: '1px solid #e0e7ff',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', textAlign: 'left', padding: '14px 18px',
+          background: 'none', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}
+      >
+        <span style={{ fontSize: 18 }}>📊</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{report.title}</div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{when}</div>
+        </div>
+        <span style={{ fontSize: 11, color: '#6366f1', flexShrink: 0 }}>{open ? '▲ collapse' : '▼ expand'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '0 18px 18px', borderTop: '1px solid #e0e7ff' }}>
+          {/* Summary */}
+          {report.summary && (
+            <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.7, padding: '14px 0 10px' }}>
+              {report.summary}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
+            {/* Strategy */}
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Strategy</div>
+              {report.strategy_snapshot.objective && <div style={{ fontSize: 12, color: '#334155', marginBottom: 4 }}><b>Objective:</b> {report.strategy_snapshot.objective}</div>}
+              {report.strategy_snapshot.target_audience && <div style={{ fontSize: 12, color: '#334155', marginBottom: 4 }}><b>Audience:</b> {report.strategy_snapshot.target_audience}</div>}
+              {report.strategy_snapshot.channel && <div style={{ fontSize: 12, color: '#334155', marginBottom: 4 }}><b>Channel:</b> {report.strategy_snapshot.channel}</div>}
+              {report.strategy_snapshot.operator && <div style={{ fontSize: 12, color: '#334155', marginBottom: 4 }}><b>Operator:</b> {report.strategy_snapshot.operator}</div>}
+              {report.strategy_snapshot.pm && <div style={{ fontSize: 12, color: '#334155' }}><b>PM:</b> {report.strategy_snapshot.pm}</div>}
+              {!report.strategy_snapshot.objective && !report.strategy_snapshot.target_audience && (
+                <div style={{ fontSize: 11, color: '#94a3b8' }}>No strategy brief yet.</div>
+              )}
+            </div>
+
+            {/* Progress */}
+            <div style={{ background: '#f8fafc', borderRadius: 8, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Progress</div>
+              {p.launch_total > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: '#334155', marginBottom: 4 }}><b>Launch:</b> {p.launch_done}/{p.launch_total} steps</div>
+                  <div style={{ height: 4, background: '#e0e7ff', borderRadius: 2 }}>
+                    <div style={{ height: '100%', width: `${Math.round((p.launch_done / p.launch_total) * 100)}%`, background: p.launch_done === p.launch_total ? '#10b981' : '#6366f1', borderRadius: 2 }} />
+                  </div>
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: '#334155', marginBottom: 2 }}><b>Leads:</b> {p.lead_total} total, {p.lead_approved} approved</div>
+              <div style={{ fontSize: 12, color: '#334155', marginBottom: 2 }}><b>Contacted:</b> {p.lead_contacted} · <b>Replied:</b> {p.lead_replied}</div>
+              {p.pending_approvals > 0 && (
+                <div style={{ fontSize: 12, color: '#f59e0b', fontWeight: 600, marginTop: 4 }}>⚠ {p.pending_approvals} pending approval{p.pending_approvals > 1 ? 's' : ''}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Risks */}
+          {report.risks.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Risks / Blockers</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {report.risks.map((r, i) => (
+                  <div key={i} style={{ fontSize: 12, color: '#dc2626', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                    <span style={{ flexShrink: 0, marginTop: 1 }}>⚠</span>
+                    <span>{r}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Next steps */}
+          {report.next_steps.length > 0 && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#065f46', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Recommended Next Step</div>
+              {report.next_steps.map((s, i) => (
+                <div key={i} style={{ fontSize: 12, color: '#064e3b' }}>{s}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ExecutiveReportPanel({ projectId }: { projectId: string }) {
+  const [reports, setReports] = useState<ExecReport[]>([])
+  const [latest, setLatest]   = useState<ExecReport | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
+
+  const load = () => {
+    setLoading(true)
+    fetch(`/api/projects/${projectId}/executive-reports`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.statusText))
+      .then(d => {
+        setReports(d.reports ?? [])
+        setLatest(d.latest ?? null)
+      })
+      .catch(() => setError('Could not load reports.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(load, [projectId])
+
+  const generate = async () => {
+    setGenerating(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/executive-reports`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      load()
+    } catch {
+      setError('Failed to generate report. Check that the AI brain is connected.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>📊 Executive Reports</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            AI-generated project status summaries — read-only. Does not trigger any action.
+          </div>
+        </div>
+        <button
+          onClick={generate}
+          disabled={generating}
+          style={{
+            background: generating ? '#e0e7ff' : '#6366f1',
+            color: generating ? '#6366f1' : '#ffffff',
+            border: 'none', borderRadius: 8,
+            padding: '9px 18px', fontSize: 12, fontWeight: 600,
+            cursor: generating ? 'not-allowed' : 'pointer',
+            transition: 'background 0.15s', flexShrink: 0,
+          }}
+        >
+          {generating ? 'Generating…' : '✦ Generate report'}
+        </button>
+      </div>
+
+      {error && (
+        <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 14, padding: '8px 12px', background: '#fef2f2', borderRadius: 6 }}>
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading reports…</div>
+      )}
+
+      {!loading && reports.length === 0 && (
+        <div style={{
+          padding: '28px 20px', textAlign: 'center',
+          background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0',
+          color: '#64748b', fontSize: 13, lineHeight: 1.6,
+        }}>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
+          <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>No executive reports yet</div>
+          Click <strong>Generate report</strong> to create a concise AI summary of this project&apos;s current strategy, progress, leads, and next steps.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {reports.map(r => (
+          <ExecReportCard key={r.id} report={r} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Decision Log Panel ─────────────────────────────────────────────────────────
 
 interface ProjectDecisionRow {
@@ -709,7 +934,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
         {/* ── Reports ─────────────────────────────────────────────────────── */}
         {tab === 'reports' && (
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
-            <PMReportPanel projectId={project.id} />
+            <div style={{ maxWidth: 800, display: 'flex', flexDirection: 'column', gap: 32 }}>
+              <ExecutiveReportPanel projectId={project.id} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 14 }}>
+                  PM Reports
+                </div>
+                <PMReportPanel projectId={project.id} />
+              </div>
+            </div>
           </div>
         )}
 

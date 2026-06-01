@@ -1045,3 +1045,29 @@ AÏKO records important project decisions so the CEO can explain why the project
 - `POST /api/projects/[id]/decisions` — record a new decision. Pass `idempotent: true` to skip if the type already exists.
 
 **Safety:** The Decision Log is read-only memory. It does not execute any action, trigger the Web Operator, or send any message.
+
+## Executive Project Reports
+
+For any project, AÏKO can generate a concise executive report summarising current strategy, progress, decisions, risks, and recommended next steps.
+
+**Triggering from CEO Chat:**
+- `"Generate an executive report for ALB Parking."`
+- `"Give me a report on Foreman."`
+- `"Weekly report for this project."`
+
+The CEO fast-path detects these commands, generates the report, and returns chips linking to the project Reports tab.
+
+**Report contents:**
+- Prose summary (AI-generated, or deterministic fallback if AI is unavailable)
+- Strategy snapshot: goal, objective, target audience, channel, value prop, PM, operator
+- Progress snapshot: launch checklist progress, lead pipeline, pending approvals
+- Risks / blockers derived from project context
+- Recommended next step
+
+**Project workspace:** The "Reports" tab now shows Executive Reports at the top, with a "Generate report" button and an expandable list of previous reports. PM Reports remain below.
+
+**API:**
+- `GET /api/projects/[id]/executive-reports` — returns `{ reports, latest }`, newest first
+- `POST /api/projects/[id]/executive-reports` — generate and save a new report
+
+**Safety:** Read-only except saving the report record. No Web Operator actions. No external sends. If the AI brain is unavailable, a deterministic fallback report is generated from structured project data.

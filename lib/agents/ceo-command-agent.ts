@@ -433,6 +433,81 @@ async function executeActions(
  * Patterns that signal a project recall question.
  * Matched case-insensitively before full CEO agent call.
  */
+// ── Executive report patterns ─────────────────────────────────────────────────
+
+const REPORT_PATTERNS: RegExp[] = [
+  /generate\s+(an?\s+)?(executive\s+)?report\s+(for|on)\s+/i,
+  /executive\s+report\s+(for|on)\s+/i,
+  /weekly\s+report\s+(for|on)\s+/i,
+  /give\s+me\s+a\s+report\s+(on|for)\s+/i,
+  /run\s+(a\s+)?report\s+(for|on)\s+/i,
+  /project\s+report\s+(for|on)\s+/i,
+  /status\s+report\s+(for|on)\s+/i,
+]
+
+function isReportIntent(command: string): boolean {
+  return REPORT_PATTERNS.some(p => p.test(command))
+}
+
+function extractReportProjectName(command: string): string {
+  const strip = (s: string) => s.trim().replace(/[?.!,]+$/, '').trim()
+
+  for (const pat of REPORT_PATTERNS) {
+    const replaced = command.replace(pat, '')
+    if (replaced !== command) return strip(replaced)
+  }
+
+  // Fallback: last preposition clause
+  const m = command.match(/\b(?:for|on|about)\s+([^?!.]+?)(?:\s*[?.!]|$)/i)
+  if (m) {
+    const candidate = strip(m[1])
+    if (candidate.length >= 2) return candidate
+  }
+
+  return strip(command)
+}
+
+async function runReportQuery(command: string, projectName: string): Promise<CEOCommandResult> {
+  const { findProjectByNameOrAlias, listActiveProjectNames } = await import('@/lib/project-context')
+
+  const project = await findProjectByNameOrAlias(projectName)
+  if (!project) {
+    const allNames = await listActiveProjectNames()
+    const list = allNames.length > 0
+      ? `Active projects: ${allNames.join(', ')}.`
+      : 'No active projects found.'
+    return {
+      response: `I don't have a project matching "${projectName}". ${list}`,
+      intent:   'executive_report',
+      actions:  [],
+      project_id: null,
+    }
+  }
+
+  const { generateProjectExecutiveReport } = await import('@/lib/project-executive-report')
+  const report = await generateProjectExecutiveReport(project.id)
+
+  // Brief CEO-voice intro
+  const intro = `Here's the executive report for ${project.name}.`
+  const body  = report.summary ?? `${project.name} — ${report.title}`
+
+  // Persist command/response in ceo_commands
+  try {
+    await db.query(
+      `INSERT INTO ceo_commands (command, response, intent, actions, project_id)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [command, `${intro} ${body}`, 'executive_report', '[]', project.id]
+    )
+  } catch { /* non-fatal */ }
+
+  return {
+    response:   `${intro} ${body}`,
+    intent:     'executive_report',
+    actions:    [],
+    project_id: project.id,
+  }
+}
+
 const RECALL_PATTERNS: RegExp[] = [
   /what\s+are\s+we\s+doing\s+(for|on|with)\s+/i,
   /summarize\s+/i,
@@ -615,6 +690,18 @@ export async function runCeoCommandAgent(
   // callAI() resolves the provider from the role assignment table.
   _modelConfig?: unknown
 ): Promise<CEOCommandResult> {
+  // ── Fast-path: executive report generation ───────────────────────────────────
+  if (isReportIntent(command)) {
+    const projectName = extractReportProjectName(command)
+    if (projectName.length >= 2) {
+      try {
+        return await runReportQuery(command, projectName)
+      } catch {
+        // Fall through to normal agent if report fails
+      }
+    }
+  }
+
   // ── Fast-path: project recall questions bypass the full CEO agent ────────────
   if (isRecallIntent(command)) {
     const projectName = extractRecallProjectName(command)

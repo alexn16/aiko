@@ -603,3 +603,13 @@ CEO/PM Chat
 - Safety: read-only memory; does not trigger automation, Web Operator, or any external action
 - Idempotency: automatic creation events (project_created, brief, launch template) use recordDecisionIfNotExists — no duplicate spam
 - Tests 70–75 added (75 total, all passing)
+
+### Executive Project Reports — 2026-06-01
+- `lib/db/migrations/034_project_executive_reports.sql` — `project_executive_reports` table (strategy_snapshot, progress_snapshot, decisions_snapshot, risks, next_steps jsonb columns)
+- `lib/project-executive-report.ts` — `generateProjectExecutiveReport()` (context → AI → save), `getLatestProjectExecutiveReport()`, `listProjectExecutiveReports()`, `createProjectExecutiveReport()`; deterministic fallback if AI unavailable
+- `GET /api/projects/[id]/executive-reports` — returns `{ reports, latest }` newest first; graceful empty if migration not run
+- `POST /api/projects/[id]/executive-reports` — generate + save; no Web Operator actions triggered
+- CEO fast-path: `isReportIntent()` + `extractReportProjectName()` + `runReportQuery()` in `ceo-command-agent.ts`; report chips (📊 View reports, 📁 Open project, ▶ First Campaign Flow) returned in CEO command response
+- Project workspace: "Reports" tab now shows Executive Reports panel above PM Reports; expandable report cards with strategy grid, progress bar, risks list, next step callout
+- Safety: only mutation is saving the report record; no leads created, no Web Operator triggered, no sends
+- Tests 76–80 added (80 total, all passing)
