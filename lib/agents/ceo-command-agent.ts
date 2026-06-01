@@ -688,6 +688,59 @@ async function runRecallQuery(command: string, projectName: string): Promise<CEO
   }
 }
 
+// ── Create-agent intent detection ────────────────────────────────────────────
+
+const CREATE_AGENT_PATTERNS: RegExp[] = [
+  /create\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+  /build\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+  /make\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+  /add\s+(an?\s+)?custom\s+agent\s+(for|to|that)\s+/i,
+  /spin\s+up\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+]
+
+function isCreateAgentIntent(command: string): boolean {
+  return CREATE_AGENT_PATTERNS.some(p => p.test(command))
+}
+
+function extractAgentNeed(command: string): string {
+  const strip = (s: string) => s.trim().replace(/[?.!,]+$/, '').trim()
+  for (const pat of CREATE_AGENT_PATTERNS) {
+    const replaced = command.replace(pat, '')
+    if (replaced !== command) return strip(replaced)
+  }
+  return strip(command)
+}
+
+async function runCreateAgentQuery(command: string, need: string): Promise<CEOCommandResult> {
+  const { generateAgentSpecFromNeed, createCustomAgent } = await import('@/lib/custom-agents')
+
+  const spec  = await generateAgentSpecFromNeed(need)
+  const agent = await createCustomAgent({
+    name:            spec.name,
+    description:     spec.description,
+    purpose:         spec.purpose,
+    capabilities:    spec.capabilities,
+    created_by_role: 'ceo',
+  })
+
+  const response = `I've created a new agent: "${agent.name}". ${spec.description} It's in draft status and can be activated from the Agents page. Like all custom agents, it must delegate external actions to the Web Operator and cannot bypass approvals.`
+
+  try {
+    await db.query(
+      `INSERT INTO ceo_commands (command, response, intent, actions, project_id)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [command, response, 'create_agent', JSON.stringify([{ type: 'create_agent', data: { agent_id: agent.id, name: agent.name } }]), null]
+    )
+  } catch { /* non-fatal */ }
+
+  return {
+    response,
+    intent:     'create_agent',
+    actions:    [{ type: 'create_agent', data: { agent_id: agent.id, name: agent.name, status: agent.status } }],
+    project_id: null,
+  }
+}
+
 export async function runCeoCommandAgent(
   command: string,
   // modelConfig is kept for backward-compatibility but is no longer used.
@@ -702,6 +755,18 @@ export async function runCeoCommandAgent(
         return await runReportQuery(command, projectName)
       } catch {
         // Fall through to normal agent if report fails
+      }
+    }
+  }
+
+  // ── Fast-path: create custom agent ──────────────────────────────────────────
+  if (isCreateAgentIntent(command)) {
+    const need = extractAgentNeed(command)
+    if (need.length >= 3) {
+      try {
+        return await runCreateAgentQuery(command, need)
+      } catch {
+        // Fall through to full agent
       }
     }
   }

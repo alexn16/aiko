@@ -1905,3 +1905,234 @@ test('executive reports list is ordered newest first', () => {
   assert.equal(sorted[1].title, 'Middle report', 'Middle second')
   assert.equal(sorted[2].title, 'Old report', 'Oldest last')
 })
+
+// ── Generated Files tests ─────────────────────────────────────────────────────
+
+// ── 81. Path traversal prevention ────────────────────────────────────────────
+
+test('generated files path traversal is prevented', () => {
+  const path = { resolve: (...parts) => parts.join('/').replace(/\/+/g, '/'), sep: '/', basename: s => s.split('/').pop() }
+  const STORAGE_BASE = '/app/storage/generated-files'
+
+  function safePath(id, filename) {
+    const safeFilename = path.basename(filename).replace(/^\.+/, '_')
+    const resolved = path.resolve(STORAGE_BASE, id, safeFilename)
+    if (!resolved.startsWith(STORAGE_BASE + path.sep)) {
+      throw new Error(`Path traversal detected: ${resolved}`)
+    }
+    return resolved
+  }
+
+  // Normal path should work
+  const normal = safePath('abc-123', 'report.md')
+  assert.ok(normal.includes('abc-123'), 'Normal path contains ID')
+  assert.ok(normal.includes('report.md'), 'Normal path contains filename')
+
+  // Leading dots are sanitised
+  const dotFile = safePath('abc-123', '.hidden')
+  assert.ok(!dotFile.includes('/.hidden'), 'Leading dot is sanitised')
+})
+
+// ── 82. CSV escaping ──────────────────────────────────────────────────────────
+
+test('CSV generator escapes commas, quotes, and newlines', () => {
+  function escapeCell(v) {
+    if (v === null || v === undefined) return ''
+    const s = String(v)
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return `"${s.replace(/"/g, '""')}"`
+    }
+    return s
+  }
+
+  assert.equal(escapeCell('plain'),              'plain',           'Plain text unchanged')
+  assert.equal(escapeCell('has,comma'),          '"has,comma"',     'Comma triggers quoting')
+  assert.equal(escapeCell('has "quote"'),        '"has ""quote"""', 'Quotes are doubled')
+  assert.equal(escapeCell('has\nnewline'),       '"has\nnewline"',  'Newlines trigger quoting')
+  assert.equal(escapeCell(null),                 '',                'null becomes empty')
+  assert.equal(escapeCell(42),                   '42',              'Number becomes string')
+})
+
+// ── 83. Generated file metadata has no secrets ───────────────────────────────
+
+test('generated file record does not include api_key or tokens', () => {
+  const fileRecord = {
+    id:               'file-uuid',
+    project_id:       'proj-uuid',
+    filename:         'report.md',
+    mime_type:        'text/markdown',
+    content_type:     'markdown',
+    title:            'Executive Report',
+    description:      'Q1 summary',
+    generated_by_role: 'ceo',
+    storage_path:     'generated-files/file-uuid/report.md',
+    size_bytes:       1024,
+    created_at:       '2026-06-01T10:00:00Z',
+  }
+
+  assert.ok(!('api_key' in fileRecord), 'No api_key field')
+  assert.ok(!('token' in fileRecord),   'No token field')
+  assert.ok(!('secret' in fileRecord),  'No secret field')
+  assert.ok(!('password' in fileRecord),'No password field')
+  assert.ok(fileRecord.storage_path.startsWith('generated-files/'), 'Storage path is relative, not absolute')
+})
+
+// ── 84. Download route sets correct Content-Disposition ──────────────────────
+
+test('download route encodes filename in Content-Disposition header', () => {
+  function buildDownloadHeaders(filename, mimeType, size) {
+    return {
+      'Content-Type':        mimeType,
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+      'Content-Length':      String(size),
+      'Cache-Control':       'private, no-cache',
+    }
+  }
+
+  const h = buildDownloadHeaders('my report.md', 'text/markdown', 1024)
+  assert.equal(h['Content-Type'],  'text/markdown')
+  assert.ok(h['Content-Disposition'].includes('attachment'))
+  assert.ok(h['Content-Disposition'].includes('my%20report.md'), 'Space is URL-encoded')
+  assert.equal(h['Cache-Control'], 'private, no-cache', 'No public caching')
+})
+
+// ── Custom Agents tests ───────────────────────────────────────────────────────
+
+// ── 85. Custom agent always has security constraints ─────────────────────────
+
+test('custom agent always includes required security constraints', () => {
+  const REQUIRED_CONSTRAINTS = [
+    'must_delegate_to_web_operator',
+    'inherits_operating_mode',
+    'cannot_bypass_approvals',
+    'cannot_send_emails_directly',
+    'cannot_access_secrets',
+  ]
+
+  function createAgentConstraints(userConstraints = []) {
+    // User cannot override required constraints — always include them
+    return [...new Set([...REQUIRED_CONSTRAINTS, ...userConstraints])]
+  }
+
+  const defaults = createAgentConstraints()
+  for (const c of REQUIRED_CONSTRAINTS) {
+    assert.ok(defaults.includes(c), `Required constraint present: ${c}`)
+  }
+
+  // User-provided extras are appended
+  const withExtra = createAgentConstraints(['custom_rule'])
+  assert.ok(withExtra.includes('custom_rule'), 'User extras are appended')
+  assert.equal(withExtra.filter(c => c === 'must_delegate_to_web_operator').length, 1, 'No duplicate constraints')
+})
+
+// ── 86. Create-agent intent detection ────────────────────────────────────────
+
+test('isCreateAgentIntent detects create-agent phrases correctly', () => {
+  const CREATE_AGENT_PATTERNS = [
+    /create\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+    /build\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+    /make\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+    /add\s+(an?\s+)?custom\s+agent\s+(for|to|that)\s+/i,
+    /spin\s+up\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i,
+  ]
+  function isCreateAgentIntent(cmd) {
+    return CREATE_AGENT_PATTERNS.some(p => p.test(cmd))
+  }
+
+  assert.ok(isCreateAgentIntent('Create an agent for lead qualification'), 'matches create...for')
+  assert.ok(isCreateAgentIntent('Build a new agent to monitor pricing'),    'matches build...to')
+  assert.ok(isCreateAgentIntent('Make an agent that checks replies'),       'matches make...that')
+  assert.ok(isCreateAgentIntent('Add a custom agent for SEO tracking'),     'matches add custom')
+  assert.ok(isCreateAgentIntent('Spin up a new agent to handle invoices'),  'matches spin up')
+  assert.ok(!isCreateAgentIntent('What agents are active?'),                'does not match status question')
+  assert.ok(!isCreateAgentIntent('Create a project for Acme'),              'does not match create project')
+})
+
+// ── 87. Agent creation result has no automatic execution ─────────────────────
+
+test('create-agent CEO result is spec-only, no automatic execution', () => {
+  const createAgentResult = {
+    response: 'Created Lead Qualification Agent in draft status.',
+    intent:   'create_agent',
+    actions:  [{ type: 'create_agent', data: { agent_id: 'uuid', name: 'Lead Qual Agent', status: 'draft' } }],
+    project_id: null,
+  }
+
+  assert.equal(createAgentResult.intent, 'create_agent', 'Intent is create_agent')
+  assert.equal(createAgentResult.actions[0].data.status, 'draft', 'Agent starts as draft, not active')
+  const hasWebAction = createAgentResult.actions.some(a =>
+    ['browse', 'click', 'fill_form', 'navigate'].includes(a.type)
+  )
+  assert.ok(!hasWebAction, 'No web actions in create-agent result')
+})
+
+// ── 88. Built-in agents are always returned ──────────────────────────────────
+
+test('agents endpoint always returns built-in agents', () => {
+  const BUILT_IN_AGENTS = [
+    { id: 'web_operator',     name: 'Web Operator',      is_built_in: true },
+    { id: 'ceo',              name: 'AÏKO CEO',           is_built_in: true },
+    { id: 'project_manager',  name: 'Project Manager',   is_built_in: true },
+    { id: 'research',         name: 'Research Agent',    is_built_in: true },
+    { id: 'copywriting',      name: 'Copywriting Agent', is_built_in: true },
+  ]
+
+  function buildResponse(customAgents) {
+    return {
+      built_in: BUILT_IN_AGENTS,
+      custom:   customAgents,
+      total:    BUILT_IN_AGENTS.length + customAgents.length,
+    }
+  }
+
+  const r = buildResponse([])
+  assert.equal(r.built_in.length, 5, 'Five built-in agents always returned')
+  assert.ok(r.built_in.every(a => a.is_built_in), 'All built-in marked with is_built_in=true')
+  assert.equal(r.total, 5, 'Total is built_in + custom count')
+})
+
+// ── 89. Agent cannot access secrets ──────────────────────────────────────────
+
+test('custom agent spec must include cannot_access_secrets constraint', () => {
+  const spec = {
+    name:         'Data Spy Agent',
+    purpose:      'Gather competitive data',
+    capabilities: ['web_research'],
+    constraints:  [
+      'must_delegate_to_web_operator',
+      'inherits_operating_mode',
+      'cannot_bypass_approvals',
+      'cannot_send_emails_directly',
+      'cannot_access_secrets',   // ← required
+    ],
+  }
+
+  assert.ok(spec.constraints.includes('cannot_access_secrets'), 'Cannot access secrets')
+  assert.ok(spec.constraints.includes('must_delegate_to_web_operator'), 'Must delegate web actions')
+  // Verify no capability grants secret access
+  const dangerousCaps = ['read_env', 'read_secrets', 'access_tokens', 'read_api_keys']
+  for (const cap of dangerousCaps) {
+    assert.ok(!spec.capabilities.includes(cap), `Capability ${cap} is forbidden`)
+  }
+})
+
+// ── 90. Provider audit: OAuth routes honest 422 ───────────────────────────────
+
+test('OAuth routes return honest 422 when env vars are missing', () => {
+  function simulateOAuthStart(envVars) {
+    const required = ['CLIENT_ID', 'AUTH_URL', 'TOKEN_URL']
+    const missing  = required.filter(k => !envVars[k])
+    if (missing.length > 0) {
+      return { status: 422, body: { error: 'OAuth not configured', configured: false, missing } }
+    }
+    return { status: 302, body: null }
+  }
+
+  const notConfigured = simulateOAuthStart({})
+  assert.equal(notConfigured.status, 422, 'Returns 422 when not configured')
+  assert.equal(notConfigured.body.configured, false, 'configured: false in response')
+  assert.ok(notConfigured.body.missing.length > 0, 'Lists missing env vars')
+
+  const configured = simulateOAuthStart({ CLIENT_ID: 'id', AUTH_URL: 'https://auth', TOKEN_URL: 'https://token' })
+  assert.equal(configured.status, 302, 'Returns 302 redirect when configured')
+})

@@ -63,7 +63,7 @@ interface Props {
   hasProvider: boolean
 }
 
-type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'leads' | 'operator' | 'decisions'
+type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'leads' | 'operator' | 'decisions' | 'files'
 
 const STATUS_DOT: Record<string, string> = {
   active: '#10b981', browsing: '#3b82f6', writing: '#f59e0b',
@@ -500,6 +500,147 @@ function ExecutiveReportPanel({ projectId }: { projectId: string }) {
   )
 }
 
+// ── Project Files Panel ────────────────────────────────────────────────────────
+
+interface ProjectFileRow {
+  id:               string
+  filename:         string
+  content_type:     string
+  title:            string | null
+  description:      string | null
+  size_bytes:       number
+  generated_by_role: string | null
+  created_at:       string
+}
+
+const FILE_TYPE_COLOR: Record<string, string> = {
+  markdown: '#6366f1', csv: '#059669', json: '#d97706', text: '#64748b',
+}
+const FILE_TYPE_LABEL: Record<string, string> = {
+  markdown: 'MD', csv: 'CSV', json: 'JSON', text: 'TXT',
+}
+
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1048576).toFixed(1)} MB`
+}
+
+function ProjectFilesPanel({ projectId }: { projectId: string }) {
+  const [files, setFiles]     = useState<ProjectFileRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/files?project_id=${projectId}`)
+      .then(r => r.ok ? r.json() : { files: [] })
+      .then(d => setFiles(d.files ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [projectId])
+
+  async function del(id: string, name: string) {
+    if (!confirm(`Delete "${name}"?`)) return
+    setDeleting(id)
+    try {
+      await fetch(`/api/files/${id}`, { method: 'DELETE' })
+      setFiles(prev => prev.filter(f => f.id !== id))
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  if (loading) return <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading files…</div>
+
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>📂 Generated Files</div>
+        <div style={{ fontSize: 12, color: '#64748b' }}>
+          Files created by AÏKO agents for this project — reports, exports, CSVs. <a href="/files" style={{ color: '#6366f1' }}>View all files →</a>
+        </div>
+      </div>
+
+      {files.length === 0 ? (
+        <div style={{
+          padding: '28px 20px', textAlign: 'center',
+          background: '#f8fafc', borderRadius: 10, border: '1px dashed #e2e8f0',
+          color: '#94a3b8', fontSize: 13, lineHeight: 1.6,
+        }}>
+          <div style={{ fontSize: 22, marginBottom: 8 }}>📂</div>
+          No files yet. Ask the CEO to generate a report or export for this project.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {files.map(file => {
+            const color = FILE_TYPE_COLOR[file.content_type] ?? '#94a3b8'
+            const label = FILE_TYPE_LABEL[file.content_type] ?? file.content_type.toUpperCase()
+            const date  = new Date(file.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            return (
+              <div key={file.id} style={{
+                display: 'grid', gridTemplateColumns: '36px 1fr auto',
+                alignItems: 'center', gap: 12,
+                padding: '12px 14px',
+                background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: 9,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: 7,
+                  background: `${color}15`, border: `1px solid ${color}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color,
+                  fontFamily: 'DM Mono, monospace', flexShrink: 0,
+                }}>
+                  {label}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {file.title ?? file.filename}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: 11, color: '#94a3b8', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'DM Mono, monospace' }}>{file.filename}</span>
+                    <span>·</span>
+                    <span>{fmtBytes(file.size_bytes)}</span>
+                    <span>·</span>
+                    <span>{date}</span>
+                    {file.generated_by_role && <><span>·</span><span>by {file.generated_by_role}</span></>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                  <a
+                    href={`/api/files/${file.id}/download`}
+                    download={file.filename}
+                    style={{
+                      padding: '5px 10px', borderRadius: 6,
+                      background: '#f8fafc', color: '#374151',
+                      border: '1px solid #e2e8f0',
+                      fontSize: 11, textDecoration: 'none',
+                    }}
+                  >
+                    ↓
+                  </a>
+                  <button
+                    onClick={() => del(file.id, file.filename)}
+                    disabled={deleting === file.id}
+                    style={{
+                      padding: '5px 8px', borderRadius: 6,
+                      background: 'none', color: '#dc2626',
+                      border: '1px solid #fecaca', fontSize: 11, cursor: 'pointer',
+                    }}
+                  >
+                    {deleting === file.id ? '…' : '✕'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Decision Log Panel ─────────────────────────────────────────────────────────
 
 interface ProjectDecisionRow {
@@ -702,6 +843,7 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
     { id: 'leads',     label: 'Leads' },
     { id: 'operator',  label: 'Operator' },
     { id: 'decisions', label: 'Decision Log' },
+    { id: 'files',     label: 'Files' },
   ]
 
   return (
@@ -1089,6 +1231,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
             <div style={{ maxWidth: 760 }}>
               <DecisionLogPanel projectId={project.id} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Files ────────────────────────────────────────────────────────── */}
+        {tab === 'files' && (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
+            <div style={{ maxWidth: 760 }}>
+              <ProjectFilesPanel projectId={project.id} />
             </div>
           </div>
         )}

@@ -309,6 +309,7 @@ export default function ConnectAIPage() {
             disconnectUrl="/api/providers/oauth/chatgpt/disconnect"
             connection={diagnostics?.chatgpt_connection ?? null}
             onRefresh={load}
+            notConfiguredNote="ChatGPT OAuth is not configured on this AÏKO instance. Use OpenAI API key instead."
           />
           <OAuthCard
             icon="🟠"

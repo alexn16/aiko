@@ -22,6 +22,8 @@ const NAV_ITEMS = [
   // { href: '/tools',      label: 'Tools' },      // hidden from nav — available at /tools for debugging
   // { href: '/tool-runs',  label: 'Tool Runs' },  // hidden from nav — available at /tool-runs for debugging
   { href: '/operators',  label: 'Operators' },
+  { href: '/agents',     label: 'Agents' },
+  { href: '/files',      label: 'Files' },
   { href: '/functions',  label: 'Functions' },
   { href: '/mode',       label: 'Operating Mode' },
   { href: '/system',     label: 'System' },
