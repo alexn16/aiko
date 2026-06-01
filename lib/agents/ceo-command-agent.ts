@@ -519,6 +519,9 @@ Rules:
 - If data is missing, say "We don't have that yet."
 - Do not suggest running external actions unless the user asked.
 - First person. No bullet points in the response field.
+- The "Key decisions" section explains WHY choices were made (operator, strategy, PM). Use it to answer "why" questions.
+- If asked about operator choice, check the "Key decisions" or "Recommended operator" lines.
+- If asked what decisions have been made, summarize the Key decisions list.
 
 Return ONLY valid JSON:
 {"response":"Your answer (2-4 sentences max)","intent":"project_recall","project_id":"<id or null>"}`

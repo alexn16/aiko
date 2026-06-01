@@ -313,18 +313,19 @@ export function getProjectExecutiveSummary(ctx: ProjectContext): string {
   if (ctx.memory_notes)          lines.push(`Memory notes: ${ctx.memory_notes}`)
   if (ctx.memory_blockers.length > 0) lines.push(`Blockers: ${ctx.memory_blockers.join('; ')}`)
   if (ctx.memory_next_steps.length > 0) lines.push(`Memory next steps: ${ctx.memory_next_steps.join('; ')}`)
+  // Decisions first — answers "why" questions; placed before actions so they survive token limits
+  if (ctx.recent_decisions.length > 0) {
+    lines.push(`Key decisions (${ctx.recent_decisions.length}):`)
+    for (const d of ctx.recent_decisions.slice(0, 5)) {
+      const when = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      lines.push(`  - [${when}] ${d.title}${d.summary ? `: ${d.summary.slice(0, 100)}` : ''}`)
+    }
+  }
   if (ctx.recent_actions.length > 0) {
     lines.push(`Recent operator actions (${ctx.recent_actions.length}):`)
     for (const a of ctx.recent_actions.slice(0, 3)) {
       const by = a.operator_name ? ` (${a.operator_name})` : ''
       lines.push(`  - [${a.status}] ${a.action_type}${by}: ${a.description.slice(0, 80)}`)
-    }
-  }
-  if (ctx.recent_decisions.length > 0) {
-    lines.push(`Key decisions (${ctx.recent_decisions.length}):`)
-    for (const d of ctx.recent_decisions.slice(0, 4)) {
-      const when = new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      lines.push(`  - [${when}] ${d.title}${d.summary ? `: ${d.summary.slice(0, 80)}` : ''}`)
     }
   }
   return lines.join('\n')

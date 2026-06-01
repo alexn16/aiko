@@ -303,10 +303,26 @@ const DECISION_BADGE: Record<string, { bg: string; color: string; label: string 
   next_step_changed:         { bg: '#f3f4f6', color: '#374151', label: 'Next Step' },
 }
 
+type DecisionFilter = 'all' | 'setup' | 'leads' | 'approvals'
+
+const FILTER_TYPES: Record<DecisionFilter, string[]> = {
+  all:       [],
+  setup:     ['project_created', 'pm_assigned', 'strategy_brief_created', 'operator_recommended', 'operator_changed', 'launch_template_created', 'research_prompt_changed'],
+  leads:     ['lead_approved', 'lead_rejected'],
+  approvals: ['approval_approved', 'approval_rejected', 'approval_changes_requested', 'campaign_approved'],
+}
+
+function roleLabel(role: string | null): string {
+  if (!role) return ''
+  if (role === 'system') return 'AÏKO'
+  return role.charAt(0).toUpperCase() + role.slice(1)
+}
+
 function DecisionLogPanel({ projectId }: { projectId: string }) {
-  const [decisions, setDecisions] = useState<ProjectDecisionRow[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState<string | null>(null)
+  const [decisions, setDecisions]   = useState<ProjectDecisionRow[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState<string | null>(null)
+  const [filter, setFilter]         = useState<DecisionFilter>('all')
 
   useEffect(() => {
     setLoading(true)
@@ -317,6 +333,10 @@ function DecisionLogPanel({ projectId }: { projectId: string }) {
       .finally(() => setLoading(false))
   }, [projectId])
 
+  const filtered = filter === 'all'
+    ? decisions
+    : decisions.filter(d => FILTER_TYPES[filter].includes(d.decision_type))
+
   if (loading) {
     return <div style={{ color: '#94a3b8', fontSize: 13, padding: '16px 0' }}>Loading decision log…</div>
   }
@@ -324,34 +344,75 @@ function DecisionLogPanel({ projectId }: { projectId: string }) {
     return <div style={{ color: '#ef4444', fontSize: 13 }}>{error}</div>
   }
 
+  const FILTERS: { id: DecisionFilter; label: string }[] = [
+    { id: 'all',       label: `All (${decisions.length})` },
+    { id: 'setup',     label: 'Setup' },
+    { id: 'leads',     label: 'Leads' },
+    { id: 'approvals', label: 'Approvals' },
+  ]
+
   return (
     <div>
-      <div style={{ marginBottom: 18 }}>
+      <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>📋 Decision Log</div>
         <div style={{ fontSize: 12, color: '#64748b' }}>
-          Important decisions made for this project — read-only memory. Does not trigger any action.
+          Why this project is moving in this direction — read-only memory. Does not trigger any action.
         </div>
       </div>
 
-      {decisions.length === 0 && (
+      {/* Filter bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {FILTERS.map(f => (
+          <button
+            key={f.id}
+            onClick={() => setFilter(f.id)}
+            style={{
+              padding: '5px 12px', borderRadius: 20,
+              border: filter === f.id ? '1.5px solid #6366f1' : '1.5px solid #e2e8f0',
+              background: filter === f.id ? '#6366f1' : '#ffffff',
+              color: filter === f.id ? '#ffffff' : '#64748b',
+              fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && decisions.length === 0 && (
         <div style={{
           padding: '28px 20px', textAlign: 'center',
           background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0',
+          color: '#64748b', fontSize: 13, lineHeight: 1.6,
+        }}>
+          <div style={{ fontSize: 22, marginBottom: 8 }}>📋</div>
+          <div style={{ fontWeight: 600, marginBottom: 6, color: '#0f172a' }}>No decisions recorded yet</div>
+          Decisions appear automatically when you create projects, assign PMs,
+          approve leads, and respond to approval requests.
+        </div>
+      )}
+
+      {filtered.length === 0 && decisions.length > 0 && (
+        <div style={{
+          padding: '20px', textAlign: 'center',
+          background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0',
           color: '#94a3b8', fontSize: 13,
         }}>
-          No decisions recorded yet. They appear automatically as you create projects, approve leads, and run campaigns.
+          No {filter} decisions yet.
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {decisions.map(d => {
-          const badge = DECISION_BADGE[d.decision_type] ?? { bg: '#f1f5f9', color: '#475569', label: d.decision_type }
+        {filtered.map(d => {
+          const badge = DECISION_BADGE[d.decision_type] ?? { bg: '#f1f5f9', color: '#475569', label: d.decision_type.replace(/_/g, ' ') }
           const when = new Date(d.created_at).toLocaleDateString('en-US', {
             month: 'short', day: 'numeric', year: 'numeric',
           })
           const time = new Date(d.created_at).toLocaleTimeString('en-US', {
             hour: '2-digit', minute: '2-digit',
           })
+          const actor = roleLabel(d.decided_by_role)
           return (
             <div key={d.id} style={{
               padding: '14px 18px',
@@ -380,9 +441,9 @@ function DecisionLogPanel({ projectId }: { projectId: string }) {
                   </div>
                 )}
                 <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                  {d.decided_by_role && (
-                    <span style={{ marginRight: 8, textTransform: 'capitalize' }}>
-                      {d.decided_by_role}
+                  {actor && (
+                    <span style={{ marginRight: 8, fontWeight: 500, color: '#64748b' }}>
+                      {actor}
                     </span>
                   )}
                   {when} · {time}

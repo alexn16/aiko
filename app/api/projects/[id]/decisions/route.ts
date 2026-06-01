@@ -34,7 +34,12 @@ export async function GET(
 
     const decisions = await listProjectDecisions(projectId, { limit, offset, types })
     return NextResponse.json({ decisions })
-  } catch (err) {
+  } catch (err: unknown) {
+    // If the migration hasn't been run yet the table won't exist — return empty gracefully
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('project_decisions') && msg.includes('does not exist')) {
+      return NextResponse.json({ decisions: [], migration_pending: true })
+    }
     console.error(`[projects/${projectId}/decisions GET]`, err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
