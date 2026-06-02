@@ -305,12 +305,35 @@ interface ExecReport {
   created_at: string
 }
 
-function ExecReportCard({ report }: { report: ExecReport }) {
-  const [open, setOpen] = useState(false)
+function ExecReportCard({ report, projectId }: { report: ExecReport; projectId: string }) {
+  const [open, setOpen]           = useState(false)
+  const [exporting, setExporting] = useState<'markdown' | 'json' | null>(null)
+  const [exportLinks, setExportLinks] = useState<{ markdown?: string; json?: string }>({})
+  const [exportError, setExportError] = useState<string | null>(null)
+
   const when = new Date(report.created_at).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
   const p = report.progress_snapshot
+
+  async function doExport(format: 'markdown' | 'json') {
+    setExporting(format)
+    setExportError(null)
+    try {
+      const res  = await fetch(`/api/projects/${projectId}/executive-reports/${report.id}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setExportError(data.error ?? 'Export failed'); return }
+      setExportLinks(prev => ({ ...prev, [format]: data.download_url }))
+    } catch (err) {
+      setExportError(String(err))
+    } finally {
+      setExporting(null)
+    }
+  }
 
   return (
     <div style={{
@@ -402,6 +425,41 @@ function ExecReportCard({ report }: { report: ExecReport }) {
               ))}
             </div>
           )}
+
+          {/* Export */}
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Export report</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {(['markdown', 'json'] as const).map(fmt => (
+                <div key={fmt} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    onClick={() => doExport(fmt)}
+                    disabled={exporting === fmt}
+                    style={{
+                      padding: '5px 12px', borderRadius: 6,
+                      background: '#f8fafc', color: '#374151',
+                      border: '1px solid #e2e8f0',
+                      fontSize: 11, fontWeight: 600, cursor: exporting === fmt ? 'default' : 'pointer',
+                    }}
+                  >
+                    {exporting === fmt ? '…' : fmt === 'markdown' ? '↓ .md' : '↓ .json'}
+                  </button>
+                  {exportLinks[fmt] && (
+                    <a
+                      href={exportLinks[fmt]}
+                      download
+                      style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none', fontWeight: 500 }}
+                    >
+                      ↓ Download {fmt === 'markdown' ? 'Markdown' : 'JSON'}
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+            {exportError && (
+              <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626' }}>{exportError}</div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -409,11 +467,13 @@ function ExecReportCard({ report }: { report: ExecReport }) {
 }
 
 function ExecutiveReportPanel({ projectId }: { projectId: string }) {
-  const [reports, setReports] = useState<ExecReport[]>([])
-  const [latest, setLatest]   = useState<ExecReport | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [reports, setReports]   = useState<ExecReport[]>([])
+  const [latest, setLatest]     = useState<ExecReport | null>(null)
+  const [loading, setLoading]   = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [error, setError]     = useState<string | null>(null)
+  const [error, setError]       = useState<string | null>(null)
+  const [quickExport, setQuickExport] = useState<{ url: string; format: string } | null>(null)
+  const [quickExporting, setQuickExporting] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -443,6 +503,26 @@ function ExecutiveReportPanel({ projectId }: { projectId: string }) {
     }
   }
 
+  const exportLatest = async (format: 'markdown' | 'json') => {
+    if (!latest) return
+    setQuickExporting(true)
+    setQuickExport(null)
+    try {
+      const res  = await fetch(`/api/projects/${projectId}/executive-reports/${latest.id}/export`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ format }),
+      })
+      const data = await res.json()
+      if (res.ok) setQuickExport({ url: data.download_url, format })
+      else setError(data.error ?? 'Export failed')
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setQuickExporting(false)
+    }
+  }
+
   return (
     <div>
       {/* Header row */}
@@ -453,20 +533,61 @@ function ExecutiveReportPanel({ projectId }: { projectId: string }) {
             AI-generated project status summaries — read-only. Does not trigger any action.
           </div>
         </div>
-        <button
-          onClick={generate}
-          disabled={generating}
-          style={{
-            background: generating ? '#e0e7ff' : '#6366f1',
-            color: generating ? '#6366f1' : '#ffffff',
-            border: 'none', borderRadius: 8,
-            padding: '9px 18px', fontSize: 12, fontWeight: 600,
-            cursor: generating ? 'not-allowed' : 'pointer',
-            transition: 'background 0.15s', flexShrink: 0,
-          }}
-        >
-          {generating ? 'Generating…' : '✦ Generate report'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {latest && (
+            <>
+              <button
+                onClick={() => exportLatest('markdown')}
+                disabled={quickExporting}
+                title="Export latest report as Markdown"
+                style={{
+                  background: '#f8fafc', color: '#374151',
+                  border: '1px solid #e2e8f0', borderRadius: 7,
+                  padding: '7px 12px', fontSize: 11, fontWeight: 600,
+                  cursor: quickExporting ? 'default' : 'pointer', flexShrink: 0,
+                }}
+              >
+                {quickExporting ? '…' : '↓ .md'}
+              </button>
+              <button
+                onClick={() => exportLatest('json')}
+                disabled={quickExporting}
+                title="Export latest report as JSON"
+                style={{
+                  background: '#f8fafc', color: '#374151',
+                  border: '1px solid #e2e8f0', borderRadius: 7,
+                  padding: '7px 12px', fontSize: 11, fontWeight: 600,
+                  cursor: quickExporting ? 'default' : 'pointer', flexShrink: 0,
+                }}
+              >
+                {quickExporting ? '…' : '↓ .json'}
+              </button>
+              {quickExport && (
+                <a
+                  href={quickExport.url}
+                  download
+                  style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, textDecoration: 'none' }}
+                >
+                  ↓ Download {quickExport.format}
+                </a>
+              )}
+            </>
+          )}
+          <button
+            onClick={generate}
+            disabled={generating}
+            style={{
+              background: generating ? '#e0e7ff' : '#6366f1',
+              color: generating ? '#6366f1' : '#ffffff',
+              border: 'none', borderRadius: 8,
+              padding: '9px 18px', fontSize: 12, fontWeight: 600,
+              cursor: generating ? 'not-allowed' : 'pointer',
+              transition: 'background 0.15s', flexShrink: 0,
+            }}
+          >
+            {generating ? 'Generating…' : '✦ Generate report'}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -493,7 +614,7 @@ function ExecutiveReportPanel({ projectId }: { projectId: string }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {reports.map(r => (
-          <ExecReportCard key={r.id} report={r} />
+          <ExecReportCard key={r.id} report={r} projectId={projectId} />
         ))}
       </div>
     </div>
@@ -503,14 +624,20 @@ function ExecutiveReportPanel({ projectId }: { projectId: string }) {
 // ── Project Files Panel ────────────────────────────────────────────────────────
 
 interface ProjectFileRow {
-  id:               string
-  filename:         string
-  content_type:     string
-  title:            string | null
-  description:      string | null
-  size_bytes:       number
-  generated_by_role: string | null
-  created_at:       string
+  id:                  string
+  filename:            string
+  content_type:        string
+  title:               string | null
+  description:         string | null
+  size_bytes:          number
+  generated_by_role:   string | null
+  source_entity_type:  string | null
+  source_entity_id:    string | null
+  created_at:          string
+}
+
+const SOURCE_ENTITY_LABEL_TAB: Record<string, string> = {
+  executive_report: 'Executive report',
 }
 
 const FILE_TYPE_COLOR: Record<string, string> = {
@@ -605,6 +732,7 @@ function ProjectFilesPanel({ projectId }: { projectId: string }) {
                     <span>·</span>
                     <span>{date}</span>
                     {file.generated_by_role && <><span>·</span><span>by {file.generated_by_role}</span></>}
+                    {file.source_entity_type && <><span>·</span><span>{SOURCE_ENTITY_LABEL_TAB[file.source_entity_type] ?? file.source_entity_type.replace(/_/g, ' ')}</span></>}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>

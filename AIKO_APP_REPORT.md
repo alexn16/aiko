@@ -613,3 +613,14 @@ CEO/PM Chat
 - Project workspace: "Reports" tab now shows Executive Reports panel above PM Reports; expandable report cards with strategy grid, progress bar, risks list, next step callout
 - Safety: only mutation is saving the report record; no leads created, no Web Operator triggered, no sends
 - Tests 76–80 added (80 total, all passing)
+
+### Executive Report Export — 2026-06-02
+- `lib/db/migrations/037_generated_files_source_entity.sql` — adds `source_entity_type` / `source_entity_id` columns to `generated_files`; index on both
+- `lib/report-file-export.ts` — `exportExecutiveReport(projectId, report, format, allowOverwrite?)` (idempotent by default); `formatExecutiveReportMarkdown(report)` → full .md doc; `formatExecutiveReportJson(report)` → structured JSON object; ownership check (project mismatch → 404)
+- `POST /api/projects/[id]/executive-reports/[reportId]/export` — body `{ format: "markdown"|"json", overwrite?: boolean }`; returns `{ file, download_url, already_existed }`; ownership verified server-side
+- `lib/generated-files.ts` — `GeneratedFile` type and `CreateGeneratedFileInput` extended with `source_entity_type`, `source_entity_id`
+- Project workspace Reports tab: each report card has "↓ .md" / "↓ .json" export buttons with inline download link; panel header has quick-export buttons for latest report
+- `/files` page: shows `source_entity_type` ("Executive report") in file metadata row
+- Project Files tab: shows source entity label on exported report files
+- Safety: no secrets/tokens in exports; writes only to `storage/generated-files/`; project ownership enforced; idempotent (no duplicate files for same report+format)
+- Tests 91–95 added (95 total, all passing)

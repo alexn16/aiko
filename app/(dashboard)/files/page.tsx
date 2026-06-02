@@ -2,16 +2,22 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 
 interface GeneratedFile {
-  id:               string
-  project_id:       string | null
-  filename:         string
-  mime_type:        string
-  content_type:     string
-  title:            string | null
-  description:      string | null
-  generated_by_role: string | null
-  size_bytes:       number
-  created_at:       string
+  id:                  string
+  project_id:          string | null
+  filename:            string
+  mime_type:           string
+  content_type:        string
+  title:               string | null
+  description:         string | null
+  generated_by_role:   string | null
+  source_entity_type:  string | null
+  source_entity_id:    string | null
+  size_bytes:          number
+  created_at:          string
+}
+
+const SOURCE_ENTITY_LABEL: Record<string, string> = {
+  executive_report: 'Executive report',
 }
 
 const CONTENT_TYPE_LABEL: Record<string, string> = {
@@ -193,6 +199,14 @@ function FileRow({
             <>
               <span style={{ fontSize: 11, color: '#cbd5e1' }}>·</span>
               <span style={{ fontSize: 11, color: '#94a3b8' }}>by {file.generated_by_role}</span>
+            </>
+          )}
+          {file.source_entity_type && (
+            <>
+              <span style={{ fontSize: 11, color: '#cbd5e1' }}>·</span>
+              <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                {SOURCE_ENTITY_LABEL[file.source_entity_type] ?? file.source_entity_type.replace(/_/g, ' ')}
+              </span>
             </>
           )}
         </div>

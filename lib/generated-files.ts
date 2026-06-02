@@ -43,28 +43,32 @@ function safePath(id: string, filename: string): string {
 export type FileContentType = 'markdown' | 'csv' | 'json' | 'text'
 
 export interface GeneratedFile {
-  id:                 string
-  project_id:         string | null
-  filename:           string
-  mime_type:          string
-  content_type:       FileContentType
-  title:              string | null
-  description:        string | null
-  generated_by_role:  string | null
-  storage_path:       string
-  size_bytes:         number
-  created_at:         string
+  id:                  string
+  project_id:          string | null
+  filename:            string
+  mime_type:           string
+  content_type:        FileContentType
+  title:               string | null
+  description:         string | null
+  generated_by_role:   string | null
+  storage_path:        string
+  size_bytes:          number
+  source_entity_type:  string | null   // e.g. 'executive_report'
+  source_entity_id:    string | null   // UUID of the source entity
+  created_at:          string
 }
 
 export interface CreateGeneratedFileInput {
-  project_id?:        string | null
-  filename:           string
-  content:            string
-  content_type:       FileContentType
-  mime_type?:         string
-  title?:             string | null
-  description?:       string | null
-  generated_by_role?: string | null
+  project_id?:         string | null
+  filename:            string
+  content:             string
+  content_type:        FileContentType
+  mime_type?:          string
+  title?:              string | null
+  description?:        string | null
+  generated_by_role?:  string | null
+  source_entity_type?: string | null
+  source_entity_id?:   string | null
 }
 
 // ── MIME types ─────────────────────────────────────────────────────────────────
@@ -89,8 +93,10 @@ export async function createGeneratedFile(
   // Create a UUID-based directory first (to get the id)
   const idRes = await db.query(
     `INSERT INTO generated_files
-       (project_id, filename, mime_type, content_type, title, description, generated_by_role, storage_path, size_bytes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'__placeholder__',0)
+       (project_id, filename, mime_type, content_type, title, description,
+        generated_by_role, storage_path, size_bytes,
+        source_entity_type, source_entity_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'__placeholder__',0,$8,$9)
      RETURNING id`,
     [
       input.project_id ?? null,
@@ -100,6 +106,8 @@ export async function createGeneratedFile(
       input.title ?? null,
       input.description ?? null,
       input.generated_by_role ?? null,
+      input.source_entity_type ?? null,
+      input.source_entity_id ?? null,
     ]
   )
   const id = idRes.rows[0].id
