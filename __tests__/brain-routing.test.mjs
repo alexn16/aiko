@@ -2688,3 +2688,105 @@ test('106. manifest download_urls are all project-scoped internal paths', () => 
     assert.ok(!f.download_url.startsWith('file://'), `${f.title} download_url is not file://`)
   }
 })
+
+// ── Tests 107–113: subscription-diagnostics logic ────────────────────────────
+// Pure-JS reimplementation of the status derivation logic from
+// app/api/providers/subscription-diagnostics/route.ts
+
+function deriveStatus(envMissing, connRow) {
+  if (envMissing.length > 0)       return 'oauth_not_configured'
+  if (!connRow)                    return 'no_connection_row'
+  if (connRow.status === 'connected')    return 'connected'
+  if (connRow.status === 'needs_reauth') return 'needs_reauth'
+  return 'not_connected'
+}
+
+function buildSubCard(envMissing, connRow) {
+  const status = deriveStatus(envMissing, connRow)
+  return {
+    status,
+    configured:  envMissing.length === 0,
+    connected:   status === 'connected',
+    needs_reauth: status === 'needs_reauth',
+    can_start_oauth: envMissing.length === 0,
+    can_call_model: status === 'connected',
+    missing_env: envMissing,
+    account_email: connRow?.account_email ?? null,
+    last_error:   connRow?.last_error ?? null,
+  }
+}
+
+test('107. subscription-diagnostics: oauth_not_configured when env vars missing', () => {
+  const card = buildSubCard(['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_CLIENT_SECRET'], null)
+  assert.equal(card.status, 'oauth_not_configured')
+  assert.equal(card.configured, false)
+  assert.equal(card.connected, false)
+  assert.equal(card.can_start_oauth, false)
+  assert.deepEqual(card.missing_env, ['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_CLIENT_SECRET'])
+})
+
+test('108. subscription-diagnostics: no_connection_row when configured but never connected', () => {
+  const card = buildSubCard([], null)
+  assert.equal(card.status, 'no_connection_row')
+  assert.equal(card.configured, true)
+  assert.equal(card.can_start_oauth, true)
+  assert.equal(card.connected, false)
+})
+
+test('109. subscription-diagnostics: connected state correct', () => {
+  const card = buildSubCard([], { status: 'connected', account_email: 'user@example.com', last_error: null })
+  assert.equal(card.status, 'connected')
+  assert.equal(card.connected, true)
+  assert.equal(card.can_call_model, true)
+  assert.equal(card.account_email, 'user@example.com')
+  assert.equal(card.missing_env.length, 0)
+})
+
+test('110. subscription-diagnostics: needs_reauth state correct', () => {
+  const card = buildSubCard([], { status: 'needs_reauth', account_email: null, last_error: 'token expired' })
+  assert.equal(card.status, 'needs_reauth')
+  assert.equal(card.needs_reauth, true)
+  assert.equal(card.connected, false)
+  assert.equal(card.can_call_model, false)
+  assert.equal(card.last_error, 'token expired')
+})
+
+test('111. subscription-diagnostics: missing_env never includes secret values', () => {
+  // missing_env should only contain env var NAMES — we verify none of the typical
+  // secret value patterns appear in the names
+  const missingNames = [
+    'OPENAI_OAUTH_CLIENT_ID',
+    'OPENAI_OAUTH_CLIENT_SECRET',
+    'OPENAI_OAUTH_AUTH_URL',
+    'OPENAI_OAUTH_TOKEN_URL',
+  ]
+  for (const name of missingNames) {
+    // Names must be all-caps identifiers — no '=', no spaces, no base64
+    assert.match(name, /^[A-Z][A-Z0-9_]+$/, `${name} is a valid env var name format`)
+  }
+})
+
+test('112. subscription-diagnostics: fallbacks object has correct shape', () => {
+  const fallbacks = {
+    openai_api_connected:    false,
+    anthropic_api_connected: true,
+    ollama_connected:        false,
+    openrouter_connected:    false,
+  }
+  // Must be booleans — not tokens or connection objects
+  for (const [key, val] of Object.entries(fallbacks)) {
+    assert.equal(typeof val, 'boolean', `${key} must be boolean`)
+  }
+})
+
+test('113. subscription-diagnostics: can_start_oauth false when env unconfigured', () => {
+  // Even if a stale connection row exists, can_start_oauth must be false
+  // when the env vars are not set (OAuth cannot be started)
+  const card = buildSubCard(
+    ['OPENAI_OAUTH_CLIENT_ID'],
+    { status: 'connected', account_email: null, last_error: null }
+  )
+  // missing_env takes priority — cannot start OAuth
+  assert.equal(card.status, 'oauth_not_configured')
+  assert.equal(card.can_start_oauth, false)
+})

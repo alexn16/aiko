@@ -63,6 +63,45 @@ interface DiagnosticsResult {
   signed_in_user: { id: string; email: string; name: string | null } | null
 }
 
+// Subscription diagnostics — from /api/providers/subscription-diagnostics
+interface SubCard {
+  status: string
+  configured: boolean
+  connected: boolean
+  needs_reauth: boolean
+  can_start_oauth: boolean
+  can_call_model: boolean
+  missing_env: string[]
+  account_email: string | null
+  provider_connection_id: string | null
+  last_error: string | null
+  last_tested_at: string | null
+}
+interface ClaudeSubCard extends SubCard {
+  claude_cli_detected: boolean
+  claude_code_token_detected: boolean
+}
+interface SubscriptionDiagnostics {
+  chatgpt: SubCard
+  claude:  ClaudeSubCard
+  ceo_brain: {
+    can_think: boolean
+    provider_name: string | null
+    model: string | null
+    auth_type: string | null
+    status: string | null
+    last_error: string | null
+    account_email: string | null
+  }
+  fallbacks: {
+    openai_api_connected: boolean
+    anthropic_api_connected: boolean
+    ollama_connected: boolean
+    openrouter_connected: boolean
+  }
+  any_model_available: boolean
+}
+
 interface AuthDiagnosticsResult {
   auth_mode?: 'optional' | 'required'
   can_configure_without_login?: boolean
@@ -114,6 +153,7 @@ export default function ConnectAIPage() {
   const [roles, setRoles] = useState<Record<string, string | null>>({})
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null)
   const [authDiagnostics, setAuthDiagnostics] = useState<AuthDiagnosticsResult | null>(null)
+  const [subDiagnostics, setSubDiagnostics] = useState<SubscriptionDiagnostics | null>(null)
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -125,16 +165,18 @@ export default function ConnectAIPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [pRes, rRes, dRes, adRes] = await Promise.all([
+      const [pRes, rRes, dRes, adRes, sdRes] = await Promise.all([
         fetch('/api/providers').then(r => r.json()),
         fetch('/api/providers/roles').then(r => r.json()),
         fetch('/api/providers/diagnostics').then(r => r.json()).catch(() => null),
         fetch('/api/auth/diagnostics').then(r => r.json()).catch(() => null),
+        fetch('/api/providers/subscription-diagnostics').then(r => r.json()).catch(() => null),
       ])
       setProviders(pRes.providers ?? [])
       setRoles(rRes.roles ?? {})
       setDiagnostics(dRes ?? null)
       setAuthDiagnostics(adRes ?? null)
+      setSubDiagnostics(sdRes ?? null)
     } finally {
       setLoading(false)
     }
@@ -257,69 +299,40 @@ export default function ConnectAIPage() {
         </p>
       </div>
 
-      {/* Status banner */}
+      {/* ── CEO Brain status banner ───────────────────────────────────────── */}
       {!loading && (
-        connectedCount === 0 ? (
-          <div style={{
-            marginBottom: 28, padding: '12px 16px',
-            background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
-            fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <span>⚠</span>
-            <span>AÏKO CEO is offline. Connect at least one AI provider below to start the company.</span>
-          </div>
-        ) : diagnostics && !diagnostics.can_ceo_think ? (
-          <div style={{
-            marginBottom: 28, padding: '12px 16px',
-            background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
-            fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <span>⚠</span>
-            <span>
-              {connectedCount} provider{connectedCount > 1 ? 's' : ''} connected, but no CEO brain resolved.
-              Assign a provider to the CEO role below or reconnect a provider.
-            </span>
-          </div>
-        ) : (
-          <div style={{
-            marginBottom: 28, padding: '12px 16px',
-            background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
-            fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 8,
-          }}>
-            <span>✓</span>
-            <span>
-              {diagnostics?.ceo_provider
-                ? `CEO brain: ${diagnostics.ceo_provider.name}${diagnostics.ceo_provider.model ? ` — ${diagnostics.ceo_provider.model}` : ''} — AÏKO is operational.`
-                : `${connectedCount} AI provider${connectedCount > 1 ? 's' : ''} connected — AÏKO is operational.`
-              }
-            </span>
-          </div>
-        )
+        <CeoBrainBanner
+          subDiagnostics={subDiagnostics}
+          connectedCount={connectedCount}
+          diagnostics={diagnostics}
+        />
       )}
 
       {/* ── Account-based AI connections (subscription / OAuth) ────────────── */}
       <div style={{ marginBottom: 32 }}>
         <div style={SECTION_LABEL}>Connect your AI accounts</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <OAuthCard
+          <SubscriptionCard
             icon="🟢"
             title="ChatGPT"
-            subtitle="Connect via your ChatGPT account"
+            subtitle="Connect via your ChatGPT Plus / Teams account"
             startUrl="/api/providers/oauth/chatgpt/start"
             disconnectUrl="/api/providers/oauth/chatgpt/disconnect"
-            connection={diagnostics?.chatgpt_connection ?? null}
+            card={subDiagnostics?.chatgpt ?? null}
+            fallbackLabel="OpenAI API"
+            fallbackConnected={subDiagnostics?.fallbacks.openai_api_connected ?? false}
             onRefresh={load}
-            notConfiguredNote="ChatGPT OAuth is not configured on this AÏKO instance. Use OpenAI API key instead."
           />
-          <OAuthCard
+          <SubscriptionCard
             icon="🟠"
             title="Claude"
-            subtitle="Connect via your Claude.ai account"
+            subtitle="Connect via your Claude.ai Pro / Teams account"
             startUrl="/api/providers/oauth/claude/start"
             disconnectUrl="/api/providers/oauth/claude/disconnect"
-            connection={diagnostics?.claude_connection ?? null}
+            card={subDiagnostics?.claude ?? null}
+            fallbackLabel="Anthropic API"
+            fallbackConnected={subDiagnostics?.fallbacks.anthropic_api_connected ?? false}
             onRefresh={load}
-            notConfiguredNote="Claude account connection is not configured on this AÏKO instance. Use Anthropic API key instead."
           />
         </div>
       </div>
@@ -449,52 +462,141 @@ export default function ConnectAIPage() {
   )
 }
 
-// ── OAuth card ────────────────────────────────────────────────────────────────
+// ── CEO Brain banner ──────────────────────────────────────────────────────────
+
+function CeoBrainBanner({
+  subDiagnostics,
+  connectedCount,
+  diagnostics,
+}: {
+  subDiagnostics: SubscriptionDiagnostics | null
+  connectedCount: number
+  diagnostics: DiagnosticsResult | null
+}) {
+  // Use subscription diagnostics if available, else fall back to legacy diagnostics
+  if (subDiagnostics) {
+    const { ceo_brain, any_model_available } = subDiagnostics
+    if (ceo_brain.can_think) {
+      const authNote =
+        ceo_brain.auth_type === 'oauth' ? ' via OAuth' :
+        ceo_brain.auth_type === 'api_key' ? ' via API key' :
+        ceo_brain.auth_type === 'local' ? ' (local)' : ''
+      return (
+        <div style={{
+          marginBottom: 28, padding: '12px 16px',
+          background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
+          fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>✓</span>
+          <span>
+            CEO brain: <strong>{ceo_brain.provider_name ?? 'unknown'}</strong>
+            {ceo_brain.model ? ` — ${ceo_brain.model}` : ''}
+            {authNote} — AÏKO is operational.
+          </span>
+        </div>
+      )
+    }
+    if (any_model_available) {
+      return (
+        <div style={{
+          marginBottom: 28, padding: '12px 16px',
+          background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+          fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>⚠</span>
+          <span>
+            A provider is connected but no CEO brain is assigned.
+            Assign a provider to the CEO role below.
+          </span>
+        </div>
+      )
+    }
+    return (
+      <div style={{
+        marginBottom: 28, padding: '12px 16px',
+        background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
+        fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span>⚠</span>
+        <span>AÏKO CEO is offline. Connect at least one AI provider below to start the company.</span>
+      </div>
+    )
+  }
+
+  // Legacy fallback
+  if (connectedCount === 0) {
+    return (
+      <div style={{
+        marginBottom: 28, padding: '12px 16px',
+        background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
+        fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span>⚠</span>
+        <span>AÏKO CEO is offline. Connect at least one AI provider below to start the company.</span>
+      </div>
+    )
+  }
+  if (diagnostics && !diagnostics.can_ceo_think) {
+    return (
+      <div style={{
+        marginBottom: 28, padding: '12px 16px',
+        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+        fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <span>⚠</span>
+        <span>
+          {connectedCount} provider{connectedCount > 1 ? 's' : ''} connected, but no CEO brain resolved.
+          Assign a provider to the CEO role below or reconnect a provider.
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div style={{
+      marginBottom: 28, padding: '12px 16px',
+      background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
+      fontSize: 13, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      <span>✓</span>
+      <span>
+        {diagnostics?.ceo_provider
+          ? `CEO brain: ${diagnostics.ceo_provider.name}${diagnostics.ceo_provider.model ? ` — ${diagnostics.ceo_provider.model}` : ''} — AÏKO is operational.`
+          : `${connectedCount} AI provider${connectedCount > 1 ? 's' : ''} connected — AÏKO is operational.`
+        }
+      </span>
+    </div>
+  )
+}
+
+// ── Subscription card ─────────────────────────────────────────────────────────
 
 /**
- * Shows the connection status for an OAuth AI provider (ChatGPT, Claude).
- * Distinguishes between:
- *   - not_configured  (env vars missing on this instance)
- *   - not_connected   (configured but user hasn't connected)
- *   - connected       (token stored and working)
- *   - needs_reauth    (token expired and refresh failed)
+ * Rich status card for subscription/OAuth AI providers (ChatGPT, Claude).
+ *
+ * Shows exactly what's happening — no false "Connected" states:
+ *   - oauth_not_configured  → lists missing env var names (not values)
+ *   - no_connection_row     → configured but never connected
+ *   - not_connected         → row exists but status is disconnected/error
+ *   - needs_reauth          → token expired / refresh failed
+ *   - connected             → token confirmed, account email shown
+ *
+ * Also shows fallback status (OpenAI API / Anthropic API) so user knows
+ * whether the app is working even if OAuth is not connected.
  */
-function OAuthCard({
-  icon, title, subtitle, startUrl, disconnectUrl, connection, onRefresh, notConfiguredNote,
+function SubscriptionCard({
+  icon, title, subtitle, startUrl, disconnectUrl, card, fallbackLabel, fallbackConnected, onRefresh,
 }: {
   icon: string
   title: string
   subtitle: string
   startUrl: string
   disconnectUrl: string
-  connection: { status: string; account_email: string | null } | null
+  card: SubCard | null
+  fallbackLabel: string
+  fallbackConnected: boolean
   onRefresh: () => void
-  notConfiguredNote?: string
 }) {
-  const [checking, setChecking]     = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
-  const [configuredState, setConfiguredState] = useState<boolean | null>(null) // null = not yet checked
-
-  // Probe whether OAuth is configured on this instance by hitting the start URL.
-  // We do a fetch (not a full redirect) to check the JSON response.
-  async function checkConfigured() {
-    setChecking(true)
-    try {
-      const res = await fetch(startUrl, { redirect: 'manual' })
-      // 422 = not configured, 3xx = configured (OAuth redirect started)
-      // We can't follow the redirect, but status 0 or 3xx both mean "configured"
-      if (res.status === 422) {
-        const data = await res.json().catch(() => ({}))
-        setConfiguredState(data.configured === false ? false : true)
-      } else {
-        setConfiguredState(true)
-      }
-    } catch {
-      setConfiguredState(true) // assume configured if fetch errors (CORS etc.)
-    } finally {
-      setChecking(false)
-    }
-  }
 
   async function disconnect() {
     if (!confirm(`Disconnect ${title}?`)) return
@@ -507,87 +609,121 @@ function OAuthCard({
     }
   }
 
-  const status = connection?.status ?? 'not_connected'
-  const email  = connection?.account_email
+  // Derive display state
+  const status       = card?.status ?? 'unknown'
+  const email        = card?.account_email ?? null
+  const missingEnv   = card?.missing_env ?? []
+  const lastError    = card?.last_error ?? null
+  const canStartOAuth = card?.can_start_oauth ?? false
+
+  const isConnected   = status === 'connected'
+  const isNeedsReauth = status === 'needs_reauth'
+  const isNotConfigured = status === 'oauth_not_configured' || (card === null)
+  const isNoRow       = status === 'no_connection_row'
 
   const statusColor =
-    status === 'connected'    ? '#16a34a' :
-    status === 'needs_reauth' ? '#f59e0b' : '#94a3b8'
+    isConnected   ? '#16a34a' :
+    isNeedsReauth ? '#f59e0b' : '#94a3b8'
 
   const statusLabel =
-    status === 'connected'    ? (email ? `Connected as ${email}` : 'Connected') :
-    status === 'needs_reauth' ? 'Needs re-authentication' :
+    isConnected       ? (email ? `Connected as ${email}` : 'Connected') :
+    isNeedsReauth     ? 'Needs re-authentication' :
+    isNotConfigured   ? 'OAuth not configured on this instance' :
+    isNoRow           ? 'Not connected' :
     'Not connected'
+
+  const borderColor =
+    isConnected   ? '#bbf7d0' :
+    isNeedsReauth ? '#fde68a' : '#f1f5f9'
 
   return (
     <div style={{
       background: '#ffffff',
-      border: `1px solid ${status === 'connected' ? '#bbf7d0' : status === 'needs_reauth' ? '#fde68a' : '#f1f5f9'}`,
+      border: `1px solid ${borderColor}`,
       borderRadius: 12, padding: '18px 20px',
       boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
     }}>
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
         <span style={{ fontSize: 20 }}>{icon}</span>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{title}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, display: 'inline-block' }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0, display: 'inline-block' }} />
             <span style={{ fontSize: 11, color: statusColor, fontWeight: 500 }}>{statusLabel}</span>
           </div>
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 14px', lineHeight: 1.5 }}>
+      <p style={{ fontSize: 12, color: '#64748b', margin: '0 0 10px', lineHeight: 1.5 }}>
         {subtitle}
       </p>
 
-      {/* Configured-check result */}
-      {configuredState === false && (
+      {/* "Why not connected?" — missing env vars (names only) */}
+      {isNotConfigured && missingEnv.length > 0 && (
         <div style={{
-          fontSize: 12, color: '#64748b', background: '#f8fafc',
+          fontSize: 11, color: '#64748b', background: '#f8fafc',
           border: '1px solid #e2e8f0', borderRadius: 8,
-          padding: '8px 10px', marginBottom: 10, lineHeight: 1.5,
+          padding: '8px 10px', marginBottom: 10, lineHeight: 1.6,
         }}>
-          {notConfiguredNote ?? `${title} OAuth is not configured on this AÏKO instance.`}
+          <span style={{ fontWeight: 600, color: '#374151' }}>Why not configured?</span>
+          {' '}Missing env vars on this instance:
+          <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {missingEnv.map(v => (
+              <code key={v} style={{
+                fontSize: 10, background: '#f1f5f9', color: '#475569',
+                borderRadius: 4, padding: '1px 5px', fontFamily: 'DM Mono, monospace',
+              }}>{v}</code>
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Needs re-auth explanation */}
+      {isNeedsReauth && (
+        <div style={{
+          fontSize: 11, color: '#92400e', background: '#fffbeb',
+          border: '1px solid #fde68a', borderRadius: 8,
+          padding: '8px 10px', marginBottom: 10, lineHeight: 1.5,
+        }}>
+          Your {title} session has expired. Re-authenticate to restore access.
+          {lastError && <div style={{ marginTop: 4, color: '#b45309' }}>Error: {lastError}</div>}
+        </div>
+      )}
+
+      {/* Last error (not_connected case) */}
+      {!isConnected && !isNeedsReauth && lastError && (
+        <div style={{
+          fontSize: 11, color: '#dc2626', background: '#fef2f2',
+          border: '1px solid #fecaca', borderRadius: 8,
+          padding: '8px 10px', marginBottom: 10, lineHeight: 1.5,
+        }}>
+          Last error: {lastError}
+        </div>
+      )}
+
+      {/* Fallback status */}
+      {!isConnected && (
+        <div style={{
+          fontSize: 11, color: fallbackConnected ? '#16a34a' : '#94a3b8',
+          marginBottom: 10, display: 'flex', alignItems: 'center', gap: 4,
+        }}>
+          <span style={{
+            width: 5, height: 5, borderRadius: '50%', display: 'inline-block',
+            background: fallbackConnected ? '#16a34a' : '#e2e8f0',
+          }} />
+          {fallbackLabel}: {fallbackConnected ? 'connected (fallback active)' : 'not connected'}
+        </div>
+      )}
+
+      {/* Action buttons */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {status !== 'connected' ? (
+        {isConnected ? (
           <>
             <a
               href={startUrl}
               style={{
-                display: 'inline-block',
-                padding: '7px 14px', borderRadius: 7,
-                background: '#0f172a', color: '#ffffff',
-                border: 'none', fontSize: 12, fontWeight: 500,
-                cursor: 'pointer', textDecoration: 'none',
-              }}
-            >
-              Connect {title}
-            </a>
-            {configuredState === null && (
-              <button
-                onClick={checkConfigured}
-                disabled={checking}
-                style={{
-                  padding: '7px 12px', borderRadius: 7, fontSize: 12,
-                  background: 'none', border: '1px solid #e2e8f0',
-                  color: '#94a3b8', cursor: 'pointer',
-                }}
-              >
-                {checking ? 'Checking…' : 'Check if configured'}
-              </button>
-            )}
-          </>
-        ) : (
-          <>
-            <a
-              href={startUrl}
-              style={{
-                display: 'inline-block',
-                padding: '7px 14px', borderRadius: 7,
+                display: 'inline-block', padding: '7px 14px', borderRadius: 7,
                 background: '#f8fafc', color: '#374151',
                 border: '1px solid #e2e8f0', fontSize: 12, fontWeight: 500,
                 cursor: 'pointer', textDecoration: 'none',
@@ -607,6 +743,25 @@ function OAuthCard({
               {disconnecting ? '…' : 'Disconnect'}
             </button>
           </>
+        ) : canStartOAuth ? (
+          <a
+            href={startUrl}
+            style={{
+              display: 'inline-block', padding: '7px 14px', borderRadius: 7,
+              background: '#0f172a', color: '#ffffff',
+              border: 'none', fontSize: 12, fontWeight: 500,
+              cursor: 'pointer', textDecoration: 'none',
+            }}
+          >
+            {isNeedsReauth ? `Re-authenticate ${title}` : `Connect ${title}`}
+          </a>
+        ) : (
+          <div style={{ fontSize: 11, color: '#94a3b8', padding: '7px 0', lineHeight: 1.5 }}>
+            To enable OAuth, set the missing env vars above and restart the server.
+            {fallbackConnected
+              ? ` ${fallbackLabel} is active as a fallback.`
+              : ` Add an ${fallbackLabel} key as a fallback.`}
+          </div>
         )}
       </div>
     </div>
