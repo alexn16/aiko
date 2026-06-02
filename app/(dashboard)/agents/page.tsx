@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 interface BuiltInAgent {
   id:           string
@@ -41,8 +41,9 @@ export default function AgentsPage() {
   const [builtIn, setBuiltIn]  = useState<BuiltInAgent[]>([])
   const [custom, setCustom]    = useState<CustomAgent[]>([])
   const [loading, setLoading]  = useState(true)
-  const [archiving, setArchiving] = useState<string | null>(null)
+  const [archiving, setArchiving]   = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -102,16 +103,37 @@ export default function AgentsPage() {
         </p>
       </div>
 
-      {/* CEO tip */}
-      <div style={{
-        marginBottom: 28, padding: '12px 16px',
-        background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10,
-        fontSize: 13, color: '#0369a1', lineHeight: 1.6,
-      }}>
-        💡 <strong>Create a new agent:</strong> Open CEO Chat and say something like{' '}
-        <em>"Create an agent for lead qualification"</em> or{' '}
-        <em>"Build an agent to monitor competitor pricing"</em>.
+      {/* Create agent */}
+      <div style={{ marginBottom: 28, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{
+          flex: 1, padding: '12px 16px',
+          background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10,
+          fontSize: 13, color: '#0369a1', lineHeight: 1.6,
+        }}>
+          💡 <strong>Quick create:</strong> Use the button, or open CEO Chat and say{' '}
+          <em>"Create an agent for lead qualification"</em>.
+        </div>
+        <button
+          onClick={() => setShowCreate(f => !f)}
+          style={{
+            flexShrink: 0, padding: '9px 18px', borderRadius: 8,
+            background: showCreate ? '#f1f5f9' : '#0f172a',
+            color: showCreate ? '#374151' : '#fff',
+            border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          {showCreate ? '✕ Cancel' : '+ New agent'}
+        </button>
       </div>
+
+      {showCreate && (
+        <CreateAgentForm
+          onCreated={(agent) => {
+            setCustom(prev => [agent, ...prev])
+            setShowCreate(false)
+          }}
+        />
+      )}
 
       {loading ? (
         <div style={{ color: '#94a3b8', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
@@ -407,5 +429,123 @@ function CustomAgentCard({
         </div>
       )}
     </div>
+  )
+}
+
+function CreateAgentForm({ onCreated }: { onCreated: (agent: CustomAgent) => void }) {
+  const [name, setName]       = useState('')
+  const [purpose, setPurpose] = useState('')
+  const [mode, setMode]       = useState<'manual' | 'ai'>('ai')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError]     = useState<string | null>(null)
+  const inputRef              = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (mode === 'ai' && !name.trim()) { setError('Describe what the agent should do.'); return }
+    if (mode === 'manual' && (!name.trim() || !purpose.trim())) { setError('Name and purpose are required.'); return }
+    setError(null)
+    setSubmitting(true)
+    try {
+      const body = mode === 'ai'
+        ? { need: name.trim() }
+        : { name: name.trim(), purpose: purpose.trim() }
+      const res  = await fetch('/api/custom-agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? 'Failed to create agent'); return }
+      onCreated(data.agent)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} style={{
+      marginBottom: 24, padding: '20px 24px',
+      background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12,
+    }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        {(['ai', 'manual'] as const).map(m => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMode(m)}
+            style={{
+              padding: '5px 14px', borderRadius: 6,
+              background: mode === m ? '#0f172a' : '#f1f5f9',
+              color: mode === m ? '#fff' : '#374151',
+              border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {m === 'ai' ? '✨ AI-generated' : '✏️ Manual'}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>
+            {mode === 'ai' ? 'What should this agent do?' : 'Agent name'}
+          </label>
+          <input
+            ref={inputRef}
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder={mode === 'ai' ? 'e.g. qualify inbound leads from LinkedIn' : 'e.g. Lead Qualifier'}
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: 7,
+              border: '1px solid #e2e8f0', fontSize: 13, background: '#fff',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        {mode === 'manual' && (
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>
+              Purpose
+            </label>
+            <textarea
+              value={purpose}
+              onChange={e => setPurpose(e.target.value)}
+              placeholder="Detailed description of purpose and responsibilities…"
+              rows={3}
+              style={{
+                width: '100%', padding: '8px 12px', borderRadius: 7,
+                border: '1px solid #e2e8f0', fontSize: 13, background: '#fff',
+                resize: 'vertical', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ marginTop: 10, fontSize: 12, color: '#dc2626', background: '#fef2f2', padding: '8px 12px', borderRadius: 7 }}>
+          {error}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={submitting}
+        style={{
+          marginTop: 14, padding: '8px 20px', borderRadius: 8,
+          background: submitting ? '#94a3b8' : '#0f172a',
+          color: '#fff', border: 'none', fontSize: 13, fontWeight: 600,
+          cursor: submitting ? 'default' : 'pointer',
+        }}
+      >
+        {submitting ? (mode === 'ai' ? 'Generating spec…' : 'Creating…') : 'Create draft agent'}
+      </button>
+    </form>
   )
 }

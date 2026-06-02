@@ -1,157 +1,96 @@
-# AÏKO Runtime Check
+# AÏKO Runtime Verification Report
 
-**Date:** 2026-06-01  
+**Date:** 2026-06-02  
 **Port:** 3001  
-**URL:** http://localhost:3001  
-**Auth mode:** optional (no Google login required)
+**Auth mode:** `AIKO_AUTH_MODE=optional` (no Google login required)
 
 ---
 
-## Environment
-
-| Item | Status |
-|------|--------|
-| DATABASE_URL | `postgresql://alli@localhost:5432/aiko` ✓ |
-| NEXTAUTH_SECRET | set ✓ |
-| NEXTAUTH_URL | `http://localhost:3001` ✓ |
-| AIKO_AUTH_MODE | `optional` (added to .env.local) ✓ |
-| PostgreSQL | Running (v16.11) ✓ |
-| Ollama | Running at `http://localhost:11434` ✓ |
-
----
-
-## Migrations
-
-All 34 migrations applied cleanly.
-
-Migrations 025_execution_trail through 034_project_executive_reports were pending and applied manually before this run (they now auto-apply on next server start via `instrumentation.ts`).
-
----
-
-## Build & Tests
-
-```
-npm run build   → ✓ Compiled successfully
-npm test        → 80/80 pass, 0 fail
-```
-
----
-
-## App startup
-
-```
-npm run dev     → ✓ Ready in 2.3s (port 3001)
-```
-
-No errors in startup log.
-
----
-
-## Page health
+## Core pages (all returned HTTP 200)
 
 | Page | Status |
-|------|--------|
-| `/` | 307 → `/ceo` (correct: brain connected, optional mode) |
-| `/connect-ai` | 200 ✓ |
-| `/ceo` | 200 ✓ |
-| `/start-campaign` | 200 ✓ |
-| `/projects` | 200 ✓ |
-| `/leads` | 200 ✓ |
-| `/operators` | 200 ✓ |
-| `/approvals` | 200 ✓ |
+|---|---|
+| / (root → /dashboard) | ✅ 200 |
+| /dashboard | ✅ 200 |
+| /connect-ai | ✅ 200 |
+| /files | ✅ 200 |
+| /agents | ✅ 200 |
+| /projects | ✅ 200 |
+| /leads | ✅ 200 |
+| /office | ✅ 200 |
+| /system | ✅ 200 |
+| /settings | ✅ 200 |
 
 ---
 
-## Diagnostics
+## Provider / OAuth honest state
 
-`GET /api/auth/diagnostics`:
-```json
-{
-  "auth_mode": "optional",
-  "can_configure_without_login": true,
-  "api_providers": { "ollama_connected": true },
-  "ceo_brain": {
-    "can_ceo_think": true,
-    "assigned_provider": "Ollama (local)",
-    "model": "llama3.1:8b"
-  }
-}
+- **OpenAI (API key):** configured if `OPENAI_API_KEY` is set — no fake state  
+- **ChatGPT OAuth:** `GET /api/auth/chatgpt/start` → HTTP 422 `{"configured":false}` when env vars absent ✅  
+- **Anthropic (API key):** configured if `ANTHROPIC_API_KEY` is set — no fake state  
+- **Claude OAuth:** `GET /api/auth/claude/start` → HTTP 422 `{"configured":false}` when env vars absent ✅  
+- **Ollama:** `GET /api/providers/ollama/status` → reports actual connection result (not faked) ✅
+
+---
+
+## Generated files
+
+| Step | Result |
+|---|---|
+| POST /api/files (create markdown) | ✅ Created, returned `{file: {...}}` |
+| File on disk at `storage/generated-files/{uuid}/filename.md` | ✅ Confirmed |
+| DB `storage_path` is relative (not absolute) | ✅ `generated-files/{uuid}/filename.md` |
+| GET /api/files (list) | ✅ File appears |
+| GET /api/files/{id}/download | ✅ `Content-Disposition: attachment`, correct MIME |
+| DELETE /api/files/{id} | ✅ Removed from list |
+| Path traversal guard: filenames sanitised via `path.basename` | ✅ |
+| `/files` page loads with generate form | ✅ — title, type selector, content textarea, Save button |
+| File appears in list immediately after save | ✅ optimistic prepend |
+| Project Files tab (`/projects/[id]` → Files) | ✅ Filters by `project_id` |
+
+---
+
+## Custom agents
+
+| Step | Result |
+|---|---|
+| GET /api/custom-agents → 5 built-in agents | ✅ |
+| POST /api/custom-agents `{name, purpose}` → draft agent | ✅ status=draft |
+| All 5 security constraints present | ✅ `must_delegate_to_web_operator`, `inherits_operating_mode`, `cannot_bypass_approvals`, `cannot_send_emails_directly`, `cannot_access_secrets` |
+| PATCH /api/custom-agents/{id} `{status:"active"}` | ✅ |
+| DELETE /api/custom-agents/{id} → archives (not hard-delete) | ✅ status=archived |
+| `/agents` page shows built-in + custom sections | ✅ |
+| "New agent" button opens create form | ✅ AI-generated mode + manual mode |
+| AI-generated spec path (POST `{need:"..."}`) | ✅ spec generated, constraints enforced |
+
+---
+
+## CEO custom agent fast-path
+
+- Input: `"Create an agent for influencer outreach."`
+- Result: `intent=create_agent`, agent spec returned without triggering full CEO context ✅
+- Pattern regex: `/create\s+(an?\s+)?(new\s+)?agent\s+(for|to|that)\s+/i` ✅
+
+---
+
+## Build & tests
+
 ```
-
-`GET /api/providers/diagnostics`:
-```json
-{
-  "ok": true,
-  "can_ceo_think": true,
-  "ceo_provider": { "name": "Ollama (local)", "model": "llama3.1:8b" }
-}
+npm run build   →  ✅  no errors, /files and /agents in output
+npm test        →  ✅  90/90 passing (0 failures)
+npx tsc --noEmit → ✅  no type errors
 ```
 
 ---
 
-## Ollama
+## Issues found & fixed during runtime verification
 
-- Running at `http://localhost:11434`
-- Models installed: `llama3.1:8b`, `qwen2.5:7b-instruct`, `qwen2.5-coder:7b`, `qwen2.5:0.5b`
-- `llama3.1:8b` confirmed present ✓
-
----
-
-## Brain Verification
-
-`POST /api/providers/test-ceo-brain`:
-```json
-{
-  "success": true,
-  "provider": { "name": "Ollama (local)", "model": "llama3.1:8b" },
-  "response": "AÏKO_CEO_OK I am ready to process your request."
-}
-```
-
----
-
-## CEO Chat
-
-`POST /api/ceo/command` — `"Hello, what are you?"`:
-```
-intent: general
-response: "I'm the CEO of AÏKO, an AI marketing company..."
-```
-Real Ollama response ✓. No fake fallback. No login required.
-
-`POST /api/ceo/command` — `"What decisions have been made for RapidBuild?"`:
-```
-intent: project_recall
-response: "The following key decisions have been made for RapidBuild: Kenji was assigned as PM..."
-```
-Decision log context used correctly ✓.
-
-`POST /api/ceo/command` — `"Generate an executive report for RapidBuild"`:
-```
-intent: executive_report
-chips: ["📊 View reports", "📁 Open project", "▶ First Campaign Flow"]
-response: "Here's the executive report for RapidBuild..."
-```
-Report generated and chips returned ✓.
-
----
-
-## Fixes Made
-
-1. **`AIKO_AUTH_MODE=optional` added to `.env.local`** — was missing (code defaulted correctly, but explicit is better).
-
-2. **`p.status` column bug in `lib/project-context.ts`** — `projects` table has no `status` column, only `active` (boolean). Fixed query to use `CASE WHEN p.active THEN 'active' ELSE 'inactive' END AS status`. This caused executive reports and CEO recall (project context) to 500.
-
-3. **Recall patterns extended in `ceo-command-agent.ts`** — Added patterns for `"what decisions have been made for X"` and `"why did we..."` so they route through the fast-path recall that includes decision log context rather than the full CEO agent that lacks it.
-
-4. **Migrations applied manually** — Migrations 025_execution_trail through 034 were not yet applied to the local DB. Applied via migration script. Future server starts will auto-apply via `instrumentation.ts`.
-
----
-
-## Remaining Manual Steps
-
-None required for core use. The app is fully functional.
-
-Optional:
-- Connect a second AI provider (OpenAI API, Anthropic API) via `/connect-ai` if you want a faster/higher-quality brain than `llama3.1:8b`.
-- Google OAuth (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) is not configured — not needed in `optional` mode.
+| Issue | Fix |
+|---|---|
+| `Buffer` not assignable to `BodyInit` in download route | Cast via `as unknown as BodyInit` |
+| `db.query<T>()` generic not supported | Stripped generic params from all db calls |
+| `callAI(role, messages, opts)` wrong signature | Changed to `callAI({role, messages, ...})` |
+| Create-agent regex didn't match "an agent" (article) | Fixed `(a\s+)?` → `(an?\s+)?` |
+| Dev server defaulted to port 3000 | Started with `PORT=3001 npm run dev` |
+| `/files` page had no generate form | Added `GenerateFileForm` component (title, type, content, save) |
+| `/agents` page had no create form | Added `CreateAgentForm` component (AI-generated + manual modes) |
