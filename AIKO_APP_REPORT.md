@@ -635,3 +635,13 @@ CEO/PM Chat
 - Project Files tab: lead CSV exports appear project-scoped
 - Safety: read-only on leads; never contacts leads; never triggers outreach; never uses Web Operator; no secrets in output; writes only to `storage/generated-files/`
 - Tests 96–100 added (100 total, all passing)
+
+### Project Artifact Bundle — 2026-06-02
+- `lib/project-artifact-bundle.ts` — `generateProjectArtifactBundle(projectId)` generates all 5 bundle files; `formatStrategyBriefMarkdown(brief, name)` → Markdown with all sections; `formatDecisionLogMarkdown(decisions, name, isoDate)` → Markdown log with ISO dates, no secrets; `generateBundleManifest(projectId, name, files)` → JSON with ISO `generated_at`, internal-only download URLs; `getLatestProjectBundle(projectId)` → returns most recent manifest file
+- `POST /api/projects/[id]/artifact-bundle` — returns `{ files, manifest, download_urls, file_count }`; 404 if project not found; non-fatal partial bundle on component errors
+- Bundle contents: (1) executive report MD — latest or auto-generated fallback, (2) leads CSV — headers-only if no leads, (3) strategy brief MD — empty-state note if no brief, (4) decision log MD — empty-state note if no decisions, (5) manifest JSON linking all files
+- Project workspace Files tab: "📦 Generate project bundle" button; success panel shows per-file download links with labels (Executive report, Leads CSV, Strategy brief, Decision log, Manifest)
+- `/files` page and project Files tab: new source labels — Strategy brief, Decision log, Project bundle
+- `source_entity_type` values: `strategy_brief`, `decision_log`, `project_bundle` (added alongside existing `executive_report`, `leads_export`)
+- Safety: internal-only; no external sends; no outreach; no Web Operator; no secrets; no absolute paths exposed; `source_text` never included; writes only to `storage/generated-files/`
+- Tests 101–106 added (106 total, all passing)

@@ -639,6 +639,17 @@ interface ProjectFileRow {
 const SOURCE_ENTITY_LABEL_TAB: Record<string, string> = {
   executive_report: 'Executive report',
   leads_export:     'Leads export',
+  strategy_brief:   'Strategy brief',
+  decision_log:     'Decision log',
+  project_bundle:   'Project bundle',
+}
+
+const BUNDLE_FILE_LABEL: Record<string, string> = {
+  executive_report: 'Executive report',
+  leads_export:     'Leads CSV',
+  strategy_brief:   'Strategy brief',
+  decision_log:     'Decision log',
+  manifest:         'Manifest',
 }
 
 const FILE_TYPE_COLOR: Record<string, string> = {
@@ -654,19 +665,29 @@ function fmtBytes(b: number): string {
   return `${(b / 1048576).toFixed(1)} MB`
 }
 
-function ProjectFilesPanel({ projectId }: { projectId: string }) {
-  const [files, setFiles]     = useState<ProjectFileRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [deleting, setDeleting] = useState<string | null>(null)
+interface BundleResult {
+  download_urls: Record<string, string>
+  file_count: number
+}
 
-  useEffect(() => {
+function ProjectFilesPanel({ projectId }: { projectId: string }) {
+  const [files, setFiles]           = useState<ProjectFileRow[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [deleting, setDeleting]     = useState<string | null>(null)
+  const [bundling, setBundling]     = useState(false)
+  const [bundleResult, setBundleResult] = useState<BundleResult | null>(null)
+  const [bundleError, setBundleError]   = useState<string | null>(null)
+
+  function loadFiles() {
     setLoading(true)
     fetch(`/api/files?project_id=${projectId}`)
       .then(r => r.ok ? r.json() : { files: [] })
       .then(d => setFiles(d.files ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [projectId])
+  }
+
+  useEffect(() => { loadFiles() }, [projectId])
 
   async function del(id: string, name: string) {
     if (!confirm(`Delete "${name}"?`)) return
@@ -679,16 +700,76 @@ function ProjectFilesPanel({ projectId }: { projectId: string }) {
     }
   }
 
+  async function generateBundle() {
+    setBundling(true)
+    setBundleResult(null)
+    setBundleError(null)
+    try {
+      const res  = await fetch(`/api/projects/${projectId}/artifact-bundle`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setBundleError(data.error ?? 'Bundle failed'); return }
+      setBundleResult({ download_urls: data.download_urls, file_count: data.file_count })
+      loadFiles()
+    } catch (err) {
+      setBundleError(String(err))
+    } finally {
+      setBundling(false)
+    }
+  }
+
   if (loading) return <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading files…</div>
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>📂 Generated Files</div>
-        <div style={{ fontSize: 12, color: '#64748b' }}>
-          Files created by AÏKO agents for this project — reports, exports, CSVs. <a href="/files" style={{ color: '#6366f1' }}>View all files →</a>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>📂 Generated Files</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            Files created by AÏKO agents for this project — reports, exports, CSVs. <a href="/files" style={{ color: '#6366f1' }}>View all files →</a>
+          </div>
         </div>
+        <button
+          onClick={generateBundle}
+          disabled={bundling}
+          style={{
+            padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            background: bundling ? '#94a3b8' : '#0f172a', color: '#fff',
+            border: 'none', cursor: bundling ? 'default' : 'pointer', flexShrink: 0,
+          }}
+        >
+          {bundling ? '⏳ Generating…' : '📦 Generate project bundle'}
+        </button>
       </div>
+
+      {bundleError && (
+        <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 7, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12, color: '#dc2626' }}>
+          {bundleError}
+        </div>
+      )}
+
+      {bundleResult && (
+        <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 9, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#166534', marginBottom: 8 }}>
+            ✓ Bundle generated — {bundleResult.file_count} files
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {Object.entries(bundleResult.download_urls).map(([key, url]) => (
+              <a
+                key={key}
+                href={url}
+                download
+                style={{
+                  padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500,
+                  background: '#fff', color: '#166534',
+                  border: '1px solid #bbf7d0', textDecoration: 'none',
+                }}
+              >
+                ↓ {BUNDLE_FILE_LABEL[key] ?? key}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {files.length === 0 ? (
         <div style={{

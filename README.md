@@ -1071,3 +1071,56 @@ The CEO fast-path detects these commands, generates the report, and returns chip
 - `POST /api/projects/[id]/executive-reports` — generate and save a new report
 
 **Safety:** Read-only except saving the report record. No Web Operator actions. No external sends. If the AI brain is unavailable, a deterministic fallback report is generated from structured project data.
+
+## Generated Files & Exports
+
+AÏKO can export project data to downloadable files stored in `storage/generated-files/`.
+
+### Lead CSV Export
+
+Export the lead pipeline for any project or status filter to a CSV file.
+
+**From `/leads` page:** Click "↓ Export CSV" to export all non-rejected leads (optionally filtered by status tab).
+
+**From project workspace Leads tab:** Click "↓ Export CSV" to export leads scoped to that project.
+
+**CSV columns:** `company_name`, `contact_name`, `email`, `phone`, `website`, `linkedin_url`, `location`, `category`, `score`, `status`, `source_url`, `notes`, `created_at`, `updated_at`.
+
+**Safety:** `source_text` (raw scraped HTML) is never included. Rejected/archived leads excluded by default. No outreach triggered.
+
+**API:** `POST /api/leads/export` — body: `{ project_id?, status?, include_rejected?, title? }`
+
+### Executive Report Export
+
+Export any executive report to Markdown or JSON from the project Reports tab.
+
+**API:** `POST /api/projects/[id]/executive-reports/[reportId]/export` — body: `{ format: "markdown"|"json", overwrite?: boolean }`
+
+### Project Artifact Bundle
+
+Generate a complete internal project package as generated files. All files appear in the project Files tab and `/files` page.
+
+**Bundle contents:**
+1. **Executive report** (Markdown) — latest report or auto-generated fallback
+2. **Leads CSV** — all non-rejected project leads (headers-only if no leads)
+3. **Strategy brief** (Markdown) — first-campaign brief or empty-state placeholder
+4. **Decision log** (Markdown) — all recorded project decisions, or empty-state note
+5. **Manifest** (JSON) — links all files with metadata, project ID, project name, ISO timestamp
+
+**From project workspace Files tab:** Click "📦 Generate project bundle". Download links for all components appear immediately after generation.
+
+**API:** `POST /api/projects/[id]/artifact-bundle` — returns `{ files, manifest, download_urls, file_count }`
+
+**Safety:** All files are internal only. No data is sent externally. No outreach triggered. No Web Operator actions. Absolute storage paths never exposed. `source_text` never included.
+
+### `/files` page
+
+All generated files from all sources are listed at `/files`. Each file shows its type badge (MD/CSV/JSON), filename, size, creation date, generating role, and source label:
+
+| `source_entity_type`  | Label shown         |
+|-----------------------|---------------------|
+| `executive_report`    | Executive report    |
+| `leads_export`        | Leads export        |
+| `strategy_brief`      | Strategy brief      |
+| `decision_log`        | Decision log        |
+| `project_bundle`      | Project bundle      |

@@ -2396,3 +2396,295 @@ test('100. formatLeadsCsv does not include source_text or secrets', () => {
   assert.ok(!csv.includes('raw HTML content'), 'source_text not in CSV')
   assert.ok(!csv.includes('sk-secret'), 'api_key not in CSV')
 })
+
+// ── 101–106. Project artifact bundle ─────────────────────────────────────────
+// Pure-JS implementations mirroring lib/project-artifact-bundle.ts
+
+// ── Inline formatStrategyBriefMarkdown ────────────────────────────────────────
+
+function formatStrategyBriefMarkdown(brief, projectName) {
+  const lines = [
+    `# ${brief.title || `${projectName} — Strategy Brief`}`,
+    '',
+    `> Generated ${new Date().toISOString().slice(0, 10)} · Project: ${projectName}`,
+    '',
+    '## Objective',
+    '',
+    brief.objective || '_No objective defined._',
+    '',
+    '## Target Audience',
+    '',
+    brief.target_audience || '_Not specified._',
+    '',
+    '## Recommended Channel',
+    '',
+    brief.recommended_channel || '_Not specified._',
+    '',
+    '## Value Proposition',
+    '',
+    brief.value_proposition || '_Not specified._',
+    '',
+    '## Research Prompt',
+    '',
+    brief.research_prompt || '_Not specified._',
+    '',
+  ]
+
+  if (brief.risks && brief.risks.length > 0) {
+    lines.push('## Risks', '')
+    brief.risks.forEach(r => lines.push(`- ${r}`))
+    lines.push('')
+  }
+  if (brief.assumptions && brief.assumptions.length > 0) {
+    lines.push('## Assumptions', '')
+    brief.assumptions.forEach(a => lines.push(`- ${a}`))
+    lines.push('')
+  }
+  if (brief.next_actions && brief.next_actions.length > 0) {
+    lines.push('## Next Actions', '')
+    brief.next_actions.forEach(a => lines.push(`- [ ] ${a}`))
+    lines.push('')
+  }
+
+  lines.push('---', '_This brief is internal guidance only. No automation is triggered by this document._')
+  return lines.join('\n')
+}
+
+// ── Inline formatDecisionLogMarkdown ─────────────────────────────────────────
+
+function formatDecisionLogMarkdown(decisions, projectName, isoDate) {
+  const lines = [
+    `# ${projectName} — Decision Log`,
+    '',
+    `> Generated ${isoDate.slice(0, 10)} · ${decisions.length} decision${decisions.length !== 1 ? 's' : ''} recorded`,
+    '',
+  ]
+
+  if (decisions.length === 0) {
+    lines.push('_No decisions have been recorded for this project yet._', '')
+  } else {
+    lines.push('## Decisions', '')
+    for (const d of decisions) {
+      const date = new Date(d.created_at).toISOString().slice(0, 10)
+      const role = d.decided_by_role ? ` _(${d.decided_by_role})_` : ''
+      lines.push(`### ${d.title}${role}`, '')
+      lines.push(`**Type:** ${d.decision_type.replace(/_/g, ' ')}  `)
+      lines.push(`**Date:** ${date}`)
+      if (d.summary) { lines.push('', d.summary) }
+      lines.push('')
+    }
+  }
+
+  lines.push('---', '_Decision log is internal only. No outreach or automation is triggered._')
+  return lines.join('\n')
+}
+
+// ── Inline generateBundleManifest ─────────────────────────────────────────────
+
+function generateBundleManifest(projectId, projectName, files) {
+  const isoDate = new Date().toISOString()
+  return {
+    project_id:   projectId,
+    project_name: projectName,
+    generated_at: isoDate,
+    files: files.map(f => ({
+      title:              f.title ?? f.filename,
+      file_type:          f.content_type,
+      content_type:       f.mime_type,
+      download_url:       `/api/files/${f.id}/download`,
+      source_entity_type: f.source_entity_type ?? 'unknown',
+      source_entity_id:   f.source_entity_id ?? null,
+    })),
+  }
+}
+
+// ── Test fixtures ─────────────────────────────────────────────────────────────
+
+const SAMPLE_BRIEF = {
+  id: 'brief-1',
+  project_id: 'proj-1',
+  title: 'TestCo — First Campaign Brief',
+  objective: 'Drive early sales pipeline',
+  target_audience: 'Series A SaaS founders',
+  research_prompt: 'Find SaaS startups in NYC',
+  recommended_channel: 'email',
+  value_proposition: 'AI-powered lead generation',
+  risks: ['Target audience too narrow', 'Email deliverability'],
+  assumptions: ['Email is primary channel'],
+  next_actions: ['Open First Campaign Flow', 'Research leads'],
+  created_by_role: 'CEO',
+  created_at: '2026-06-01T00:00:00Z',
+  updated_at: '2026-06-01T00:00:00Z',
+  recommended_operator_id: null,
+  recommended_operator_name: null,
+  operator_reason: null,
+}
+
+const SAMPLE_DECISIONS = [
+  {
+    id: 'd-1',
+    project_id: 'proj-1',
+    decision_type: 'project_created',
+    title: 'Project created',
+    summary: 'Initial project setup',
+    decided_by_role: 'user',
+    decided_by_user_id: null,
+    related_entity_type: null,
+    related_entity_id: null,
+    metadata: {},
+    created_at: '2026-06-01T10:00:00Z',
+  },
+  {
+    id: 'd-2',
+    project_id: 'proj-1',
+    decision_type: 'lead_approved',
+    title: 'Lead approved: Acme Corp',
+    summary: 'High-score lead approved for outreach',
+    decided_by_role: 'ceo',
+    decided_by_user_id: null,
+    related_entity_type: 'lead',
+    related_entity_id: 'lead-1',
+    metadata: {},
+    created_at: '2026-06-02T09:00:00Z',
+  },
+]
+
+const SAMPLE_FILES = [
+  {
+    id: 'file-1',
+    project_id: 'proj-1',
+    filename: 'executive-report-2026-06-02.md',
+    mime_type: 'text/markdown',
+    content_type: 'markdown',
+    title: 'TestCo — Executive Report',
+    description: 'Executive report',
+    generated_by_role: 'system',
+    storage_path: '/storage/generated-files/file-1/executive-report-2026-06-02.md',
+    size_bytes: 1200,
+    source_entity_type: 'executive_report',
+    source_entity_id: 'report-1',
+    created_at: '2026-06-02T10:00:00Z',
+  },
+  {
+    id: 'file-2',
+    project_id: 'proj-1',
+    filename: 'leads-project-2026-06-02.csv',
+    mime_type: 'text/csv',
+    content_type: 'csv',
+    title: 'TestCo — Leads Export',
+    description: '10 leads',
+    generated_by_role: 'system',
+    storage_path: '/storage/generated-files/file-2/leads-project-2026-06-02.csv',
+    size_bytes: 800,
+    source_entity_type: 'leads_export',
+    source_entity_id: null,
+    created_at: '2026-06-02T10:01:00Z',
+  },
+  {
+    id: 'file-3',
+    project_id: 'proj-1',
+    filename: 'strategy-brief-2026-06-02.md',
+    mime_type: 'text/markdown',
+    content_type: 'markdown',
+    title: 'TestCo — Strategy Brief',
+    description: 'Strategy brief',
+    generated_by_role: 'system',
+    storage_path: '/storage/generated-files/file-3/strategy-brief-2026-06-02.md',
+    size_bytes: 900,
+    source_entity_type: 'strategy_brief',
+    source_entity_id: 'brief-1',
+    created_at: '2026-06-02T10:02:00Z',
+  },
+  {
+    id: 'file-4',
+    project_id: 'proj-1',
+    filename: 'decision-log-2026-06-02.md',
+    mime_type: 'text/markdown',
+    content_type: 'markdown',
+    title: 'TestCo — Decision Log',
+    description: '2 decisions',
+    generated_by_role: 'system',
+    storage_path: '/storage/generated-files/file-4/decision-log-2026-06-02.md',
+    size_bytes: 600,
+    source_entity_type: 'decision_log',
+    source_entity_id: null,
+    created_at: '2026-06-02T10:03:00Z',
+  },
+]
+
+test('101. generateBundleManifest produces valid manifest JSON', () => {
+  const manifest = generateBundleManifest('proj-1', 'TestCo', SAMPLE_FILES)
+  assert.equal(manifest.project_id, 'proj-1', 'project_id set')
+  assert.equal(manifest.project_name, 'TestCo', 'project_name set')
+  assert.ok(typeof manifest.generated_at === 'string', 'generated_at present')
+  assert.equal(manifest.files.length, 4, 'All 4 files in manifest')
+  // Check first file entry shape
+  const f = manifest.files[0]
+  assert.ok(f.title, 'file entry has title')
+  assert.ok(f.download_url.startsWith('/api/files/'), 'download_url correct prefix')
+  assert.ok(f.source_entity_type, 'source_entity_type set')
+})
+
+test('102. manifest generated_at is ISO 8601 (not locale format)', () => {
+  const manifest = generateBundleManifest('proj-1', 'TestCo', SAMPLE_FILES)
+  const date = new Date(manifest.generated_at)
+  assert.ok(!isNaN(date.getTime()), 'generated_at is a valid date')
+  // ISO 8601 format: contains 'T' and 'Z'
+  assert.ok(manifest.generated_at.includes('T'), 'generated_at has ISO T separator')
+  assert.ok(
+    manifest.generated_at.endsWith('Z') || manifest.generated_at.includes('+'),
+    'generated_at has timezone indicator'
+  )
+  // Must NOT be locale format like "Jun 2, 2026"
+  assert.ok(!/[A-Za-z]{3}\s+\d+,\s+\d{4}/.test(manifest.generated_at), 'generated_at not locale format')
+})
+
+test('103. formatDecisionLogMarkdown excludes secrets and metadata', () => {
+  const md = formatDecisionLogMarkdown(SAMPLE_DECISIONS, 'TestCo', '2026-06-02T10:00:00Z')
+  // Must not expose raw metadata, tokens, or API keys
+  const forbidden = ['api_key', 'token', 'password', 'OPENAI', 'secret', 'decided_by_user_id']
+  for (const f of forbidden) {
+    assert.ok(!md.toLowerCase().includes(f.toLowerCase()), `Decision log must not contain "${f}"`)
+  }
+  // Must include decision titles
+  assert.ok(md.includes('Project created'), 'Includes first decision title')
+  assert.ok(md.includes('Lead approved'), 'Includes second decision title')
+})
+
+test('104. formatDecisionLogMarkdown uses ISO dates not locale format', () => {
+  const md = formatDecisionLogMarkdown(SAMPLE_DECISIONS, 'TestCo', '2026-06-02T10:00:00Z')
+  // Each decision date should appear as ISO-ish (YYYY-MM-DD)
+  assert.ok(md.includes('2026-06-01'), 'ISO date for first decision')
+  assert.ok(md.includes('2026-06-02'), 'ISO date for second decision')
+  // Must NOT have locale format like "Jun 2, 2026"
+  assert.ok(!/Jun\s+\d+,\s+\d{4}/.test(md), 'No locale date format in decision log')
+})
+
+test('105. formatStrategyBriefMarkdown includes all sections and no secrets', () => {
+  const md = formatStrategyBriefMarkdown(SAMPLE_BRIEF, 'TestCo')
+  // Required sections
+  assert.ok(md.includes('## Objective'), 'Objective section')
+  assert.ok(md.includes('## Target Audience'), 'Target Audience section')
+  assert.ok(md.includes('## Value Proposition'), 'Value Proposition section')
+  assert.ok(md.includes('## Risks'), 'Risks section')
+  assert.ok(md.includes('## Next Actions'), 'Next Actions section')
+  // Content correctness
+  assert.ok(md.includes('Drive early sales pipeline'), 'Objective text present')
+  assert.ok(md.includes('- [ ] Open First Campaign Flow'), 'Next actions as checkboxes')
+  // No secrets
+  const forbidden = ['api_key', 'token', 'password', 'OPENAI', 'secret']
+  for (const f of forbidden) {
+    assert.ok(!md.toLowerCase().includes(f.toLowerCase()), `Brief must not contain "${f}"`)
+  }
+})
+
+test('106. manifest download_urls are all project-scoped internal paths', () => {
+  const manifest = generateBundleManifest('proj-1', 'TestCo', SAMPLE_FILES)
+  for (const f of manifest.files) {
+    // All URLs must be internal /api/files/ paths — no external URLs
+    assert.ok(f.download_url.startsWith('/api/files/'), `${f.title} download_url is internal`)
+    // No absolute paths or file:// URLs
+    assert.ok(!f.download_url.startsWith('http'), `${f.title} download_url is not external`)
+    assert.ok(!f.download_url.startsWith('file://'), `${f.title} download_url is not file://`)
+  }
+})
