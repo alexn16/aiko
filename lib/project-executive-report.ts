@@ -341,6 +341,8 @@ function rowToReport(r: Record<string, unknown>): ExecutiveReport {
     risks:              safeJSON<string[]>(r.risks, []),
     next_steps:         safeJSON<string[]>(r.next_steps, []),
     generated_by_role:  String(r.generated_by_role ?? 'ceo'),
-    created_at:         String(r.created_at),
+    created_at:         r.created_at instanceof Date
+                          ? (r.created_at as Date).toISOString()
+                          : String(r.created_at),
   }
 }
