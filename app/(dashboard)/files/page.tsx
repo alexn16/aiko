@@ -18,6 +18,7 @@ interface GeneratedFile {
 
 const SOURCE_ENTITY_LABEL: Record<string, string> = {
   executive_report: 'Executive report',
+  leads_export:     'Leads export',
 }
 
 const CONTENT_TYPE_LABEL: Record<string, string> = {

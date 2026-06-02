@@ -624,3 +624,14 @@ CEO/PM Chat
 - Project Files tab: shows source entity label on exported report files
 - Safety: no secrets/tokens in exports; writes only to `storage/generated-files/`; project ownership enforced; idempotent (no duplicate files for same report+format)
 - Tests 91–95 added (95 total, all passing)
+
+### Lead CSV Export — 2026-06-02
+- `lib/lead-file-export.ts` — `formatLeadsCsv(leads)` (correct CSV escaping: commas, quotes, newlines); `exportLeadsToCsv(options)` (project_id?, status?, include_rejected?, title?); rejected/archived leads excluded by default; `source_text` never included; uses existing generated-files system
+- `POST /api/leads/export` — body `{project_id?, status?, include_rejected?, title?}`; returns `{file, download_url, lead_count}`; no outreach, no Web Operator
+- CSV columns: company_name, contact_name, email, phone, website, linkedin_url, location, category, score, status, source_url, notes, created_at, updated_at
+- `/leads` page: "↓ Export CSV" button in header; respects active status filter and project; download link appears after export
+- Project workspace Leads tab: "↓ Export CSV" button in top controls; scoped to project_id; download link appears after export
+- `/files` page: `source_entity_type=leads_export` shows label "Leads export"
+- Project Files tab: lead CSV exports appear project-scoped
+- Safety: read-only on leads; never contacts leads; never triggers outreach; never uses Web Operator; no secrets in output; writes only to `storage/generated-files/`
+- Tests 96–100 added (100 total, all passing)

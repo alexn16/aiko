@@ -45,6 +45,9 @@ export default function LeadsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [draftingId, setDraftingId] = useState<string | null>(null)
   const [draftResult, setDraftResult] = useState<Record<string, string>>({})
+  const [exporting, setExporting] = useState(false)
+  const [exportLink, setExportLink] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   async function load(pid: string) {
     const [l, a] = await Promise.all([
@@ -128,6 +131,29 @@ export default function LeadsPage() {
     }
   }
 
+  async function exportCsv() {
+    setExporting(true)
+    setExportLink(null)
+    setExportError(null)
+    try {
+      const body: Record<string, unknown> = {}
+      if (projectId)    body.project_id = projectId
+      if (statusFilter) body.status      = statusFilter
+      const res  = await fetch('/api/leads/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) { setExportError(data.error ?? 'Export failed'); return }
+      setExportLink(data.download_url)
+    } catch (err) {
+      setExportError(String(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const filteredLeads = statusFilter
     ? leads.filter(l => l.status === statusFilter)
     : leads
@@ -144,7 +170,27 @@ export default function LeadsPage() {
             {leads.length > 0 ? `${leads.length} leads in pipeline` : 'Build your prospect pipeline'}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {exportLink && (
+            <a
+              href={exportLink}
+              download
+              style={{
+                padding: '7px 12px', borderRadius: 7, fontSize: 12, fontWeight: 500,
+                background: '#f0fdf4', color: '#166534',
+                border: '1px solid #bbf7d0', textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              ↓ Download CSV
+            </a>
+          )}
+          {exportError && (
+            <span style={{ fontSize: 11, color: '#dc2626' }}>{exportError}</span>
+          )}
+          <Button variant="ghost" onClick={exportCsv} disabled={exporting}>
+            {exporting ? 'Exporting…' : '↓ Export CSV'}
+          </Button>
           <Button variant="ghost" onClick={() => { setShowAdd(v => !v); setShowScrape(false) }}>
             {showAdd ? 'Cancel' : '+ Add manually'}
           </Button>

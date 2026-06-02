@@ -638,6 +638,7 @@ interface ProjectFileRow {
 
 const SOURCE_ENTITY_LABEL_TAB: Record<string, string> = {
   executive_report: 'Executive report',
+  leads_export:     'Leads export',
 }
 
 const FILE_TYPE_COLOR: Record<string, string> = {

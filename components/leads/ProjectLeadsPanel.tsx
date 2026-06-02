@@ -48,6 +48,9 @@ export function ProjectLeadsPanel({ projectId }: Props) {
   const [showManual, setShowManual] = useState(false)
   const [manualForm, setManualForm] = useState(BLANK_MANUAL)
   const [savingManual, setSavingManual] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportLink, setExportLink] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const loadLeads = useCallback(async () => {
     try {
@@ -220,6 +223,26 @@ export function ProjectLeadsPanel({ projectId }: Props) {
     }
   }
 
+  async function exportCsv() {
+    setExporting(true)
+    setExportLink(null)
+    setExportError(null)
+    try {
+      const res  = await fetch('/api/leads/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: projectId }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setExportError(data.error ?? 'Export failed'); return }
+      setExportLink(data.download_url)
+    } catch (err) {
+      setExportError(String(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const CARD: React.CSSProperties = {
     background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: 10,
     padding: '12px 14px', marginBottom: 16,
@@ -268,6 +291,34 @@ export function ProjectLeadsPanel({ projectId }: Props) {
         >
           {showManual ? 'Cancel' : '+ Add lead manually'}
         </button>
+        <button
+          onClick={exportCsv}
+          disabled={exporting}
+          style={{
+            background: '#f8fafc', color: '#374151',
+            border: '1px solid #e2e8f0', borderRadius: 6, padding: '7px 14px',
+            fontSize: 11, fontWeight: 600, cursor: exporting ? 'default' : 'pointer',
+          }}
+        >
+          {exporting ? 'Exporting…' : '↓ Export CSV'}
+        </button>
+        {exportLink && (
+          <a
+            href={exportLink}
+            download
+            style={{
+              padding: '7px 12px', borderRadius: 6, fontSize: 11, fontWeight: 500,
+              background: '#f0fdf4', color: '#166534',
+              border: '1px solid #bbf7d0', textDecoration: 'none',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            ↓ Download CSV
+          </a>
+        )}
+        {exportError && (
+          <span style={{ fontSize: 11, color: '#dc2626', padding: '7px 0' }}>{exportError}</span>
+        )}
       </div>
 
       {/* Manual add form */}

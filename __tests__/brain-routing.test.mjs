@@ -2292,3 +2292,107 @@ test('95. exportExecutiveReport returns 404 when report project_id mismatches', 
   assert.ok(caught !== null, 'Should throw for mismatched project')
   assert.equal(caught.statusCode, 404, 'Error should have statusCode 404')
 })
+
+// ── 96–100. Lead CSV export ───────────────────────────────────────────────────
+// Pure-JS implementation mirroring lib/lead-file-export.ts
+
+const CSV_COLUMNS = [
+  'company_name','contact_name','email','phone','website','linkedin_url',
+  'location','category','score','status','source_url','notes','created_at','updated_at',
+]
+
+function escapeCell(value) {
+  if (value === null || value === undefined) return ''
+  const s = String(value)
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return `"${s.replace(/"/g, '""')}"`
+  }
+  return s
+}
+
+function getField(lead, col) {
+  if (col === 'score') return lead.score ?? null
+  return lead[col] ?? null
+}
+
+function formatLeadsCsv(leads) {
+  const header = CSV_COLUMNS.join(',')
+  const rows = leads.map(lead => CSV_COLUMNS.map(col => escapeCell(getField(lead, col))).join(','))
+  return [header, ...rows].join('\n')
+}
+
+const REJECTED_STATUSES = new Set(['rejected', 'archived'])
+
+function filterLeads(leads, { status, includeRejected = false }) {
+  let result = leads
+  if (status) {
+    result = result.filter(l => l.status === status)
+  } else if (!includeRejected) {
+    result = result.filter(l => !REJECTED_STATUSES.has(l.status))
+  }
+  return result
+}
+
+const SAMPLE_LEADS = [
+  { company_name: 'Acme, Inc', contact_name: 'Jane "CEO" Smith', email: 'jane@acme.com',
+    phone: '+1 555 000', website: 'acme.com', linkedin_url: null, location: 'New York',
+    category: 'SaaS', score: 85, status: 'approved', source_url: 'https://acme.com',
+    notes: 'Multi\nline note', created_at: '2026-06-01T00:00:00Z', updated_at: null },
+  { company_name: 'Beta Corp', contact_name: null, email: null,
+    phone: null, website: 'beta.io', linkedin_url: null, location: null,
+    category: null, score: 40, status: 'rejected', source_url: null,
+    notes: null, created_at: '2026-06-01T00:00:00Z', updated_at: null },
+  { company_name: 'Gamma Ltd', contact_name: 'Bob', email: 'bob@gamma.com',
+    phone: null, website: null, linkedin_url: null, location: 'London',
+    category: 'Agency', score: 60, status: 'discovered', source_url: null,
+    notes: null, created_at: '2026-06-01T00:00:00Z', updated_at: null },
+]
+
+test('96. formatLeadsCsv escapes commas, quotes, and newlines correctly', () => {
+  const csv = formatLeadsCsv([SAMPLE_LEADS[0]])
+  const lines = csv.split('\n')
+  assert.equal(lines[0], CSV_COLUMNS.join(','), 'First line is header')
+  // company_name "Acme, Inc" should be quoted due to comma
+  assert.ok(lines[1].startsWith('"Acme, Inc"'), 'company_name with comma is quoted')
+  // contact_name 'Jane "CEO" Smith' should escape internal quotes
+  assert.ok(lines[1].includes('"Jane ""CEO"" Smith"'), 'Quotes inside value are doubled')
+  // notes with newline should be quoted
+  assert.ok(csv.includes('"Multi\nline note"'), 'Newlines inside value are quoted')
+})
+
+test('97. rejected leads excluded by default', () => {
+  const filtered = filterLeads(SAMPLE_LEADS, { includeRejected: false })
+  assert.ok(!filtered.some(l => l.status === 'rejected'), 'No rejected leads')
+  assert.ok(!filtered.some(l => l.status === 'archived'), 'No archived leads')
+  assert.ok(filtered.some(l => l.status === 'approved'), 'Approved leads included')
+  assert.ok(filtered.some(l => l.status === 'discovered'), 'Discovered leads included')
+})
+
+test('98. status filter includes only matching status', () => {
+  const filtered = filterLeads(SAMPLE_LEADS, { status: 'approved' })
+  assert.equal(filtered.length, 1, 'Only 1 approved lead')
+  assert.equal(filtered[0].company_name, 'Acme, Inc')
+})
+
+test('99. empty lead list produces valid CSV with only headers', () => {
+  const csv = formatLeadsCsv([])
+  const lines = csv.split('\n')
+  assert.equal(lines.length, 1, 'One line — just headers')
+  assert.equal(lines[0], CSV_COLUMNS.join(','), 'Header line correct')
+  // Validate no secret fields present
+  const forbidden = ['source_text', 'API_KEY', 'OPENAI', 'password', 'token']
+  for (const f of forbidden) {
+    assert.ok(!lines[0].includes(f), `Header must not contain "${f}"`)
+  }
+})
+
+test('100. formatLeadsCsv does not include source_text or secrets', () => {
+  const leadWithSecret = {
+    ...SAMPLE_LEADS[0],
+    source_text: 'raw HTML content with secrets',
+    api_key: 'sk-secret-should-not-appear',
+  }
+  const csv = formatLeadsCsv([leadWithSecret])
+  assert.ok(!csv.includes('raw HTML content'), 'source_text not in CSV')
+  assert.ok(!csv.includes('sk-secret'), 'api_key not in CSV')
+})
