@@ -10,7 +10,13 @@ export async function GET(
 ) {
   try {
     const status = await getOperatorStatus(params.id)
-    return NextResponse.json(status)
+    const headlessEnv = process.env.WEB_OPERATOR_HEADLESS ?? process.env.BROWSER_HEADLESS
+    return NextResponse.json({
+      ...status,
+      browser_mode: {
+        headless: headlessEnv !== 'false',
+      },
+    })
   } catch (err) {
     console.error('[web-operators/[id] GET]', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

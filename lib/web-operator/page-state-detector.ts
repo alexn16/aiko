@@ -75,6 +75,9 @@ const SECURITY_CHECKPOINT_PATTERNS = [
   /we noticed unusual activity/i, /checkpoint/i,
   /account verification/i, /verify it's you/i,
   /we've detected suspicious/i, /actividad sospechosa/i,
+  /just a moment/i, /\bun momento\b/i, /cloudflare/i,
+  /\brayid\b/i, /cf-mitigated/i,
+  /volver a diseñar/i, /equipo de ayuda de canva/i,
 ]
 
 const TWO_FACTOR_PATTERNS = [

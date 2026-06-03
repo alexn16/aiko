@@ -38,6 +38,14 @@ interface Action {
   created_at: string
 }
 
+interface OperatorStatusResponse {
+  operator?: WebOperator | null
+  latest_screenshot?: string | null
+  browser_mode?: {
+    headless: boolean
+  }
+}
+
 const STATUS_COLOR: Record<string, string> = {
   idle: '#94a3b8',
   working: '#3b82f6',
@@ -99,15 +107,10 @@ function waitingReasonLabel(reason: string | null): string {
   return `The operator is paused: ${reason.replace(/_/g, ' ')}. Please resolve this in the browser and click "Login / CAPTCHA completed".`
 }
 
-// Detect headed mode from a server-rendered hint in meta or a client-side env check
-// (window is not available server-side, so we use a safe fallback)
-const isHeadedMode = typeof window !== 'undefined'
-  ? document.querySelector('meta[name="web-operator-headless"]')?.getAttribute('content') === 'false'
-  : false
-
 export default function OperatorDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [operator, setOperator] = useState<WebOperator | null>(null)
+  const [browserHeadless, setBrowserHeadless] = useState(true)
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -125,8 +128,9 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         fetch(`/api/web-operator/actions?operator_id=${id}&limit=20`),
       ])
       if (opRes.ok) {
-        const d = await opRes.json()
-        setOperator(d.operator ?? null)
+        const d = await opRes.json() as OperatorStatusResponse
+        setOperator(d.operator ? { ...d.operator, latest_screenshot: d.latest_screenshot ?? d.operator.latest_screenshot ?? null } : null)
+        if (d.browser_mode) setBrowserHeadless(d.browser_mode.headless)
       }
       if (actRes.ok) {
         const d = await actRes.json()
@@ -326,7 +330,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
             </div>
           )}
           <div style={{ fontSize: 12, color: '#92400e', marginBottom: 14, lineHeight: 1.6 }}>
-            {isHeadedMode
+            {!browserHeadless
               ? 'Open the browser window and complete the action manually. Then click "Login / CAPTCHA completed" below.'
               : 'The browser is running in headless mode. Restart with WEB_OPERATOR_HEADLESS=false to see and interact with the browser window. Then click "Login / CAPTCHA completed".'}
           </div>
@@ -446,18 +450,6 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
             style={actionLoading ? BTN_LOADING : BTN}
           >
             {actionLoading === 'clear_workflow' ? 'Clearing…' : 'Clear workflow'}
-          </button>
-          <button
-            onClick={() => doAction('mark_user_controlling')}
-            disabled={!!actionLoading}
-            style={actionLoading ? BTN_LOADING : {
-              ...BTN,
-              background: '#ede9fe',
-              color: '#6d28d9',
-              border: '1px solid #c4b5fd',
-            }}
-          >
-            {actionLoading === 'mark_user_controlling' ? 'Updating…' : 'Mark: I\'m in control'}
           </button>
           {showResume && (
             <button
@@ -630,7 +622,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         lineHeight: 1.6,
         marginTop: 8,
       }}>
-        The operator browser is isolated. For login, CAPTCHA, or verification — complete it in the operator browser window and click &lsquo;Mark login completed&rsquo;.
+        The operator browser is isolated. For login, CAPTCHA, or verification — complete it in the operator browser window and click &lsquo;Login / CAPTCHA completed&rsquo;.
       </div>
     </div>
   )

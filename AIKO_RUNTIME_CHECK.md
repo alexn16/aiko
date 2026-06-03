@@ -462,3 +462,67 @@ Headless browser web search is blocked by bot detection in standard local enviro
 
 The architecture supports any of these — the workflow calls `delegateToWebOperator` which routes through the skill system.
 
+---
+
+## Visible Web Operator Runtime Validation — 2026-06-03
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Environment
+
+| Check | Result |
+|---|---|
+| CEO brain | ✅ Ollama (local) / llama3.1:8b connected |
+| Operating mode | ✅ `approval_required` |
+| Browser mode | ✅ headed (`WEB_OPERATOR_HEADLESS=false`) |
+| Playwright Chromium | ✅ installed |
+
+### Test results
+
+| Test | Result |
+|---|---|
+| `Kevin, open https://example.com and summarize the page.` | ⚠️ Web Operator routed to `website_reader`, but local DNS could not resolve `example.com`; action logged `failed/network_error`. |
+| `Kevin, search Google for property administrators in A Coruña.` | ✅ Google CAPTCHA/unusual traffic detected; action logged `waiting_user`; operator status stayed `waiting_user`; no fake result. |
+| `Kevin, open Facebook and research parking groups in A Coruña.` | ⚠️ Tagged `facebook_research`; current flow searches Google first and was stopped by Google CAPTCHA before reaching Facebook. No bypass or fake result. |
+| `Kevin, open Canva and create a draft Instagram post for ALB Parking.` | ✅ Canva Cloudflare/security page detected as `security_checkpoint`; action logged `waiting_user`; no publish/share/download action attempted. |
+| `Kevin, post on Facebook about ALB Parking.` | ✅ Approval item created; action logged `waiting_approval`; no post attempted. |
+| `/operators/[id]` | ✅ Shows current URL, waiting reason, pending action, skill names, latest screenshot when safe, and controls: `I'm taking over`, `Login / CAPTCHA completed`, `Resume workflow`, `Pause operator`, `Clear workflow`. |
+
+### Actions logged
+
+- `open_url` / `website_reader` / `failed` / `network_error` for `https://example.com`.
+- `search` / `general_web_research` / `waiting_user` / `captcha_detected` for Google.
+- `search` / `facebook_research` / `waiting_user` / `captcha_detected` for Facebook research prompt.
+- `open_url` / `canva_design` / `waiting_user` / `security_checkpoint` for Canva.
+- `create_post` / `facebook_research` / `waiting_approval` for Facebook post.
+
+### Screenshots
+
+- Screenshots were captured on completed non-sensitive pages.
+- Screenshots were suppressed on waiting-user CAPTCHA/security checkpoint actions.
+- `/operators/[id]` now maps the API `latest_screenshot` field correctly and renders the latest safe screenshot block.
+
+### Waiting and resume behavior
+
+- CAPTCHA/security pages stop automation and set `requires_user_input=true`.
+- `I'm taking over` sets `user_controlling` while preserving the waiting reason.
+- `Login / CAPTCHA completed` now inspects the page matching the operator's current URL and refuses to clear unresolved security checkpoints.
+- `Resume workflow` refuses to continue while `requires_user_input=true` (`Cannot resume: security_checkpoint`).
+- Facebook posting remains approval-gated and does not execute silently.
+
+### Issues fixed during this validation
+
+| Issue | Fix |
+|---|---|
+| URL prompt misclassified `https://example.com` as unknown site `https` | Extract first URL and route URL prompts to `website_reader` |
+| Manual takeover status overwritten to `idle` | Preserve `waiting_user` in delegation status update |
+| Canva Spanish Cloudflare challenge treated as normal page | Add `security_checkpoint` patterns for Cloudflare/RayID/Canva Spanish challenge copy |
+| Operator page always showed headless warning | Add server browser-mode field to `/api/web-operators/[id]` |
+| Operator page ignored `latest_screenshot` from status API | Map top-level `latest_screenshot` into operator state |
+| Duplicate old takeover button | Remove stale `Mark: I'm in control` button |
+| Taking over cleared unresolved blocker | Preserve `requires_user_input` and `waiting_reason` |
+| Login-completed checked `about:blank` page | Prefer page matching operator `current_url` |

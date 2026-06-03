@@ -3164,6 +3164,9 @@ const CAPTCHA_TEXT_PATTERNS_TEST = [
 const SECURITY_CHECKPOINT_TEST = [
   /security checkpoint/i, /account locked/i, /verify your identity/i,
   /verify it's you/i,
+  /just a moment/i, /\bun momento\b/i, /cloudflare/i,
+  /\brayid\b/i, /cf-mitigated/i,
+  /volver a diseñar/i, /equipo de ayuda de canva/i,
 ]
 const TWO_FACTOR_TEST = [
   /two.?factor/i, /2-step verification/i, /2fa/i,
@@ -3216,6 +3219,16 @@ test('126. Spanish CAPTCHA text triggers captcha_detected', () => {
   assert.equal(state.requires_manual_takeover, true)
 })
 
+test('126b. Spanish Canva challenge text triggers security_checkpoint', () => {
+  const state = detectPageStateTest(
+    'https://www.canva.com/',
+    'Un momento…',
+    'Muy pronto podrás volver a diseñar. Si no puedes superar esta página, ponte en contacto con el equipo de Ayuda de Canva. RayID: abc123'
+  )
+  assert.equal(state.type, 'security_checkpoint')
+  assert.equal(state.requires_manual_takeover, true)
+})
+
 test('127. Agent must not claim to solve CAPTCHA — waiting_user message does not claim solution', () => {
   // The user-facing message must never say "I solved" or "solved the CAPTCHA"
   const operatorName = 'Kevin'
@@ -3246,4 +3259,44 @@ test('129. headed mode env: WEB_OPERATOR_HEADLESS=false maps to headless=false',
   assert.equal(isHeadlessTest('true', undefined), true, 'WEB_OPERATOR_HEADLESS=true → headless=true')
   assert.equal(isHeadlessTest(undefined, 'false'), false, 'falls back to BROWSER_HEADLESS=false')
   assert.equal(isHeadlessTest(undefined, undefined), true, 'defaults to headless=true')
+})
+
+test('130. URL instructions route to website_reader instead of unknown-site proposal', () => {
+  function extractFirstUrl(text) {
+    const match = text.match(/https?:\/\/[^\s"'<>]+/i)
+    return match ? match[0].replace(/[),.!?;:]+$/, '') : null
+  }
+  function inferUnknownWebsiteFromInstruction(text) {
+    const withoutUrls = text.replace(/https?:\/\/[^\s"'<>]+/gi, '')
+    if (!withoutUrls.trim()) return null
+    const lower = withoutUrls.toLowerCase()
+    if (!/\b(work on|research on|use|open|browse)\b/.test(lower)) return null
+    const match = withoutUrls.match(/(?:work on|research on|use|open|browse)\s+([A-Z][\w.-]{2,}|[a-z][\w.-]+\.[a-z]{2,})/i)
+    if (!match) return null
+    const candidate = match[1].replace(/[.,!?;:]$/, '')
+    const known = ['canva', 'facebook', 'linkedin', 'gmail', 'instagram', 'google', 'web', 'and', 'or', 'the', 'a', 'an']
+    if (known.includes(candidate.toLowerCase())) return null
+    return candidate
+  }
+
+  const command = 'Kevin, open https://example.com and summarize the page.'
+  assert.equal(extractFirstUrl(command), 'https://example.com')
+  assert.equal(inferUnknownWebsiteFromInstruction(command), null)
+})
+
+test('131. named unknown website still creates an unknown-site candidate', () => {
+  function inferUnknownWebsiteFromInstruction(text) {
+    const withoutUrls = text.replace(/https?:\/\/[^\s"'<>]+/gi, '')
+    if (!withoutUrls.trim()) return null
+    const lower = withoutUrls.toLowerCase()
+    if (!/\b(work on|research on|use|open|browse)\b/.test(lower)) return null
+    const match = withoutUrls.match(/(?:work on|research on|use|open|browse)\s+([A-Z][\w.-]{2,}|[a-z][\w.-]+\.[a-z]{2,})/i)
+    if (!match) return null
+    const candidate = match[1].replace(/[.,!?;:]$/, '')
+    const known = ['canva', 'facebook', 'linkedin', 'gmail', 'instagram', 'google', 'web', 'and', 'or', 'the', 'a', 'an']
+    if (known.includes(candidate.toLowerCase())) return null
+    return candidate
+  }
+
+  assert.equal(inferUnknownWebsiteFromInstruction('Kevin, open AcmePortal and check leads.'), 'AcmePortal')
 })

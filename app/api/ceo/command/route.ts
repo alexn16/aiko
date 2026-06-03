@@ -3,9 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
-import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail, delegateToWebOperator } from '@/lib/web-operator/delegation'
+import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail, delegateToWebOperator, delegateOpenUrl } from '@/lib/web-operator/delegation'
 import type { DelegationResult } from '@/lib/web-operator/delegation'
-import { getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
+import { extractFirstUrl, getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
 import { createSystemImprovementProposal } from '@/lib/system-improvements'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
@@ -130,6 +130,7 @@ export async function POST(request: NextRequest) {
       const unknownWebsite = operatorName && !recommendedSkill
         ? inferUnknownWebsiteFromInstruction(command.trim())
         : null
+      const requestedUrl = extractFirstUrl(command.trim())
 
       if (unknownWebsite) {
         await createSystemImprovementProposal({
@@ -166,6 +167,13 @@ export async function POST(request: NextRequest) {
           instruction: `${operatorName}, work on Canva as a safe browser-only draft workflow. Manual login/takeover may be required. Publishing, sharing, and downloading final assets require approval.`,
           reason: 'Canva Web Operator skill requested',
           skillId: 'canva_design',
+        }).catch(() => null)
+      } else if (!delegationResult && recommendedSkill?.skill_id === 'website_reader' && requestedUrl) {
+        delegationResult = await delegateOpenUrl({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          url: requestedUrl,
         }).catch(() => null)
       } else if (!delegationResult && recommendedSkill?.skill_id === 'facebook_research' && /\b(post|publish|comment|message|join)\b/i.test(command.trim())) {
         delegationResult = await delegateToWebOperator({

@@ -178,6 +178,11 @@ export async function getSkillForUrl(url: string): Promise<WebOperatorSkill | nu
   return null
 }
 
+export function extractFirstUrl(text: string): string | null {
+  const match = text.match(/https?:\/\/[^\s"'<>]+/i)
+  return match ? match[0].replace(/[),.!?;:]+$/, '') : null
+}
+
 function aliases(actionType: string): string[] {
   const map: Record<string, string[]> = {
     send_gmail_draft: ['send_email'],
@@ -238,18 +243,21 @@ export async function getRecommendedSkillForInstruction(text: string): Promise<W
   if (/\blinkedin\b/.test(lower)) return getSkillById('linkedin_research')
   if (/\bgmail\b|\bemail\b|\binbox\b/.test(lower)) return getSkillById('gmail_workflow')
   if (/\binstagram\b/.test(lower)) return getSkillById('instagram_research')
-  if (/https?:\/\//i.test(text)) return getSkillForUrl(text)
+  const url = extractFirstUrl(text)
+  if (url) return getSkillForUrl(url)
   if (/\b(research|search|look up|browse|manual research|like a human|web)\b/.test(lower)) return getSkillById('general_web_research')
   return null
 }
 
 export function inferUnknownWebsiteFromInstruction(text: string): string | null {
-  const lower = text.toLowerCase()
+  const withoutUrls = text.replace(/https?:\/\/[^\s"'<>]+/gi, '')
+  if (!withoutUrls.trim()) return null
+  const lower = withoutUrls.toLowerCase()
   if (!/\b(work on|research on|use|open|browse)\b/.test(lower)) return null
-  const match = text.match(/(?:work on|research on|use|open|browse)\s+([A-Z][\w.-]{2,}|[a-z][\w.-]+\.[a-z]{2,})/i)
+  const match = withoutUrls.match(/(?:work on|research on|use|open|browse)\s+([A-Z][\w.-]{2,}|[a-z][\w.-]+\.[a-z]{2,})/i)
   if (!match) return null
   const candidate = match[1].replace(/[.,!?;:]$/, '')
-  const known = ['canva', 'facebook', 'linkedin', 'gmail', 'instagram', 'google', 'web']
+  const known = ['canva', 'facebook', 'linkedin', 'gmail', 'instagram', 'google', 'web', 'and', 'or', 'the', 'a', 'an']
   if (known.includes(candidate.toLowerCase())) return null
   return candidate
 }

@@ -172,3 +172,59 @@ Facebook post/comment/join/message → `ALWAYS_REQUIRES_APPROVAL` → `waiting_a
 - **Screenshot refresh** — `/operators/[id]` polls every 10s and shows `latest_screenshot`.
 - **Persistent profiles** — stored in `.operator-profiles/` (gitignored). Delete to reset sessions.
 - **CAPTCHA bypass is never attempted** — `ManualTakeoverRequired` throws before any further automation.
+
+---
+
+## Headed Runtime Validation — 2026-06-03
+
+### Setup
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+| Check | Result |
+|---|---|
+| Browser mode | ✅ Headed (`WEB_OPERATOR_HEADLESS=false`) |
+| CEO brain | ✅ Connected: Ollama (local) / llama3.1:8b |
+| Operating mode | ✅ `approval_required` |
+| Playwright Chromium | ✅ Installed: Chromium v1223 |
+
+### Tests run
+
+| Test | Result |
+|---|---|
+| Generic URL open: `https://example.com` | ⚠️ Routed correctly to `website_reader` after fix, but local DNS could not resolve `example.com`; action logged `failed/network_error`. |
+| Google search | ✅ Google unusual-traffic/CAPTCHA detected; action logged `waiting_user`; operator stayed `waiting_user`; no fake results. |
+| Facebook research | ⚠️ Routed to `facebook_research`, but current research path searches Google first; Google CAPTCHA stopped automation before Facebook. No bypass and no fake result. |
+| Canva draft | ✅ Canva Cloudflare/security challenge detected after fix; action logged `waiting_user` with `security_checkpoint`; no publishing/downloading/sharing. |
+| Facebook post | ✅ `create_post` created approval item and action logged `waiting_approval`; no post attempted. |
+| Operator page | ✅ Shows current URL, waiting reason, pending action, skill names, latest screenshot when safe, and buttons: `I'm taking over`, `Login / CAPTCHA completed`, `Resume workflow`, `Pause operator`, `Clear workflow`. |
+
+### Actions and screenshots observed
+
+| Action | Skill | Status | Screenshot |
+|---|---|---|---|
+| `open_url https://example.com` | Website reader | `failed/network_error` | None (navigation failed before page load) |
+| Google search | General web research | `waiting_user/captcha_detected` | None (manual takeover page) |
+| Facebook research | Facebook research | `waiting_user/captcha_detected` | None (manual takeover page) |
+| Canva open | Canva design | `waiting_user/security_checkpoint` | Suppressed after detector fix |
+| Facebook post | Facebook research | `waiting_approval` | None (approval created before browser execution) |
+
+### Runtime bugs fixed
+
+1. URL instructions such as `open https://example.com` were classified as an unknown website named `https`. Fixed URL extraction and routed public URL prompts to the existing `website_reader` skill.
+2. `delegateToWebOperator()` overwrote `waiting_user` operator status back to `idle`. Fixed status precedence so manual takeover state is preserved.
+3. Canva/Cloudflare Spanish challenge pages (`Un momento…`, `RayID`, Canva help copy) were treated as normal pages. Added security checkpoint detection.
+4. `/operators/[id]` always displayed the headless-mode warning because browser mode was read from a missing client meta tag. Added server-provided browser mode in the operator API.
+5. `/operators/[id]` ignored top-level `latest_screenshot` from the status API. Fixed mapping so safe screenshots render on the detail page.
+6. Duplicate stale `Mark: I'm in control` control remained on the detail page. Removed it; the visible takeover button is now `I'm taking over`.
+7. `markUserControlling()` cleared `requires_user_input`, hiding unresolved CAPTCHA/security blockers. It now preserves the waiting reason until `markLoginCompleted()` verifies the page is clear.
+8. `markLoginCompleted()` inspected the first browser context page, which could be `about:blank`. It now prefers the page matching the operator's current URL.
+
+### Resume behavior
+
+- `I'm taking over` marks the operator `user_controlling` while preserving `requires_user_input=true` and the waiting reason.
+- `Login / CAPTCHA completed` refuses to clear the blocker while the browser still shows `security_checkpoint`.
+- `Resume workflow` returns `Cannot resume: security_checkpoint` until manual intervention is actually complete.
+- Risky Facebook posting remains approval-gated before and after manual-control flows.

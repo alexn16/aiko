@@ -285,7 +285,15 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
 
   // Mark operator idle after action
   if (operator?.id) {
-    const newStatus = result.waiting_approval ? 'waiting_approval' : result.success ? 'idle' : 'idle'
+    const newStatus = result.waiting_user
+      ? 'waiting_user'
+      : result.waiting_approval
+        ? 'waiting_approval'
+        : (!result.success && operator.requires_user_input)
+          ? 'waiting_user'
+        : result.success
+          ? 'idle'
+          : 'idle'
     await updateOperatorStatus(operator.id, newStatus, {
       current_task: result.success ? null : undefined,
     }).catch(() => {})

@@ -471,10 +471,15 @@ export async function markLoginCompleted(
   try {
     // Generic check: look at the current browser page state.
     // If it's no longer a login/CAPTCHA/security page, mark as ready to resume.
-    const { getOperatorPage } = await import('./playwright-executor')
+    const { getOperatorContext, getOperatorPage } = await import('./playwright-executor')
     const { detectPageState } = await import('./page-state-detector')
 
-    const page = await getOperatorPage(op.browser_profile_key)
+    const context = await getOperatorContext(op.browser_profile_key)
+    const pages = context.pages()
+    const page = pages.find(p => op.current_url && p.url() === op.current_url)
+      ?? pages.find(p => op.current_url && p.url().startsWith(op.current_url))
+      ?? pages.find(p => p.url() !== 'about:blank')
+      ?? await getOperatorPage(op.browser_profile_key)
     const state = await detectPageState(page)
 
     // Also save latest session state (cookies) after user logged in
@@ -559,5 +564,4 @@ export async function pauseOperator(operator_id: string, reason?: string): Promi
 
 export async function markUserControlling(operator_id: string): Promise<void> {
   await updateOperatorStatus(operator_id, 'user_controlling', { current_task: 'User is in control' })
-  await updateOperatorMemory(operator_id, { requires_user_input: false, waiting_reason: null })
 }
