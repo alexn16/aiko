@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     // 1. Projects
     const projectsRes = await db.query(
-      `SELECT id, name, status, created_at FROM projects WHERE active=true ORDER BY created_at DESC LIMIT 20`
+      `SELECT id, name, created_at FROM projects WHERE active=true ORDER BY created_at DESC LIMIT 20`
     )
 
     // 2. Named operators
