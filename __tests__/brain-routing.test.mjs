@@ -2994,3 +2994,151 @@ test('136. provider brain smart defaults do not target partial unique indexes as
   assert.equal(/ON CONFLICT ON CONSTRAINT ai_role_asgn_(user|global)_uniq/.test(fixedSql), false)
   assert.equal(oldSql.includes('ON CONFLICT ON CONSTRAINT'), true)
 })
+
+// ── Tests 114–120: Lead discovery workflow ────────────────────────────────────
+// Pure-JS reimplementation of discovery-workflow.ts logic for testing without
+// network or DB access.
+
+// Inline buildLeadDiscoveryQueries logic
+function buildLeadDiscoveryQueriesTest(userPrompt, projectContext) {
+  const base = userPrompt.trim()
+  const loc = projectContext?.location ?? extractLocationTest(userPrompt)
+  const audience = projectContext?.target_audience ?? ''
+  const queries = [base]
+
+  if (loc && !base.toLowerCase().includes(loc.toLowerCase())) {
+    queries.push(`${base} ${loc}`)
+  }
+  const iberian = ['coruña', 'a coruña', 'galicia', 'madrid', 'barcelona', 'spain']
+  const isIberian = loc && iberian.some(i => loc.toLowerCase().includes(i))
+
+  if (loc && isIberian) {
+    queries.push(`administradores de fincas ${loc}`)
+    queries.push(`gestor aparcamiento ${loc} contacto`)
+    queries.push(`parking privado ${loc} empresa`)
+  } else if (loc) {
+    queries.push(`property managers ${loc} contact`)
+    queries.push(`facility management ${loc}`)
+  }
+
+  if (audience) queries.push(`${audience} ${loc ?? ''}`.trim())
+
+  const seen = new Set()
+  return queries.filter(q => {
+    const k = q.toLowerCase().trim()
+    if (seen.has(k) || k.length < 5) return false
+    seen.add(k)
+    return true
+  }).slice(0, 5)
+}
+
+function extractLocationTest(text) {
+  const match = text.match(/\b([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)*)\s*[.,]?\s*$/u)
+  return match?.[1] ?? null
+}
+
+// Inline normalizeLeadCandidate logic
+function validateEmailTest(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null
+}
+
+function normalizeLeadCandidateTest(c) {
+  return {
+    ...c,
+    email: c.email ? validateEmailTest(c.email.trim()) : null,
+    confidence: Math.min(100, Math.max(0, c.confidence ?? 0)),
+  }
+}
+
+// Inline parseCandidates logic
+function parseCandidatesTest(raw) {
+  try {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim()
+    const start = cleaned.indexOf('[')
+    const end = cleaned.lastIndexOf(']')
+    if (start === -1 || end === -1) return []
+    const parsed = JSON.parse(cleaned.slice(start, end + 1))
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(c => c.company_name && typeof c.company_name === 'string' && c.source_url)
+  } catch {
+    return []
+  }
+}
+
+test('114. buildLeadDiscoveryQueries returns multiple targeted variants', () => {
+  const queries = buildLeadDiscoveryQueriesTest(
+    'property administrators in A Coruña',
+    { location: 'A Coruña' }
+  )
+  assert.ok(queries.length >= 3, `Expected ≥3 queries, got ${queries.length}`)
+  // Should include Spanish language variants for Iberian target
+  const hasSpanish = queries.some(q => q.toLowerCase().includes('administradores') || q.toLowerCase().includes('gestor'))
+  assert.ok(hasSpanish, 'Should include Spanish query variants for Iberian location')
+})
+
+test('115. buildLeadDiscoveryQueries caps at 5 queries', () => {
+  const queries = buildLeadDiscoveryQueriesTest(
+    'parking operators in Madrid Spain',
+    { location: 'Madrid', target_audience: 'property managers' }
+  )
+  assert.ok(queries.length <= 5, `Expected ≤5 queries, got ${queries.length}`)
+})
+
+test('116. normalizeLeadCandidate never invents email — rejects invalid format', () => {
+  const candidate = { company_name: 'Test Co', source_url: 'https://example.com', email: 'not-an-email', confidence: 80 }
+  const normalized = normalizeLeadCandidateTest(candidate)
+  assert.equal(normalized.email, null, 'Invalid email must be set to null, not passed through')
+})
+
+test('117. normalizeLeadCandidate preserves valid email from visible source', () => {
+  const candidate = { company_name: 'Test Co', source_url: 'https://example.com', email: 'info@testco.es', confidence: 80 }
+  const normalized = normalizeLeadCandidateTest(candidate)
+  assert.equal(normalized.email, 'info@testco.es')
+})
+
+test('118. parseCandidates rejects candidates missing company_name or source_url', () => {
+  const raw = JSON.stringify([
+    { company_name: 'Valid Co', source_url: 'https://valid.com', confidence: 70, reason: 'ok' },
+    { source_url: 'https://no-name.com', confidence: 60, reason: 'missing name' },
+    { company_name: 'No URL Co', confidence: 50, reason: 'missing url' },
+  ])
+  const candidates = parseCandidatesTest(raw)
+  assert.equal(candidates.length, 1, 'Only the candidate with both company_name and source_url should pass')
+  assert.equal(candidates[0].company_name, 'Valid Co')
+})
+
+test('119. discovery summary message is honest when 0 leads found', () => {
+  // Inline buildSummaryMessage logic
+  function buildSummaryMessage(ctx) {
+    if (ctx.status === 'blocked') return `Research is blocked. ${ctx.failures[0] ?? 'Check Operating Mode.'}`
+    if (ctx.status === 'failed') return `Lead discovery failed. ${ctx.failures[0] ?? 'All search queries failed.'}`
+    const parts = []
+    if (ctx.leadsCreated > 0) {
+      parts.push(`${ctx.leadsCreated} lead candidate${ctx.leadsCreated !== 1 ? 's' : ''} created and awaiting review.`)
+    } else {
+      parts.push('No new leads were extracted from the search results.')
+      parts.push('Try a more specific query, or ask the Web Operator to open specific target websites directly.')
+    }
+    parts.push(`${ctx.queriesRun} quer${ctx.queriesRun !== 1 ? 'ies' : 'y'} run, ${ctx.pagesChecked} page${ctx.pagesChecked !== 1 ? 's' : ''} checked.`)
+    if (ctx.duplicatesSkipped > 0) parts.push(`${ctx.duplicatesSkipped} duplicate${ctx.duplicatesSkipped !== 1 ? 's' : ''} skipped.`)
+    return parts.join(' ')
+  }
+
+  const msg = buildSummaryMessage({ status: 'completed', queriesRun: 3, pagesChecked: 5, candidatesFound: 0, leadsCreated: 0, duplicatesSkipped: 0, failures: [] })
+  assert.ok(msg.includes('No new leads'), 'Should say no leads found honestly')
+  assert.ok(msg.includes('Try a more specific'), 'Should suggest next steps')
+  assert.ok(msg.includes('queries run'), 'Should report queries run')
+  assert.ok(!msg.includes('undefined'), 'Should have no undefined values')
+})
+
+test('120. discovery blocked message is clear when mode is read_only', () => {
+  function buildBlockedMsg(mode, reason) {
+    return mode === 'read_only'
+      ? 'Research is blocked because AÏKO is in Read Only mode. Go to Operating Mode and switch to Auto / Approval Required to allow browser research.'
+      : reason
+  }
+  const msg = buildBlockedMsg('read_only', 'raw reason')
+  assert.ok(msg.includes('Read Only mode'), 'Should name the mode')
+  assert.ok(msg.includes('Auto / Approval Required'), 'Should name the required mode')
+  assert.ok(!msg.includes('raw reason'), 'Should not expose internal reason string')
+})

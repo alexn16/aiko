@@ -628,27 +628,54 @@ function StartCampaignInner() {
 
   async function handleResearch() {
     if (!researchQuery.trim()) return
-    setResearchState({ status: 'loading', message: 'Delegating to Web Operator…' })
+    setResearchState({ status: 'loading', message: 'Running lead discovery…' })
     try {
-      const res = await fetch('/api/ceo/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          command:    researchQuery.trim(),
-          project_id: selectedProject || undefined,
-          operator:   selectedOperator
-            ? (summary?.operators.find(o => o.id === selectedOperator)?.name ?? undefined)
-            : undefined,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setResearchState({ status: 'error', message: data.error ?? 'Research request failed.' })
-        return
+      // If a project is selected, use the structured lead discovery workflow.
+      // Otherwise fall back to generic CEO delegation.
+      if (selectedProject) {
+        const operatorName = selectedOperator
+          ? (summary?.operators.find(o => o.id === selectedOperator)?.name ?? undefined)
+          : undefined
+        const res = await fetch(`/api/projects/${selectedProject}/lead-discovery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt:       researchQuery.trim(),
+            operator_id:  selectedOperator || undefined,
+            operator_name: operatorName,
+            max_queries:  5,
+            max_pages_per_query: 3,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setResearchState({ status: 'error', message: data.error ?? 'Lead discovery failed.' })
+          return
+        }
+        const status = data.status === 'blocked' || data.leads_created === 0 ? 'error' : 'ok'
+        setResearchState({ status, message: data.summary ?? 'Research complete.' })
+        await fetchSummary(selectedProject)
+      } else {
+        // No project — fall back to CEO delegation
+        setResearchState({ status: 'loading', message: 'Delegating to Web Operator…' })
+        const res = await fetch('/api/ceo/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            command:    researchQuery.trim(),
+            operator:   selectedOperator
+              ? (summary?.operators.find(o => o.id === selectedOperator)?.name ?? undefined)
+              : undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setResearchState({ status: 'error', message: data.error ?? 'Research request failed.' })
+          return
+        }
+        const msg = data.message ?? data.delegation?.message ?? 'Research delegated to Web Operator.'
+        setResearchState({ status: 'ok', message: msg })
       }
-      const msg = data.message ?? data.delegation?.message ?? 'Research delegated to Web Operator.'
-      setResearchState({ status: 'ok', message: msg })
-      await fetchSummary(selectedProject || undefined)
     } catch {
       setResearchState({ status: 'error', message: 'Network error — check console.' })
     }

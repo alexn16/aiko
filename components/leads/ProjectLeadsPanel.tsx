@@ -51,6 +51,10 @@ export function ProjectLeadsPanel({ projectId }: Props) {
   const [exporting, setExporting] = useState(false)
   const [exportLink, setExportLink] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [discoveryQuery, setDiscoveryQuery] = useState('')
+  const [discoverying, setDiscoverying] = useState(false)
+  const [discoveryResult, setDiscoveryResult] = useState<string | null>(null)
+  const [showDiscovery, setShowDiscovery] = useState(false)
 
   const loadLeads = useCallback(async () => {
     try {
@@ -197,6 +201,26 @@ export function ProjectLeadsPanel({ projectId }: Props) {
     }
   }
 
+  async function handleDiscovery() {
+    if (!discoveryQuery.trim()) return
+    setDiscoverying(true)
+    setDiscoveryResult(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/lead-discovery`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: discoveryQuery.trim(), max_queries: 5, max_pages_per_query: 3 }),
+      })
+      const data = await res.json()
+      setDiscoveryResult(data.summary ?? (res.ok ? 'Discovery complete.' : data.error ?? 'Failed.'))
+      if (data.leads_created > 0) await loadLeads()
+    } catch {
+      setDiscoveryResult('Network error — check console.')
+    } finally {
+      setDiscoverying(false)
+    }
+  }
+
   async function handleManualAdd() {
     if (!manualForm.company_name.trim()) return
     setSavingManual(true)
@@ -269,6 +293,17 @@ export function ProjectLeadsPanel({ projectId }: Props) {
         >
           {extractingAction ? 'Extracting…' : 'Extract leads from latest research'}
         </button>
+        <button
+          onClick={() => setShowDiscovery(v => !v)}
+          style={{
+            background: showDiscovery ? '#f1f5f9' : '#6366f1',
+            color: showDiscovery ? '#374151' : '#ffffff',
+            border: 'none', borderRadius: 6, padding: '7px 14px',
+            fontSize: 11, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          🔍 Run lead discovery
+        </button>
         {extractResult && (
           <span style={{
             fontSize: 11, padding: '7px 12px', borderRadius: 6,
@@ -320,6 +355,50 @@ export function ProjectLeadsPanel({ projectId }: Props) {
           <span style={{ fontSize: 11, color: '#dc2626', padding: '7px 0' }}>{exportError}</span>
         )}
       </div>
+
+      {/* Lead discovery panel */}
+      {showDiscovery && (
+        <div style={{ ...CARD, background: '#fafafa', marginBottom: 12 }}>
+          <div style={LABEL}>Lead discovery — browser search</div>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
+            AÏKO runs multiple targeted search queries and extracts public company data.
+            No emails are invented. All source URLs are saved.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+            <input
+              value={discoveryQuery}
+              onChange={e => setDiscoveryQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !discoverying && handleDiscovery()}
+              placeholder="e.g. property administrators in A Coruña"
+              style={{ ...INPUT, flex: 1, minWidth: 220 }}
+              disabled={discoverying}
+            />
+            <button
+              onClick={handleDiscovery}
+              disabled={discoverying || !discoveryQuery.trim()}
+              style={{
+                background: discoverying || !discoveryQuery.trim() ? '#e2e8f0' : '#6366f1',
+                color: discoverying || !discoveryQuery.trim() ? '#94a3b8' : '#ffffff',
+                border: 'none', borderRadius: 6, padding: '7px 14px',
+                fontSize: 11, fontWeight: 600, cursor: discoverying ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {discoverying ? 'Searching…' : '🔍 Discover'}
+            </button>
+          </div>
+          {discoveryResult && (
+            <div style={{
+              fontSize: 11, padding: '8px 10px', borderRadius: 6, lineHeight: 1.5,
+              background: discoveryResult.includes('No new leads') || discoveryResult.includes('blocked') || discoveryResult.includes('failed')
+                ? '#fef2f2' : '#f0fdf4',
+              color: discoveryResult.includes('No new leads') || discoveryResult.includes('blocked') || discoveryResult.includes('failed')
+                ? '#dc2626' : '#15803d',
+            }}>
+              {discoveryResult}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Manual add form */}
       {showManual && (

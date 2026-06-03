@@ -518,18 +518,48 @@ export async function executeWebAction(
 
       case 'search': {
         const query = String(opts.input?.query ?? opts.description)
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`
 
+        // Try DuckDuckGo first — more headless-friendly than Google.
+        // Fall back to Google if DDG returns 0 results.
         const { result: coreOutput, retryCount } = await withRetry(async () => {
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
-          const results = await page.evaluate(() => {
-            const items = Array.from(document.querySelectorAll('h3')).slice(0, 10)
-            return items.map(h => ({
-              title: h.innerText,
-              href: (h.closest('a') as HTMLAnchorElement | null)?.href ?? '',
-            }))
+          const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+          await page.goto(ddgUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+
+          // DuckDuckGo HTML endpoint result selectors
+          const ddgResults = await page.evaluate(() => {
+            const items = Array.from(document.querySelectorAll('.result__title a, .result__a'))
+            const snippets = Array.from(document.querySelectorAll('.result__snippet'))
+            return items.slice(0, 10).map((a, i) => ({
+              title:   (a as HTMLElement).innerText.trim(),
+              url:     (a as HTMLAnchorElement).href ?? '',
+              snippet: (snippets[i] as HTMLElement | undefined)?.innerText.trim() ?? '',
+            })).filter(r => r.title && r.url && !r.url.includes('duckduckgo.com'))
           })
-          return { query, results }
+
+          if (ddgResults.length > 0) {
+            return { query, results: ddgResults }
+          }
+
+          // Fallback: Google
+          const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`
+          await page.goto(googleUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+          const googleResults = await page.evaluate(() => {
+            // Try multiple selector patterns Google uses
+            const links = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]
+            const results: Array<{ title: string; url: string; snippet: string }> = []
+            for (const a of links) {
+              const h = a.querySelector('h3')
+              if (!h) continue
+              const href = a.href ?? ''
+              if (!href.startsWith('http') || href.includes('google.com')) continue
+              const snippet = a.closest('div')?.querySelector('[data-sncf]')?.textContent ?? ''
+              results.push({ title: (h as HTMLElement).innerText.trim(), url: href, snippet: snippet.trim() })
+              if (results.length >= 10) break
+            }
+            return results
+          })
+
+          return { query, results: googleResults }
         }, opts.action_type)
 
         const pageState = await capturePageState(page)

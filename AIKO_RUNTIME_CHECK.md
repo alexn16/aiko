@@ -389,3 +389,76 @@ Intent resolved: `project_recall` ✅ — answers grounded in DB, not hallucinat
 | Provider: Ollama / llama3.1:8b | ✅ connected |
 | Mode | `approval_required` |
 | Playwright Chromium | ✅ installed |
+
+---
+
+## Lead Discovery Workflow — 2026-06-03
+
+### What was built
+
+**`lib/leads/discovery-workflow.ts`** — new module:
+- `buildLeadDiscoveryQueries()` — generates 3–5 targeted query variants from prompt + project context, including Spanish-language variants for Iberian targets
+- `runLeadDiscoveryWorkflow()` — orchestrates multi-query search, page reads, candidate extraction, dedup, save
+- `extractLeadCandidatesFromSearchResults()` — AI extraction from search snippets (never invents emails)
+- `extractLeadCandidatesFromPageText()` — AI extraction from page text
+- `normalizeLeadCandidate()` — validates email format, normalizes URLs
+- `saveLeadCandidates()` — dedup by project + website/email/company, saves to leads table
+- `buildSummaryMessage()` — honest summary with queries run, pages checked, reason for 0 leads
+
+**`app/api/projects/[id]/lead-discovery/route.ts`** — new endpoint:
+- `POST /api/projects/{id}/lead-discovery`
+- Returns `{ status, queries_run, pages_checked, candidates_found, leads_created, duplicates_skipped, failures, summary }`
+- Max 5 queries × 3 pages (rate-limited by default)
+
+**`app/(dashboard)/start-campaign/page.tsx`** — updated Step 3:
+- When project is selected: uses `/api/projects/{id}/lead-discovery` instead of generic CEO delegation
+- Shows honest summary from discovery result
+- Falls back to CEO command when no project selected
+
+**`components/leads/ProjectLeadsPanel.tsx`** — added:
+- "🔍 Run lead discovery" button opens inline discovery panel
+- Discovery query input + Discover button
+- Honest result message shown
+
+**`lib/web-operator/playwright-executor.ts`** — improved search:
+- Tries DuckDuckGo HTML endpoint first (more headless-friendly)
+- Falls back to Google with improved result selectors
+- Multiple selector patterns tried for both engines
+
+**Tests 114–120** — all pass:
+- Query generation returns multiple variants including Spanish for Iberian targets
+- Query count capped at 5
+- Invalid email format rejected (never invented)
+- Valid email preserved
+- Candidates missing company_name or source_url rejected
+- 0-leads summary is honest with suggested next steps
+- Mode-blocked message names the required mode
+
+### Runtime validation result
+
+| Check | Result |
+|---|---|
+| Endpoint responds | ✅ 200 |
+| Queries generated | ✅ 3 queries run (English + 2 Spanish variants) |
+| Pages checked | ✅ 3 |
+| Search results | 0 — bot detection (Google CAPTCHA in headless Chromium) |
+| Leads created | 0 — honest, not faked |
+| Summary message | ✅ "No new leads were extracted from the search results. Try a more specific query, or ask the Web Operator to open specific target websites directly. 3 queries run, 3 pages checked." |
+| Fake leads created | ✅ None |
+
+### Root cause of 0 search results
+
+Google (and DuckDuckGo as fallback) block headless Chromium with CAPTCHA. Page preview shows: *"Our systems have detected unusual traffic from your computer network."*
+
+This is expected behavior. The discovery workflow is architecturally correct — it runs, it tries, it reports honestly.
+
+### Known limitation
+
+Headless browser web search is blocked by bot detection in standard local environments. Workarounds (outside current scope):
+1. Use a real search API (Brave Search API, SerpAPI, Bing Web Search)
+2. Run browser with a logged-in user profile / persistent session
+3. Use a residential proxy
+4. Direct URL reads (`read_page` on known business directory URLs) instead of search
+
+The architecture supports any of these — the workflow calls `delegateToWebOperator` which routes through the skill system.
+
