@@ -448,6 +448,7 @@ export async function POST(request: NextRequest) {
           status: delegationResult.status,
           message: delegationResult.message,
           actionId: delegationResult.actionId,
+          operatorId: delegationResult.operatorId,
           taskOutputId: delegationResult.taskOutputId,
           playbookId: delegationResult.playbookId,
           playbookName: delegationResult.playbookName,

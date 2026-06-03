@@ -497,6 +497,8 @@ export async function markLoginCompleted(
         current_task: op.pending_action_type ? `Resume: ${op.pending_action_type}` : 'Ready',
         current_url: state.url || op.current_url,
       })
+      const { markLatestWaitingUserStepReadyForOperator } = await import('./action-steps')
+      await markLatestWaitingUserStepReadyForOperator(operator_id).catch(() => {})
       return { success: true, was_logged_in: true, message: 'Cleared. Operator is ready to resume.' }
     } else {
       return {
@@ -516,6 +518,8 @@ export async function markLoginCompleted(
     await updateOperatorStatus(operator_id, 'ready_to_resume', {
       current_task: op.pending_action_type ? `Resume: ${op.pending_action_type}` : 'Ready',
     })
+    const { markLatestWaitingUserStepReadyForOperator } = await import('./action-steps')
+    await markLatestWaitingUserStepReadyForOperator(operator_id, 'Manual blocker marked complete. Ready to resume.').catch(() => {})
     return {
       success: true,
       was_logged_in: true,

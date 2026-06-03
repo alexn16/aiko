@@ -63,6 +63,7 @@ export interface DelegationResult {
   error?: string
   message: string
   operatorName?: string
+  operatorId?: string
   skillId?: string
   skillName?: string
   skillDecision?: SkillDecision
@@ -393,6 +394,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       sessionId: session.id,
       approvalId: result.approval?.id,
       operatorName: operator?.name,
+      operatorId: operator?.id,
       skillId: skill?.skill_id,
       skillName: skill?.name,
       skillDecision: skillDecision ?? undefined,
@@ -416,6 +418,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
         status: 'blocked',
         actionId: result.action?.id,
         operatorName: operator?.name,
+        operatorId: operator?.id,
         skillId: skill?.skill_id,
         skillName: skill?.name,
         skillDecision: skillDecision ?? undefined,
@@ -438,6 +441,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       actionId: result.action?.id,
       error: rawError,
       operatorName: operator?.name,
+      operatorId: operator?.id,
       skillId: skill?.skill_id,
       skillName: skill?.name,
       skillDecision: skillDecision ?? undefined,
@@ -482,6 +486,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     output: actionOutput,
     taskOutputId,
     operatorName: operator?.name,
+    operatorId: operator?.id,
     skillId: skill?.skill_id,
     skillName: skill?.name,
     skillDecision: skillDecision ?? undefined,

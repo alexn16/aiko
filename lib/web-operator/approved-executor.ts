@@ -3,6 +3,7 @@
 
 import type { WebOperatorAction } from './web-operator'
 import { updateWebOperatorAction } from './web-operator'
+import { markStepCompleted, markStepFailed } from './action-steps'
 
 export async function checkBrowserRuntimeAndExecute(action: WebOperatorAction): Promise<{
   success: boolean
@@ -18,6 +19,10 @@ export async function checkBrowserRuntimeAndExecute(action: WebOperatorAction): 
   }
 
   if (!browserAvailable) {
+    await markStepFailed(action.id, {
+      stepId: action.action_type,
+      message: 'Browser runtime not configured.',
+    }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       status: 'approved',
       output: { error: 'Browser runtime not configured. Action is approved and will execute when runtime is connected.' },
@@ -39,9 +44,19 @@ export async function checkBrowserRuntimeAndExecute(action: WebOperatorAction): 
       screenshot_url: result.screenshot_url ?? null,
       completed_at: new Date().toISOString(),
     })
+    await markStepCompleted(action.id, {
+      stepId: action.action_type,
+      message: 'Approved action resumed and completed.',
+      screenshot_url: result.screenshot_url ?? null,
+      result: result.output,
+    }).catch(() => {})
     return { success: true, action: { ...action, status: 'completed', output: result.output } }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
+    await markStepFailed(action.id, {
+      stepId: action.action_type,
+      message: errMsg,
+    }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       status: 'failed',
       output: { error: errMsg },

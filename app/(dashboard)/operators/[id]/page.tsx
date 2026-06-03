@@ -56,6 +56,23 @@ type PlaybookPlanView = {
   steps?: PlaybookPlanStep[]
 }
 
+interface ActionStep {
+  id: string
+  action_id: string
+  step_index: number
+  step_id: string
+  title: string
+  status: string
+  approval_required: boolean
+  forbidden: boolean
+  url: string | null
+  screenshot_url: string | null
+  message: string | null
+  result: Record<string, unknown>
+  started_at: string | null
+  completed_at: string | null
+}
+
 interface OperatorStatusResponse {
   operator?: WebOperator | null
   latest_screenshot?: string | null
@@ -103,6 +120,33 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
+function StepStatusBadge({ status }: { status: string }) {
+  const color = STATUS_COLOR[status] ?? (
+    status === 'completed' ? '#10b981' :
+      status === 'failed' || status === 'blocked' ? '#ef4444' :
+        status === 'skipped' ? '#64748b' :
+          status === 'running' ? '#3b82f6' : '#94a3b8'
+  )
+  return (
+    <span style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      border: `1px solid ${color}35`,
+      background: `${color}12`,
+      color,
+      borderRadius: 999,
+      padding: '2px 7px',
+      fontSize: 9,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+      whiteSpace: 'nowrap',
+    }}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  )
+}
+
 function timeAgo(iso: string): string {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000
   if (diff < 60) return `${Math.round(diff)}s ago`
@@ -135,6 +179,8 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   const [operator, setOperator] = useState<WebOperator | null>(null)
   const [browserHeadless, setBrowserHeadless] = useState(true)
   const [actions, setActions] = useState<Action[]>([])
+  const [actionSteps, setActionSteps] = useState<ActionStep[]>([])
+  const [stepsActionId, setStepsActionId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
@@ -157,7 +203,23 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
       }
       if (actRes.ok) {
         const d = await actRes.json()
-        setActions(d.actions ?? [])
+        const loadedActions = (d.actions ?? []) as Action[]
+        setActions(loadedActions)
+        const stepAction = loadedActions.find(a =>
+          (a.playbook_id || a.playbook_plan) &&
+          ['running', 'waiting_user', 'waiting_approval', 'approved'].includes(a.status)
+        ) ?? loadedActions.find(a => a.playbook_id || a.playbook_plan)
+        if (stepAction?.id) {
+          const stepsRes = await fetch(`/api/web-operator/actions/${stepAction.id}/steps`)
+          if (stepsRes.ok) {
+            const stepsData = await stepsRes.json()
+            setActionSteps(Array.isArray(stepsData.steps) ? stepsData.steps : [])
+            setStepsActionId(stepAction.id)
+          }
+        } else {
+          setActionSteps([])
+          setStepsActionId(null)
+        }
       }
     } catch {
       // non-fatal
@@ -238,12 +300,14 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   const showResume = operator.status === 'ready_to_resume' || !!operator.pending_action_type
   const pendingPlaybook = getPendingPlaybook(operator.pending_action_payload)
   const actionPlaybook = actions.find(a => a.playbook_id || a.playbook_plan)
+  const stepAction = actions.find(a => a.id === stepsActionId) ?? actionPlaybook
   const currentPlaybook: PlaybookPlanView | null = pendingPlaybook
-    ?? (actionPlaybook?.playbook_plan as PlaybookPlanView | null)
-    ?? (actionPlaybook?.playbook_id ? {
-      playbook_id: actionPlaybook.playbook_id,
-      playbook_name: actionPlaybook.playbook_name ?? undefined,
+    ?? (stepAction?.playbook_plan as PlaybookPlanView | null)
+    ?? (stepAction?.playbook_id ? {
+      playbook_id: stepAction.playbook_id,
+      playbook_name: stepAction.playbook_name ?? undefined,
     } : null)
+  const currentExecutionStep = actionSteps.find(s => ['running', 'waiting_user', 'waiting_approval'].includes(s.status))
 
   const handleResumeAction = async (actionId: string) => {
     setResumingAction(prev => ({ ...prev, [actionId]: true }))
@@ -454,6 +518,80 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
               ))}
             </ol>
           )}
+        </div>
+      )}
+
+      {/* Playbook execution checklist */}
+      {stepAction && actionSteps.length > 0 && (
+        <div style={CARD}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+                Playbook Execution
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                {stepAction.playbook_name ?? currentPlaybook?.playbook_name ?? 'Playbook steps'}
+              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'DM Mono, monospace', marginTop: 2 }}>
+                Action {stepAction.action_type} · {truncate(stepAction.id, 8)}
+              </div>
+            </div>
+            <StepStatusBadge status={stepAction.status} />
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {actionSteps.map(step => {
+              const highlighted = step.id === currentExecutionStep?.id
+              return (
+                <div
+                  key={step.id}
+                  style={{
+                    border: highlighted ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                    background: highlighted ? '#eef2ff' : '#ffffff',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'DM Mono, monospace' }}>
+                          {step.step_index + 1}
+                        </span>
+                        <span style={{ fontSize: 13, color: '#0f172a', fontWeight: highlighted ? 700 : 600 }}>
+                          {step.title}
+                        </span>
+                        {step.approval_required && <span style={{ fontSize: 9, color: '#d97706', fontWeight: 700 }}>approval</span>}
+                        {step.forbidden && <span style={{ fontSize: 9, color: '#dc2626', fontWeight: 700 }}>forbidden</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'DM Mono, monospace', marginTop: 2 }}>
+                        {step.step_id}
+                      </div>
+                    </div>
+                    <StepStatusBadge status={step.status} />
+                  </div>
+                  {step.message && (
+                    <div style={{ marginTop: 7, fontSize: 12, color: '#475569' }}>
+                      {step.message}
+                    </div>
+                  )}
+                  {(step.url || step.screenshot_url) && (
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 7, fontSize: 11 }}>
+                      {step.url && (
+                        <a href={step.url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'none' }}>
+                          Open URL
+                        </a>
+                      )}
+                      {step.screenshot_url && (
+                        <a href={step.screenshot_url} target="_blank" rel="noopener noreferrer" style={{ color: '#6366f1', textDecoration: 'none' }}>
+                          Screenshot
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

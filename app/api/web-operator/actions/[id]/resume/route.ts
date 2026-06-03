@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db/client'
 import { updateWebOperatorAction } from '@/lib/web-operator/web-operator'
 import { canPerformAction } from '@/lib/operating-mode'
+import { getCurrentStepForAction, updateActionStepStatus } from '@/lib/web-operator/action-steps'
 
 export const dynamic = 'force-dynamic'
 
@@ -103,6 +104,13 @@ export async function POST(
 
     // Mark as 'running' before execution (idempotency — if this fails, status shows running)
     await updateWebOperatorAction(actionId, { status: 'running' })
+    const currentStep = await getCurrentStepForAction(actionId).catch(() => null)
+    if (currentStep && currentStep.status !== 'running') {
+      await updateActionStepStatus(currentStep.id, 'running', {
+        message: 'Approved action resumed.',
+        enforceApproval: false,
+      }).catch(() => {})
+    }
 
     // 6. Reconstruct the action object for the executor
     const action = {

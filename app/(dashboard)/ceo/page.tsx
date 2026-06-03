@@ -16,6 +16,9 @@ interface DelegationChip {
   status: 'completed' | 'approval_required' | 'blocked' | 'failed'
   message: string
   actionId?: string
+  operatorId?: string
+  playbookId?: string
+  playbookName?: string
   taskOutputId?: string
 }
 
@@ -1150,6 +1153,27 @@ function DelegationChipView({ chip }: { chip: DelegationChip }) {
         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3, marginLeft: 2 }}>
           {chip.message}
         </div>
+      )}
+      {chip.playbookName && chip.operatorId && (
+        <Link
+          href={`/operators/${chip.operatorId}`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            marginTop: 6,
+            marginLeft: 2,
+            fontSize: 11,
+            color: '#4338ca',
+            background: '#eef2ff',
+            border: '1px solid #c7d2fe',
+            borderRadius: 6,
+            padding: '4px 10px',
+            textDecoration: 'none',
+            fontWeight: 600,
+          }}
+        >
+          Open playbook steps
+        </Link>
       )}
     </div>
   )

@@ -3106,7 +3106,61 @@ test('150. CEO copy includes playbook and manual takeover language', () => {
   assert.match(copy, /ask approval before joining, posting, commenting, or messaging/)
 })
 
-test('151. provider brain smart defaults do not target partial unique indexes as constraints', () => {
+test('151. Playbook action creates step rows', () => {
+  const plan = buildPlaybookPlanTest('facebook_group_research', 'Kevin, research Facebook groups about parking in A Coruña.')
+  const steps = createActionStepsTest('action-1', plan)
+  assert.ok(steps.length >= plan.steps.length)
+  assert.equal(steps[0].action_id, 'action-1')
+  assert.equal(steps.some(s => s.step_id === 'join_group' && s.approval_required), true)
+})
+
+test('152. First playbook step is running and later safe steps are planned', () => {
+  const plan = buildPlaybookPlanTest('canva_instagram_draft', 'Kevin, create a Canva Instagram draft.')
+  const steps = createActionStepsTest('action-2', plan)
+  assert.equal(steps[0].status, 'running')
+  assert.equal(steps[1].status, 'planned')
+})
+
+test('153. Manual takeover marks current step waiting_user', () => {
+  const steps = createActionStepsTest('action-3', buildPlaybookPlanTest('canva_instagram_draft', 'Canva draft'))
+  markCurrentStepTest(steps, 'waiting_user', 'security_checkpoint')
+  assert.equal(steps[0].status, 'waiting_user')
+  assert.equal(steps[0].message, 'security_checkpoint')
+})
+
+test('154. Approval-required playbook step marks waiting_approval', () => {
+  const steps = createActionStepsTest('action-4', buildPlaybookPlanTest('facebook_group_research', 'Facebook groups'))
+  markStepByIdOrCurrentTest(steps, 'join_group', 'waiting_approval', 'Approval required')
+  const step = steps.find(s => s.step_id === 'join_group')
+  assert.equal(step.status, 'waiting_approval')
+  assert.equal(step.approval_required, true)
+})
+
+test('155. Forbidden playbook step is displayed blocked', () => {
+  const steps = createActionStepsTest('action-5', buildPlaybookPlanTest('facebook_group_research', 'Facebook groups'))
+  const forbidden = steps.find(s => s.step_id === 'bypass_login')
+  assert.equal(forbidden.status, 'blocked')
+  assert.equal(forbidden.forbidden, true)
+})
+
+test('156. Listing playbook steps redacts sensitive result data', () => {
+  const steps = createActionStepsTest('action-6', buildPlaybookPlanTest('gmail_prepare_draft', 'Gmail draft'))
+  steps[0].result = { token: 'secret-token', body: 'private body', title: 'Safe title' }
+  const listed = listStepsRedactedTest(steps)
+  assert.equal(listed[0].result.token, '[redacted]')
+  assert.equal(listed[0].result.body, '[redacted]')
+  assert.equal(listed[0].result.title, 'Safe title')
+})
+
+test('157. Completing action does not mark unexecuted approval steps completed', () => {
+  const steps = createActionStepsTest('action-7', buildPlaybookPlanTest('facebook_group_research', 'Facebook groups'))
+  markCurrentStepTest(steps, 'completed', 'Browser action completed')
+  const join = steps.find(s => s.step_id === 'join_group')
+  assert.equal(steps[0].status, 'completed')
+  assert.equal(join.status, 'planned')
+})
+
+test('158. provider brain smart defaults do not target partial unique indexes as constraints', () => {
   const oldSql = 'ON CONFLICT ON CONSTRAINT ai_role_asgn_user_uniq'
   const fixedSql = 'DELETE FROM ai_role_assignments WHERE role = $1 AND user_id = $2'
   assert.equal(/ON CONFLICT ON CONSTRAINT ai_role_asgn_(user|global)_uniq/.test(fixedSql), false)
@@ -3192,6 +3246,52 @@ function buildPlaybookPlanTest(playbookId, instruction) {
     approval_gates: playbook.approval_gates,
     forbidden_steps: playbook.forbidden_steps,
   }
+}
+
+function createActionStepsTest(actionId, plan) {
+  const seen = new Set()
+  const rows = []
+  const add = (stepId, approvalRequired = false, forbidden = false) => {
+    if (seen.has(stepId)) return
+    seen.add(stepId)
+    rows.push({
+      id: `${actionId}-${rows.length}`,
+      action_id: actionId,
+      step_index: rows.length,
+      step_id: stepId,
+      title: stepId.replace(/_/g, ' '),
+      approval_required: approvalRequired,
+      forbidden,
+      status: forbidden ? 'blocked' : rows.length === 0 ? 'running' : 'planned',
+      message: forbidden ? 'Forbidden by playbook.' : null,
+      result: {},
+    })
+  }
+  for (const step of plan.steps) add(step.step_type, step.requires_approval, step.forbidden)
+  for (const gate of plan.approval_gates) add(gate, true, false)
+  for (const forbidden of plan.forbidden_steps) add(forbidden, false, true)
+  return rows
+}
+
+function markCurrentStepTest(steps, status, message) {
+  const step = steps.find(s => ['running', 'waiting_user', 'waiting_approval'].includes(s.status)) ?? steps.find(s => s.status === 'planned' && !s.forbidden)
+  step.status = status
+  step.message = message
+}
+
+function markStepByIdOrCurrentTest(steps, stepId, status, message) {
+  const step = steps.find(s => s.step_id === stepId) ?? steps.find(s => ['running', 'waiting_user', 'waiting_approval'].includes(s.status))
+  step.status = status
+  step.message = message
+}
+
+function listStepsRedactedTest(steps) {
+  return steps.map(step => ({
+    ...step,
+    result: Object.fromEntries(Object.entries(step.result).map(([key, value]) => (
+      /password|secret|token|api_key|apikey|authorization|body/i.test(key) ? [key, '[redacted]'] : [key, value]
+    ))),
+  }))
 }
 
 function buildPlaybookCopyTest(operatorName, result) {

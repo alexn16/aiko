@@ -4,6 +4,13 @@ import { createApprovalItem } from '@/lib/approvals'
 import { getSkillById, getSkillForUrl, getRecommendedSkillForInstruction, validateSkillAction } from '@/lib/web-operator/skills'
 import type { SkillDecision, WebOperatorSkill } from '@/lib/web-operator/skills'
 import type { PlaybookExecutionPlan } from '@/lib/web-operator/playbooks'
+import {
+  createStepsForAction,
+  markStepCompleted,
+  markStepFailed,
+  markStepWaitingApproval,
+  markStepWaitingUser,
+} from '@/lib/web-operator/action-steps'
 import type { ModeState } from '@/lib/operating-mode'
 import type { ApprovalItem } from '@/lib/approvals'
 
@@ -390,6 +397,8 @@ export async function runWebOperatorAction(opts: {
       requires_approval: false,
       operator_id: opts.operator_id ?? null,
     })
+    await createStepsForAction(action.id, playbookFields.playbook_plan).catch(() => {})
+    await markStepFailed(action.id, { stepId: opts.action_type, message: skillDecision.reason }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       output: { error: skillDecision.reason, skill_decision: skillDecision },
       failure_reason: 'skill_blocked',
@@ -411,6 +420,8 @@ export async function runWebOperatorAction(opts: {
 
   if (!modeCheck.allowed) {
     const action = await logWebOperatorAction({ ...opts, ...skillFields, ...playbookFields, status: 'blocked', requires_approval: false, operator_id: opts.operator_id ?? null })
+    await createStepsForAction(action.id, playbookFields.playbook_plan).catch(() => {})
+    await markStepFailed(action.id, { stepId: opts.action_type, message: modeCheck.reason }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       output: { error: modeCheck.reason },
       failure_reason: 'operating_mode_blocked',
@@ -423,6 +434,11 @@ export async function runWebOperatorAction(opts: {
   const needsApproval = requiresApproval(opts.action_type, modeCheck.mode) || Boolean(skillDecision?.requires_approval)
   if (needsApproval) {
     const action = await logWebOperatorAction({ ...opts, ...skillFields, ...playbookFields, status: 'waiting_approval', requires_approval: true, operator_id: opts.operator_id ?? null })
+    await createStepsForAction(action.id, playbookFields.playbook_plan).catch(() => {})
+    await markStepWaitingApproval(action.id, {
+      stepId: opts.action_type,
+      message: skillDecision?.reason ?? 'Approval required before this step can run.',
+    }).catch(() => {})
     const approval = await requireOperatorApproval(action.id, {
       project_id: opts.project_id,
       title: opts.description,
@@ -446,10 +462,15 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
 
   // 3. Log as running
   const action = await logWebOperatorAction({ ...opts, ...skillFields, ...playbookFields, status: 'running', operator_id: opts.operator_id ?? null })
+  await createStepsForAction(action.id, playbookFields.playbook_plan).catch(() => {})
 
   // 4. Check browser runtime
   const browserAvailable = await checkBrowserRuntime()
   if (!browserAvailable) {
+    await markStepFailed(action.id, {
+      stepId: opts.action_type,
+      message: 'Browser runtime not configured.',
+    }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       status: 'failed',
       output: { error: 'Browser runtime not configured. Install and configure Playwright to enable web automation.' },
@@ -507,6 +528,13 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
       retry_count: result.retry_count ?? 0,
       completed_at: new Date().toISOString(),
     })
+    await markStepCompleted(action.id, {
+      stepId: opts.action_type,
+      message: 'Browser action completed.',
+      url: pageState?.url ?? opts.target_url ?? null,
+      screenshot_url: pageState?.is_sensitive ? null : pageState?.screenshot_url ?? result.screenshot_url ?? null,
+      result: cleanOutput,
+    }).catch(() => {})
 
     // Update session current_url and page_title if we have page state
     if (pageState?.url && opts.session_id) {
@@ -548,6 +576,12 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
         page_title: ps.title ?? null,
         completed_at: new Date().toISOString(),
       })
+      await markStepWaitingUser(action.id, {
+        stepId: opts.action_type,
+        message: ps.waiting_reason ?? 'manual_takeover_required',
+        url: ps.url ?? null,
+        screenshot_url: ps.screenshot_url ?? null,
+      }).catch(() => {})
 
       // Update operator status to waiting_user
       if (opts.operator_id) {
@@ -582,6 +616,10 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
     }
 
     const failure_reason = (err as { failure_reason?: string }).failure_reason ?? 'unknown_error'
+    await markStepFailed(action.id, {
+      stepId: opts.action_type,
+      message: errMsg,
+    }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       status: 'failed',
       output: { error: errMsg },
