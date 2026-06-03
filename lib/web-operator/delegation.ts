@@ -26,6 +26,7 @@ import {
   validateSkillAction,
 } from '@/lib/web-operator/skills'
 import type { SkillDecision, WebOperatorSkill } from '@/lib/web-operator/skills'
+import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -178,6 +179,18 @@ function buildCompletionMessage(actionType: string, output: Record<string, unkno
 // ── Core delegation function ───────────────────────────────────────────────────
 
 export async function delegateToWebOperator(req: DelegationRequest): Promise<DelegationResult> {
+  const directTarget = req.skillId && req.actionType === 'search'
+    ? getDirectSiteTargetFromInstruction(req.query ?? req.instruction, req.skillId)
+    : null
+  if (directTarget && ['facebook_research', 'linkedin_research', 'instagram_research', 'canva_design', 'gmail_workflow'].includes(req.skillId ?? '')) {
+    req.actionType = 'open_url'
+    req.targetUrl = directTarget.url
+    req.payload = {
+      ...(req.payload ?? {}),
+      ...(directTarget.query ? { query: directTarget.query } : {}),
+    }
+  }
+
   // 1. Check mode
   const modeCheck = await canPerformAction(
     ['send_email', 'submit_form'].includes(req.actionType) ? 'send_email' : 'browse_web'
@@ -351,6 +364,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     // ── Manual takeover required (CAPTCHA / login / security checkpoint) ──
     if ((result as { waiting_user?: boolean }).waiting_user) {
       const name = operator?.name ?? 'The operator'
+      const directPrefix = skill?.skill_id && req.targetUrl
+        ? `${name} opened ${siteNameForSkill(skill.skill_id)} directly and needs your help.`
+        : `${name} needs your help.`
       return {
         status: 'blocked',
         actionId: result.action?.id,
@@ -358,7 +374,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
         skillId: skill?.skill_id,
         skillName: skill?.name,
         skillDecision: skillDecision ?? undefined,
-        message: `${name} needs your help. Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`,
+        message: `${directPrefix} Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`,
         error: result.error,
       }
     }
@@ -562,6 +578,7 @@ export async function delegateOpenGmail(opts: {
     projectId: opts.projectId,
     requestedByRole: opts.requestedByRole,
     actionType: 'open_gmail',
+    targetUrl: 'https://mail.google.com/',
     instruction: 'Open Gmail in browser',
     reason: 'Email workflow',
     skillId: 'gmail_workflow',

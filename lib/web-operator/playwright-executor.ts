@@ -227,12 +227,15 @@ async function executeOpenGmail(opts: { profileKey?: string }): Promise<ExecuteR
 
   const url = page.url()
   if (url.includes('accounts.google.com') || url.includes('signin') || url.includes('ServiceLogin')) {
-    const state = await capturePageState(page)
-    return {
-      success: false,
-      output: { error: 'Gmail login required. Please log in manually in the operator browser window.', url: state.url, login_required: true },
-      _page: { ...state, screenshot_url: null, is_sensitive: true },
-    } as unknown as ExecuteResult
+    const detectedState = await detectPageState(page)
+    throw new ManualTakeoverRequired({
+      ...detectedState,
+      type: 'login_required',
+      requires_manual_takeover: true,
+      waiting_reason: 'login_required',
+      user_message: 'Gmail login required. Please log in manually in the operator browser window, then click "Login / CAPTCHA completed".',
+      is_sensitive: true,
+    })
   }
 
   const state = await capturePageState(page)

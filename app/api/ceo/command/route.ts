@@ -6,6 +6,7 @@ import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail, delegateToWebOperator, delegateOpenUrl } from '@/lib/web-operator/delegation'
 import type { DelegationResult } from '@/lib/web-operator/delegation'
 import { extractFirstUrl, getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
+import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
 import { createSystemImprovementProposal } from '@/lib/system-improvements'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
@@ -131,6 +132,9 @@ export async function POST(request: NextRequest) {
         ? inferUnknownWebsiteFromInstruction(command.trim())
         : null
       const requestedUrl = extractFirstUrl(command.trim())
+      const directSiteTarget = recommendedSkill
+        ? getDirectSiteTargetFromInstruction(command.trim(), recommendedSkill.skill_id)
+        : null
 
       if (unknownWebsite) {
         await createSystemImprovementProposal({
@@ -157,18 +161,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (!delegationResult && recommendedSkill?.skill_id === 'canva_design') {
-        delegationResult = await delegateToWebOperator({
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName,
-          actionType: 'open_url',
-          targetUrl: 'https://www.canva.com/',
-          instruction: `${operatorName}, work on Canva as a safe browser-only draft workflow. Manual login/takeover may be required. Publishing, sharing, and downloading final assets require approval.`,
-          reason: 'Canva Web Operator skill requested',
-          skillId: 'canva_design',
-        }).catch(() => null)
-      } else if (!delegationResult && recommendedSkill?.skill_id === 'website_reader' && requestedUrl) {
+      if (!delegationResult && recommendedSkill?.skill_id === 'website_reader' && requestedUrl) {
         delegationResult = await delegateOpenUrl({
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
@@ -186,38 +179,18 @@ export async function POST(request: NextRequest) {
           reason: 'Facebook action requires explicit approval',
           skillId: 'facebook_research',
         }).catch(() => null)
-      } else if (!delegationResult && recommendedSkill?.skill_id === 'facebook_research') {
+      } else if (!delegationResult && directSiteTarget && recommendedSkill && ['facebook_research', 'linkedin_research', 'instagram_research', 'canva_design'].includes(recommendedSkill.skill_id)) {
+        const siteName = siteNameForSkill(recommendedSkill.skill_id)
         delegationResult = await delegateToWebOperator({
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
           operatorName,
-          actionType: 'search',
-          query: command.trim(),
-          instruction: `${operatorName}, research Facebook public pages/groups/posts through browser actions only. Manual login may be required; do not message, comment, join, or post without approval.`,
-          reason: 'Facebook research Web Operator skill requested',
-          skillId: 'facebook_research',
-        }).catch(() => null)
-      } else if (!delegationResult && recommendedSkill?.skill_id === 'linkedin_research') {
-        delegationResult = await delegateToWebOperator({
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName,
-          actionType: 'search',
-          query: command.trim(),
-          instruction: `${operatorName}, research LinkedIn public company/profile information through browser actions only. Do not send connection requests, messages, or posts without approval.`,
-          reason: 'LinkedIn research Web Operator skill requested',
-          skillId: 'linkedin_research',
-        }).catch(() => null)
-      } else if (!delegationResult && recommendedSkill?.skill_id === 'instagram_research') {
-        delegationResult = await delegateToWebOperator({
-          projectId: result.project_id ?? undefined,
-          requestedByRole: 'CEO',
-          operatorName,
-          actionType: 'search',
-          query: command.trim(),
-          instruction: `${operatorName}, research Instagram public information through browser actions only. Do not message, comment, follow, or post without approval.`,
-          reason: 'Instagram research Web Operator skill requested',
-          skillId: 'instagram_research',
+          actionType: 'open_url',
+          targetUrl: directSiteTarget.url,
+          payload: directSiteTarget.query ? { query: directSiteTarget.query } : undefined,
+          instruction: `${operatorName}, open ${siteName} directly in the browser session. Manual login/takeover may be required. Continue only safe browser actions; do not post, message, join, publish, share, or download final assets without approval.`,
+          reason: `${siteName} Web Operator skill requested`,
+          skillId: recommendedSkill.skill_id,
         }).catch(() => null)
       }
 
@@ -382,7 +355,11 @@ export async function POST(request: NextRequest) {
           // (delegation already set the right message; we just preserve it)
         } else if (delegationResult.status === 'completed' || delegationResult.status === 'approval_required') {
           // Append a note about the browser session and manual takeover policy
-          const takeover = ` ${operatorName} will open the site in their browser session. If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+          const siteName = delegationResult.skillId ? siteNameForSkill(delegationResult.skillId) : 'the site'
+          const directCopy = ['Facebook', 'LinkedIn', 'Instagram', 'Canva', 'Gmail'].includes(siteName)
+            ? `${operatorName} will open ${siteName} directly in their browser session.`
+            : `${operatorName} will open the site in their browser session.`
+          const takeover = ` ${directCopy} If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
           if (delegationResult.message && !delegationResult.message.includes('take over')) {
             delegationResult = { ...delegationResult, message: delegationResult.message + takeover }
           }

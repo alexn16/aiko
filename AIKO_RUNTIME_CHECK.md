@@ -526,3 +526,44 @@ WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 | Duplicate old takeover button | Remove stale `Mark: I'm in control` button |
 | Taking over cleared unresolved blocker | Preserve `requires_user_input` and `waiting_reason` |
 | Login-completed checked `about:blank` page | Prefer page matching operator `current_url` |
+
+---
+
+## Known-Site Direct Open Validation — 2026-06-03
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Goal
+
+Explicit known-site work should open the known website directly instead of routing through generic Google search first.
+
+### Test results
+
+| Prompt | Action log result |
+|---|---|
+| `Kevin, research Facebook groups about parking in A Coruña.` | ✅ `action_type=open_url`, `skill_id=facebook_research`, `target_url=https://www.facebook.com/search/groups?q=parking%20A%20Coru%C3%B1a`; no Google URL used. Facebook returned `Not Found` in the unauthenticated headed browser, so no fake results were produced. |
+| `Kevin, open Canva and create a draft Instagram post for ALB Parking.` | ✅ `action_type=open_url`, `skill_id=canva_design`, `target_url=https://www.canva.com/`; Cloudflare/Canva security checkpoint paused as `waiting_user/security_checkpoint`. |
+| `Kevin, open Gmail.` | ✅ `action_type=open_gmail`, `skill_id=gmail_workflow`, `target_url=https://mail.google.com/`; Google login paused as `waiting_user/login_required`. |
+
+### Implementation summary
+
+- Added `lib/web-operator/site-intents.ts` with direct target helpers:
+  - `getDirectSiteTargetFromInstruction(text, skillId)`
+  - `buildSiteSearchUrl(skillId, query)`
+  - `shouldOpenSiteDirectly(skillId, instruction)`
+- CEO delegation now uses direct `open_url` for Facebook, LinkedIn, Instagram, and Canva research/open instructions.
+- Delegation has a fallback rewrite so safe known-site `search` actions become direct `open_url` actions before execution.
+- Posting/messaging/joining/publishing/sharing/downloading still require approval and do not execute silently.
+- `open_gmail` now raises the standard manual-takeover path on login pages instead of completing with `login_required` output.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| Direct-site smoke tests | ✅ Added |
+| CAPTCHA/login/security behavior | ✅ Preserved: `waiting_user` on blockers |
+| Approval behavior | ✅ Preserved: Facebook post stays `waiting_approval` |

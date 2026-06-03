@@ -228,3 +228,42 @@ WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 - `Login / CAPTCHA completed` refuses to clear the blocker while the browser still shows `security_checkpoint`.
 - `Resume workflow` returns `Cannot resume: security_checkpoint` until manual intervention is actually complete.
 - Risky Facebook posting remains approval-gated before and after manual-control flows.
+
+---
+
+## Known-Site Direct Open Validation — 2026-06-03
+
+### Change
+
+Explicit known-site operator instructions now open the target site directly instead of starting with generic Google/DDG search.
+
+| Skill | Direct target |
+|---|---|
+| `facebook_research` | `https://www.facebook.com/search/groups?q={query}` |
+| `linkedin_research` | `https://www.linkedin.com/search/results/companies/?keywords={query}` |
+| `instagram_research` | `https://www.instagram.com/` |
+| `canva_design` | `https://www.canva.com/` |
+| `gmail_workflow` | `https://mail.google.com/` |
+| `website_reader` | Validated exact HTTP(S) URL from the instruction |
+
+### Runtime validation
+
+Command:
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+| Prompt | Result |
+|---|---|
+| `Kevin, research Facebook groups about parking in A Coruña.` | ✅ Action logged as `open_url`, skill `facebook_research`, target URL `https://www.facebook.com/search/groups?q=parking%20A%20Coru%C3%B1a`; no Google navigation. Facebook returned `Not Found` unauthenticated, but no fake result was produced. |
+| `Kevin, open Canva and create a draft Instagram post for ALB Parking.` | ✅ Action logged as `open_url`, skill `canva_design`, target URL `https://www.canva.com/`; Canva security checkpoint paused as `waiting_user/security_checkpoint`. |
+| `Kevin, open Gmail.` | ✅ Action logged as `open_gmail`, skill `gmail_workflow`, target URL `https://mail.google.com/`; Google login paused as `waiting_user/login_required`. |
+
+### Fixes in this pass
+
+1. Added `lib/web-operator/site-intents.ts` for direct known-site target resolution.
+2. Updated CEO delegation for Facebook/LinkedIn/Instagram/Canva to use direct `open_url` instead of generic `search`.
+3. Added a delegation-level guard that rewrites safe known-site `search` actions to direct `open_url`, so non-CEO callers do not accidentally reintroduce Google-first routing.
+4. Updated CEO copy to say the operator will open the known site directly.
+5. Fixed `open_gmail` so Gmail login pages use the standard `waiting_user/login_required` path instead of logging a completed action with `login_required` output.

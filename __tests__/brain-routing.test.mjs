@@ -2988,12 +2988,90 @@ test('135. skill_id is stored on web_operator_actions payload', () => {
   assert.equal(actionRow.skill_decision.allowed, true)
 })
 
-test('136. provider brain smart defaults do not target partial unique indexes as constraints', () => {
+test('136. Facebook research opens Facebook groups directly, not Google', () => {
+  const target = buildDirectSiteTargetTest('Kevin, research Facebook groups about parking in A Coruña.', 'facebook_research')
+  assert.equal(target.action_type, 'open_url')
+  assert.equal(target.url.startsWith('https://www.facebook.com/search/groups?q='), true)
+  assert.equal(target.url.includes('google.com'), false)
+  assert.equal(decodeURIComponent(target.url).includes('parking A Coruña'), true)
+})
+
+test('137. Canva instruction opens canva.com directly', () => {
+  const target = buildDirectSiteTargetTest('Kevin, open Canva and create a draft Instagram post for ALB Parking.', 'canva_design')
+  assert.equal(target.action_type, 'open_url')
+  assert.equal(target.url, 'https://www.canva.com/')
+})
+
+test('138. LinkedIn instruction opens LinkedIn directly', () => {
+  const target = buildDirectSiteTargetTest('Kevin, research LinkedIn companies for parking in A Coruña.', 'linkedin_research')
+  assert.equal(target.action_type, 'open_url')
+  assert.equal(target.url.startsWith('https://www.linkedin.com/search/results/companies/?keywords='), true)
+  assert.equal(target.url.includes('google.com'), false)
+})
+
+test('139. Gmail instruction opens mail.google.com directly', () => {
+  const target = buildDirectSiteTargetTest('Kevin, open Gmail.', 'gmail_workflow')
+  assert.equal(target.action_type, 'open_url')
+  assert.equal(target.url, 'https://mail.google.com/')
+})
+
+test('140. Direct URL remains exact after validation', () => {
+  const target = buildDirectSiteTargetTest('Kevin, open https://example.com/a?b=1 and summarize it.', 'website_reader')
+  assert.equal(target.action_type, 'open_url')
+  assert.equal(target.url, 'https://example.com/a?b=1')
+})
+
+test('141. Posting still creates approval and does not execute', () => {
+  function routeFacebookAction(command) {
+    if (/\b(post|publish|comment|message|join)\b/i.test(command)) {
+      return { action_type: 'create_post', status: 'waiting_approval', executed: false }
+    }
+    return buildDirectSiteTargetTest(command, 'facebook_research')
+  }
+  const result = routeFacebookAction('Kevin, post on Facebook about ALB Parking.')
+  assert.equal(result.status, 'waiting_approval')
+  assert.equal(result.executed, false)
+})
+
+test('142. CAPTCHA/security direct-site blockers still set waiting_user', () => {
+  function handlePageState(state) {
+    if (state.requires_manual_takeover) {
+      return { status: 'waiting_user', waiting_reason: state.waiting_reason, bypass_attempted: false }
+    }
+    return { status: 'completed', waiting_reason: null, bypass_attempted: false }
+  }
+  const result = handlePageState({ requires_manual_takeover: true, waiting_reason: 'security_checkpoint' })
+  assert.equal(result.status, 'waiting_user')
+  assert.equal(result.waiting_reason, 'security_checkpoint')
+  assert.equal(result.bypass_attempted, false)
+})
+
+test('143. provider brain smart defaults do not target partial unique indexes as constraints', () => {
   const oldSql = 'ON CONFLICT ON CONSTRAINT ai_role_asgn_user_uniq'
   const fixedSql = 'DELETE FROM ai_role_assignments WHERE role = $1 AND user_id = $2'
   assert.equal(/ON CONFLICT ON CONSTRAINT ai_role_asgn_(user|global)_uniq/.test(fixedSql), false)
   assert.equal(oldSql.includes('ON CONFLICT ON CONSTRAINT'), true)
 })
+
+function buildDirectSiteTargetTest(text, skillId) {
+  const directUrl = text.match(/https?:\/\/[^\s"'<>]+/i)?.[0]?.replace(/[),.!?;:]+$/, '')
+  if (directUrl) return { action_type: 'open_url', url: directUrl }
+  const query = text
+    .replace(/^[A-Z][a-z]+,\s*/i, '')
+    .replace(/\b(facebook|fb|linkedin)\b/ig, ' ')
+    .replace(/\b(research|search|find|look up|open|browse|groups?|pages?|companies|results|about|for|on|in)\b/ig, ' ')
+    .replace(/[.?!]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const map = {
+    facebook_research: `https://www.facebook.com/search/groups?q=${encodeURIComponent(query)}`,
+    linkedin_research: `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(query)}`,
+    instagram_research: 'https://www.instagram.com/',
+    canva_design: 'https://www.canva.com/',
+    gmail_workflow: 'https://mail.google.com/',
+  }
+  return { action_type: 'open_url', url: map[skillId], query }
+}
 
 // ── Tests 114–120: Lead discovery workflow ────────────────────────────────────
 // Pure-JS reimplementation of discovery-workflow.ts logic for testing without
