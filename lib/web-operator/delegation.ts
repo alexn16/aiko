@@ -165,6 +165,9 @@ function buildCompletionMessage(actionType: string, output: Record<string, unkno
   const opStr = operatorName ? `${operatorName} ` : 'Web Operator '
   if (actionType === 'search') {
     const count = Array.isArray(output.results) ? output.results.length : 0
+    if (count === 0) {
+      return `${opStr}completed search, but no structured leads were extracted. Try a more specific query or use Web Operator to open target websites directly.`
+    }
     return `${opStr}completed search — ${count} result${count !== 1 ? 's' : ''} found. Lead extraction is running in the background.`
   }
   if (actionType === 'read_page') return `${opStr}read the page and saved the content.`
@@ -181,7 +184,11 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
   )
   if (!modeCheck.allowed) {
     await sendInternalBlockMessage(req, modeCheck.reason)
-    return { status: 'blocked', message: modeCheck.reason, error: modeCheck.reason }
+    // Produce a user-readable message instead of a raw internal reason string
+    const modeBlockMsg = modeCheck.mode === 'read_only'
+      ? 'Research is blocked because AÏKO is in Read Only mode. Go to Operating Mode and switch to Auto / Approval Required to allow browser research.'
+      : modeCheck.reason
+    return { status: 'blocked', message: modeBlockMsg, error: modeCheck.reason }
   }
 
   const skillResolution = await resolveSkillForDelegation(req)
@@ -333,15 +340,21 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
   }
 
   if (!result.success) {
+    // Produce a clean user-facing message for known error patterns
+    const rawError = result.error ?? 'Web Operator action failed.'
+    let userMessage = rawError
+    if (rawError.includes("Executable doesn't exist") || rawError.includes('browserType.launch')) {
+      userMessage = 'Browser runtime is missing. Run: npx playwright install chromium'
+    }
     return {
       status: 'failed',
       actionId: result.action?.id,
-      error: result.error,
+      error: rawError,
       operatorName: operator?.name,
       skillId: skill?.skill_id,
       skillName: skill?.name,
       skillDecision: skillDecision ?? undefined,
-      message: result.error ?? 'Web Operator action failed.',
+      message: userMessage,
     }
   }
 

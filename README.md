@@ -858,6 +858,64 @@ The expected registry is `https://registry.npmjs.org/`. Do not commit registry c
 On first launch with no provider configured, AÏKO shows the setup screen.
 
 
+### Verified local workflow
+
+The following end-to-end workflow has been verified locally (2026-06-03) with Ollama / llama3.1:8b as the CEO brain:
+
+**Prerequisites:**
+- PostgreSQL running, `DATABASE_URL` set
+- Ollama running: `ollama serve` + `ollama pull llama3.1:8b`
+- Playwright Chromium installed: `npx playwright install chromium`
+
+**Steps:**
+
+```bash
+# 1. Clean install and verify
+rm -rf node_modules .next
+npm install
+npm test              # 136/136 pass
+npm run build         # clean build
+
+# 2. Start the app
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+```bash
+# 3. Check readiness (no secrets printed)
+npm run setup:check
+```
+
+Open `http://localhost:3001/setup` — if Ollama is running, the setup wizard shows **CEO brain connected: Ollama (local) / llama3.1:8b** at Step 4.
+
+**Switch mode for browser research** (read_only blocks Web Operator):
+```bash
+curl -X PATCH http://localhost:3001/api/mode \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"approval_required"}'
+```
+
+Or toggle it in the app at `/mode` → Operating Mode.
+
+**First Campaign Flow:**
+1. Open `/ceo` → send "Create a marketing project for ALB Parking."
+2. Open `/start-campaign?project_id=<id>` — strategy brief + launch template appear.
+3. Select Default operator, type a research query, click 🔍 Research.
+4. Web Operator runs via Playwright (General web research skill, `search` action logged).
+5. Review leads at `/leads`, approve, export CSV.
+6. Send "Generate an executive report for ALB Parking." in CEO Chat.
+7. Export report: `POST /api/projects/{id}/executive-reports/{reportId}/export` with `{"format":"markdown"}`.
+8. Generate full bundle: `POST /api/projects/{id}/artifact-bundle` → 5 files (exec report, leads CSV, strategy brief, decision log, manifest).
+9. Open `/files` — all artifacts appear with Download links.
+
+**CEO context recall (verified):**
+- "What are we doing for ALB Parking?" → real project answer (intent: `project_recall`)
+- "What decisions have been made?" → decision log answer from DB
+
+**Provider status (honest, no fake states):**
+- ChatGPT OAuth: `oauth_not_configured` — lists exact missing env var names
+- Claude OAuth: `oauth_not_configured` — lists exact missing env var names
+- Ollama: `connected` (CEO brain)
+
 ### OpenClaw-style first-run setup
 
 AÏKO initializes like OpenClaw:

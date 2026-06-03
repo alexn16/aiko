@@ -361,3 +361,31 @@ Intent resolved: `project_recall` ✅ — answers grounded in DB, not hallucinat
 | `git diff --check` | ✅ no whitespace issues |
 | Operating mode after workflow | `approval_required` (not restored to read_only — intentional for local dev) |
 
+
+---
+
+## Polish pass — 2026-06-03
+
+### Messages improved
+
+| Location | Before | After |
+|---|---|---|
+| Research 0 results (`lib/web-operator/delegation.ts`) | "completed search — 0 results found. Lead extraction is running in the background." | "completed search, but no structured leads were extracted. Try a more specific query or use Web Operator to open target websites directly." |
+| Mode-blocked (`lib/web-operator/delegation.ts`) | Raw: `Action "browse_web" requires Auto / Approval Required mode or higher.` | "Research is blocked because AÏKO is in Read Only mode. Go to Operating Mode and switch to Auto / Approval Required to allow browser research." |
+| Playwright missing (`lib/web-operator/delegation.ts`) | Raw stack trace from `browserType.launch: Executable doesn't exist at ...` | "Browser runtime is missing. Run: npx playwright install chromium" |
+
+### Docs updated
+
+- `README.md` — Added "Verified local workflow" section: prerequisites, mode switch, First Campaign Flow steps, CEO recall, provider honesty.
+- `AIKO_RUNTIME_CHECK.md` — This file (full workflow record, bugs fixed, polish pass).
+
+### Final state
+
+| Check | Result |
+|---|---|
+| `npm test` | ✅ 136/136 |
+| `npm run build` | ✅ clean |
+| `git diff --check` | ✅ no whitespace issues |
+| Provider: Ollama / llama3.1:8b | ✅ connected |
+| Mode | `approval_required` |
+| Playwright Chromium | ✅ installed |
