@@ -17,12 +17,13 @@ export type ProviderCategory =
 export type CompatibilityType =
   | 'openai_compatible'
   | 'anthropic_messages'
+  | 'claude_code_cli'
   | 'ollama_native'
   | 'google_gemini'
   | 'aws_bedrock'
   | 'not_implemented'
 
-export type AuthType = 'api_key' | 'oauth' | 'none' | 'aws_credentials'
+export type AuthType = 'api_key' | 'oauth' | 'local' | 'cli' | 'none' | 'aws_credentials'
 
 export type CatalogStatus = 'available' | 'planned' | 'not_available_in_this_build'
 
@@ -475,11 +476,30 @@ export const CATALOG: ProviderCatalogEntry[] = [
   // ── Local ────────────────────────────────────────────────────────────────────
 
   {
+    id: 'claude-code-local',
+    display_name: 'Claude Code local',
+    short_description: 'Use an installed Claude Code CLI/local account when detected',
+    category: 'local',
+    auth_type: 'cli',
+    compatibility: 'claude_code_cli',
+    status: 'available',
+    requires_base_url: false,
+    requires_api_key: false,
+    supports_streaming: false,
+    supports_tools: true,
+    supports_chat: true,
+    model_suggestions: ['claude-code-local'],
+    icon: '🧡',
+    notes: 'Only works when the claude CLI or CLAUDE_CODE_OAUTH_TOKEN is available on the AÏKO server. Otherwise use Anthropic API key instead.',
+    capabilities: ['reasoning', 'research', 'writing', 'coding', 'local'],
+  },
+
+  {
     id: 'ollama',
     display_name: 'Ollama / Local',
     short_description: 'Run models locally — no API key needed',
     category: 'local',
-    auth_type: 'none',
+    auth_type: 'local',
     compatibility: 'ollama_native',
     default_base_url: 'http://localhost:11434/v1',
     docs_url: 'https://ollama.ai/docs',

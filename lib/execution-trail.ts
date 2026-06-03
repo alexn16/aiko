@@ -45,6 +45,8 @@ export interface TrailEvent {
   action_id: string | null
   screenshot_url: string | null   // null for sensitive actions
   failure_reason: string | null
+  skill_id: string | null
+  skill_name: string | null
 }
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
@@ -58,6 +60,8 @@ function actionToEvents(row: Record<string, unknown>): TrailEvent[] {
     // Never expose sensitive screenshots
     screenshot_url: row.is_sensitive ? null : (row.screenshot_url ? String(row.screenshot_url) : null),
     failure_reason: row.failure_reason ? String(row.failure_reason) : null,
+    skill_id: row.skill_id ? String(row.skill_id) : null,
+    skill_name: row.skill_name ? String(row.skill_name) : null,
   }
 
   const actionType = String(row.action_type)
@@ -178,6 +182,8 @@ function approvalToEvent(row: Record<string, unknown>): TrailEvent | null {
     action_id: null,
     screenshot_url: null,
     failure_reason: null,
+    skill_id: null,
+    skill_name: null,
   }
 
   if (status === 'approved' && reviewedAt) {
@@ -262,6 +268,8 @@ export async function getLeadExecutionTrail(leadId: string): Promise<TrailEvent[
           action_id: null,
           screenshot_url: null,
           failure_reason: null,
+          skill_id: null,
+          skill_name: null,
         })
       }
       if (lead.status === 'rejected') {
@@ -276,6 +284,8 @@ export async function getLeadExecutionTrail(leadId: string): Promise<TrailEvent[
           action_id: null,
           screenshot_url: null,
           failure_reason: null,
+          skill_id: null,
+          skill_name: null,
         })
       }
     }

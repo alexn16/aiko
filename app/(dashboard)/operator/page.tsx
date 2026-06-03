@@ -551,7 +551,7 @@ export default function OperatorPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr style={{ background: '#fafafa' }}>
-                  {['Time', 'Type', 'Role', 'URL / Page', 'Status', 'Description', 'Preview'].map(h => (
+                  {['Time', 'Type', 'Skill', 'Role', 'URL / Page', 'Status', 'Description', 'Preview'].map(h => (
                     <th key={h} style={{
                       padding: '7px 10px', textAlign: 'left', fontWeight: 600,
                       color: '#94a3b8', borderBottom: '1px solid #f1f5f9',
@@ -571,6 +571,14 @@ export default function OperatorPage() {
                     <td style={{ padding: '8px 10px', color: '#374151', fontFamily: 'DM Mono, monospace', fontSize: 10 }}>
                       {action.action_type}
                     </td>
+                    <td style={{ padding: '8px 10px', color: '#475569' }}>
+                      {(action as { skill_name?: string | null }).skill_name ? (
+                        <div>
+                          <span style={{ fontSize: 10, fontWeight: 600 }}>{(action as { skill_name?: string | null }).skill_name}</span>
+                          <div style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'DM Mono, monospace' }}>{(action as { skill_id?: string | null }).skill_id}</div>
+                        </div>
+                      ) : '—'}
+                    </td>
                     <td style={{ padding: '8px 10px', color: '#64748b' }}>
                       {action.agent_role}
                     </td>
@@ -588,7 +596,7 @@ export default function OperatorPage() {
                       <StatusBadge status={action.status} />
                       {(action as { failure_reason?: string | null }).failure_reason && (
                         <div style={{ fontSize: 9, color: '#ef4444', marginTop: 2 }}>
-                          {(action as { failure_reason?: string | null }).failure_reason}
+                          {(action as { failure_reason?: string | null }).failure_reason === 'skill_blocked' ? 'Skill blocked this action' : (action as { failure_reason?: string | null }).failure_reason}
                         </div>
                       )}
                       {(action as { is_sensitive?: boolean }).is_sensitive && (

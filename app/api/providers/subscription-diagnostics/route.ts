@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { db } from '@/lib/db/client'
+import { detectClaudeCodeLocal } from '@/lib/ai/providers/claude-code-cli'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,9 +25,9 @@ export const dynamic = 'force-dynamic'
 function chatgptEnvCheck(): { present: string[]; missing: string[] } {
   const vars = [
     'OPENAI_OAUTH_CLIENT_ID',
-    'OPENAI_OAUTH_CLIENT_SECRET',
     'OPENAI_OAUTH_AUTH_URL',
     'OPENAI_OAUTH_TOKEN_URL',
+    'OPENAI_OAUTH_REDIRECT_URI',
   ]
   const present = vars.filter(v => !!process.env[v])
   const missing = vars.filter(v => !process.env[v])
@@ -36,7 +37,6 @@ function chatgptEnvCheck(): { present: string[]; missing: string[] } {
 function claudeEnvCheck(): { present: string[]; missing: string[] } {
   const vars = [
     'CLAUDE_OAUTH_CLIENT_ID',
-    'CLAUDE_OAUTH_CLIENT_SECRET',
     'CLAUDE_OAUTH_AUTH_URL',
     'CLAUDE_OAUTH_TOKEN_URL',
   ]
@@ -159,6 +159,7 @@ export async function GET() {
       ollamaConnected,
       openrouterConnected,
       ceoBrain,
+      claudeCodeDetection,
     ] = await Promise.all([
       getConnection('chatgpt_oauth',  userId),
       getConnection('claude_oauth',   userId),
@@ -167,6 +168,7 @@ export async function GET() {
       isApiConnected('ollama',        userId),
       isApiConnected('openrouter',    userId),
       getCeoBrain(userId),
+      detectClaudeCodeLocal(),
     ])
 
     // ── ChatGPT card ─────────────────────────────────────────────────────────
@@ -213,8 +215,8 @@ export async function GET() {
     const clConfigured = clEnv.missing.length === 0
 
     // Claude CLI / Claude Code detection (boolean only — no token values)
-    const claudeCliDetected        = false  // Server-side CLI not detectable here
-    const claudeCodeTokenDetected  = !!process.env.CLAUDE_CODE_OAUTH_TOKEN
+    const claudeCliDetected        = claudeCodeDetection.cli_detected
+    const claudeCodeTokenDetected  = claudeCodeDetection.token_env_detected
 
     type ClaudeStatus =
       | 'connected'
@@ -250,6 +252,8 @@ export async function GET() {
       last_tested_at:        claudeConn?.last_tested_at ?? null,
       claude_cli_detected:   claudeCliDetected,
       claude_code_token_detected: claudeCodeTokenDetected,
+      claude_code_local_auth_detected: claudeCodeDetection.local_auth_detected,
+      claude_code_detail: claudeCodeDetection.detail,
     }
 
     // ── CEO brain summary ────────────────────────────────────────────────────

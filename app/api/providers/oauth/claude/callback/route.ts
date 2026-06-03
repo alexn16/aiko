@@ -63,37 +63,32 @@ export async function GET(req: NextRequest) {
 
     if (userId) {
       await db.query(
+        `DELETE FROM provider_connections
+         WHERE user_id = $1 AND provider_catalog_id = 'claude_oauth'`,
+        [userId]
+      )
+      await db.query(
         `INSERT INTO provider_connections
-           (name, type, status, model, provider_catalog_id, compatibility, auth_type,
-            oauth_access_token, oauth_refresh_token, token_expires_at,
-            account_email, user_id, supports_streaming, last_tested_at, updated_at)
-         VALUES ('Claude', 'claude_direct', 'connected', $1, 'claude_oauth', 'anthropic_messages',
-                 'oauth', $2, $3, $4, $5, $6, true, NOW(), NOW())
-         ON CONFLICT ON CONSTRAINT provider_conn_user_catalog_uniq
-         DO UPDATE SET
-           oauth_access_token  = EXCLUDED.oauth_access_token,
-           oauth_refresh_token = EXCLUDED.oauth_refresh_token,
-           token_expires_at    = EXCLUDED.token_expires_at,
-           account_email       = EXCLUDED.account_email,
-           status              = 'connected',
-           last_tested_at      = NOW(),
-           updated_at          = NOW()`,
-        [cfg.defaultModel, tokens.access_token, tokens.refresh_token ?? null, expiresAt, tokens.email ?? null, userId]
+           (name, display_name, type, status, model, provider_catalog_id, compatibility, auth_type, auth_method,
+            oauth_access_token, oauth_refresh_token, oauth_access_token_encrypted, oauth_refresh_token_encrypted,
+            token_expires_at, account_email, user_id, supports_streaming, last_tested_at, updated_at)
+         VALUES ($1, $2, 'claude_direct', 'connected', $3, 'claude_oauth', 'anthropic_messages',
+                 'oauth', 'oauth', $4, $5, $4, $5, $6, $7, $8, true, NOW(), NOW())`,
+        [cfg.displayName, 'Claude account', cfg.defaultModel, tokens.access_token, tokens.refresh_token ?? null, expiresAt, tokens.email ?? null, userId]
       )
     } else {
-      // Global (null user_id) — delete-then-insert since NULLs don't match in unique constraints
       await db.query(
         `DELETE FROM provider_connections
          WHERE user_id IS NULL AND provider_catalog_id = 'claude_oauth'`
       )
       await db.query(
         `INSERT INTO provider_connections
-           (name, type, status, model, provider_catalog_id, compatibility, auth_type,
-            oauth_access_token, oauth_refresh_token, token_expires_at,
-            account_email, user_id, supports_streaming, last_tested_at, updated_at)
-         VALUES ('Claude', 'claude_direct', 'connected', $1, 'claude_oauth', 'anthropic_messages',
-                 'oauth', $2, $3, $4, $5, NULL, true, NOW(), NOW())`,
-        [cfg.defaultModel, tokens.access_token, tokens.refresh_token ?? null, expiresAt, tokens.email ?? null]
+           (name, display_name, type, status, model, provider_catalog_id, compatibility, auth_type, auth_method,
+            oauth_access_token, oauth_refresh_token, oauth_access_token_encrypted, oauth_refresh_token_encrypted,
+            token_expires_at, account_email, user_id, supports_streaming, last_tested_at, updated_at)
+         VALUES ($1, $2, 'claude_direct', 'connected', $3, 'claude_oauth', 'anthropic_messages',
+                 'oauth', 'oauth', $4, $5, $4, $5, $6, $7, NULL, true, NOW(), NOW())`,
+        [cfg.displayName, 'Claude account', cfg.defaultModel, tokens.access_token, tokens.refresh_token ?? null, expiresAt, tokens.email ?? null]
       )
     }
 

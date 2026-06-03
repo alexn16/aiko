@@ -14,10 +14,7 @@ import { getOAuthProviderConfig, isConfigured } from '@/lib/oauth-helpers'
 
 export async function POST() {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const userId = session?.user?.id ?? null
 
   const cfg = getOAuthProviderConfig('chatgpt')
   if (!isConfigured(cfg)) {
@@ -25,8 +22,10 @@ export async function POST() {
   }
 
   const res = await db.query(
-    `SELECT id, oauth_refresh_token FROM provider_connections
-     WHERE user_id = $1 AND provider_catalog_id = 'chatgpt_oauth'`,
+    `SELECT id, COALESCE(oauth_refresh_token_encrypted, oauth_refresh_token) AS oauth_refresh_token FROM provider_connections
+     WHERE provider_catalog_id = 'chatgpt_oauth' AND (user_id = $1 OR user_id IS NULL)
+     ORDER BY user_id NULLS LAST
+     LIMIT 1`,
     [userId]
   )
   const row = res.rows[0]
@@ -63,7 +62,7 @@ export async function POST() {
 
     await db.query(
       `UPDATE provider_connections
-       SET oauth_access_token=$1, oauth_refresh_token=$2, token_expires_at=$3,
+       SET oauth_access_token=$1, oauth_refresh_token=$2, oauth_access_token_encrypted=$1, oauth_refresh_token_encrypted=$2, token_expires_at=$3,
            status='connected', last_error=NULL, last_tested_at=NOW(), updated_at=NOW()
        WHERE id=$4`,
       [tokens.access_token, tokens.refresh_token ?? row.oauth_refresh_token, expiresAt, row.id]

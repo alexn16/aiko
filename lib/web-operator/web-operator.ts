@@ -1,6 +1,8 @@
 import { db } from '@/lib/db/client'
 import { canPerformAction, getModeState } from '@/lib/operating-mode'
 import { createApprovalItem } from '@/lib/approvals'
+import { getSkillById, getSkillForUrl, getRecommendedSkillForInstruction, validateSkillAction } from '@/lib/web-operator/skills'
+import type { SkillDecision, WebOperatorSkill } from '@/lib/web-operator/skills'
 import type { ModeState } from '@/lib/operating-mode'
 import type { ApprovalItem } from '@/lib/approvals'
 
@@ -14,6 +16,13 @@ export type WebOperatorActionType =
   | 'open_gmail' | 'detect_gmail_login'
   | 'fill_gmail_to' | 'fill_gmail_subject' | 'fill_gmail_body' | 'send_gmail_draft'
   | 'search_gmail' | 'check_gmail_reply'
+  | 'collect_public_info' | 'summarize' | 'create_account'
+  | 'open_canva' | 'create_design_draft' | 'edit_text' | 'upload_user_approved_assets' | 'export_design'
+  | 'publish_design' | 'share_design' | 'download_final_asset'
+  | 'search_pages' | 'search_groups' | 'read_public_posts' | 'collect_public_leads'
+  | 'send_message' | 'post_comment' | 'join_group' | 'create_post' | 'post'
+  | 'search_companies' | 'read_public_profiles' | 'collect_company_info'
+  | 'send_connection_request' | 'follow_account' | 'search_mail' | 'check_reply'
 
 export interface WebOperatorSession {
   id: string
@@ -51,20 +60,31 @@ export interface WebOperatorAction {
   source_task_id: string | null
   requested_by_role: string | null
   lead_id: string | null
+  skill_id: string | null
+  skill_name: string | null
+  skill_decision: Record<string, unknown> | null
   created_at: string
   completed_at: string | null
 }
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
-const SENSITIVE_ACTIONS = ['send_email', 'submit_form', 'create_email_draft', 'download_file']
+const SENSITIVE_ACTIONS = [
+  'send_email', 'send_gmail_draft', 'submit_form', 'create_email_draft', 'download_file',
+  'publish_design', 'share_design', 'download_final_asset', 'send_message', 'post_comment',
+  'join_group', 'create_post', 'post', 'send_connection_request', 'follow_account',
+]
 
 function isSensitiveAction(type: string): boolean {
   return SENSITIVE_ACTIONS.includes(type)
 }
 
-const ALWAYS_REQUIRES_APPROVAL = ['send_email', 'submit_form']
-const AUTO_REQUIRES_APPROVAL = ['send_email', 'submit_form', 'create_email_draft', 'fill_form', 'click']
+const ALWAYS_REQUIRES_APPROVAL = [
+  'send_email', 'send_gmail_draft', 'submit_form', 'publish_design', 'share_design',
+  'download_final_asset', 'send_message', 'post_comment', 'join_group', 'create_post',
+  'post', 'send_connection_request', 'follow_account',
+]
+const AUTO_REQUIRES_APPROVAL = ['send_email', 'send_gmail_draft', 'submit_form', 'create_email_draft', 'fill_form', 'click']
 
 function requiresApproval(action_type: string, mode: string): boolean {
   if (ALWAYS_REQUIRES_APPROVAL.includes(action_type) && mode !== 'full_access') return true
@@ -163,13 +183,17 @@ export async function logWebOperatorAction(params: {
   requested_by_role?: string | null
   operator_id?: string | null
   lead_id?: string | null
+  skill_id?: string | null
+  skill_name?: string | null
+  skill_decision?: Record<string, unknown> | SkillDecision | null
 }): Promise<WebOperatorAction> {
   const result = await db.query(
     `INSERT INTO web_operator_actions
        (session_id, project_id, agent_role, action_type, target_url,
         description, input, status, requires_approval,
-        source_task_id, requested_by_role, operator_id, lead_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        source_task_id, requested_by_role, operator_id, lead_id,
+        skill_id, skill_name, skill_decision)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING *`,
     [
       params.session_id ?? null,
@@ -185,6 +209,9 @@ export async function logWebOperatorAction(params: {
       params.requested_by_role ?? null,
       params.operator_id ?? null,
       params.lead_id ?? null,
+      params.skill_id ?? null,
+      params.skill_name ?? null,
+      params.skill_decision ? JSON.stringify(params.skill_decision) : null,
     ]
   )
   return rowToAction(result.rows[0])
@@ -203,6 +230,9 @@ export async function updateWebOperatorAction(
     is_sensitive: boolean
     completed_at: string
     approval_item_id: string | null
+    skill_id: string | null
+    skill_name: string | null
+    skill_decision: Record<string, unknown> | SkillDecision | null
   }>
 ): Promise<void> {
   const sets: string[] = []
@@ -219,6 +249,9 @@ export async function updateWebOperatorAction(
   if (fields.is_sensitive !== undefined) { sets.push(`is_sensitive=$${idx++}`); values.push(fields.is_sensitive) }
   if (fields.completed_at !== undefined) { sets.push(`completed_at=$${idx++}`); values.push(fields.completed_at) }
   if (fields.approval_item_id !== undefined) { sets.push(`approval_item_id=$${idx++}`); values.push(fields.approval_item_id) }
+  if (fields.skill_id !== undefined) { sets.push(`skill_id=$${idx++}`); values.push(fields.skill_id) }
+  if (fields.skill_name !== undefined) { sets.push(`skill_name=$${idx++}`); values.push(fields.skill_name) }
+  if (fields.skill_decision !== undefined) { sets.push(`skill_decision=$${idx++}`); values.push(fields.skill_decision ? JSON.stringify(fields.skill_decision) : null) }
 
   if (sets.length === 0) return
   values.push(id)
@@ -275,6 +308,22 @@ export async function requireOperatorApproval(
 
 // ── Main execution ─────────────────────────────────────────────────────────────
 
+async function resolveSkillForAction(opts: {
+  action_type: WebOperatorActionType
+  target_url?: string | null
+  description: string
+  skill_id?: string | null
+}): Promise<{ skill: WebOperatorSkill | null; decision: SkillDecision | null }> {
+  const skill = opts.skill_id
+    ? await getSkillById(opts.skill_id)
+    : opts.target_url
+      ? await getSkillForUrl(opts.target_url)
+      : await getRecommendedSkillForInstruction(opts.description)
+  if (!skill) return { skill: null, decision: null }
+  const decision = await validateSkillAction(skill.skill_id, opts.action_type)
+  return { skill, decision }
+}
+
 export async function runWebOperatorAction(opts: {
   session_id?: string | null
   project_id?: string | null
@@ -288,6 +337,9 @@ export async function runWebOperatorAction(opts: {
   operator_id?: string | null
   lead_id?: string | null
   profileKey?: string | null
+  skill_id?: string | null
+  skill_name?: string | null
+  skill_decision?: Record<string, unknown> | SkillDecision | null
 }): Promise<{
   success: boolean
   action: WebOperatorAction
@@ -295,6 +347,36 @@ export async function runWebOperatorAction(opts: {
   waiting_approval?: boolean
   approval?: ApprovalItem
 }> {
+  const skillResolution = await resolveSkillForAction(opts)
+  const skill = skillResolution.skill
+  const skillDecision = (opts.skill_decision as SkillDecision | null) ?? skillResolution.decision
+  const skillFields = {
+    skill_id: skill?.skill_id ?? opts.skill_id ?? null,
+    skill_name: skill?.name ?? opts.skill_name ?? null,
+    skill_decision: skillDecision ?? null,
+  }
+
+  if (skillDecision?.blocked) {
+    const action = await logWebOperatorAction({
+      ...opts,
+      ...skillFields,
+      status: 'blocked',
+      requires_approval: false,
+      operator_id: opts.operator_id ?? null,
+    })
+    await updateWebOperatorAction(action.id, {
+      output: { error: skillDecision.reason, skill_decision: skillDecision },
+      failure_reason: 'skill_blocked',
+      completed_at: new Date().toISOString(),
+    })
+    const updated = await db.query(`SELECT * FROM web_operator_actions WHERE id=$1`, [action.id])
+    return {
+      success: false,
+      action: updated.rows[0] ? rowToAction(updated.rows[0]) : action,
+      error: skillDecision.reason,
+    }
+  }
+
   // 1. Check operating mode
   const modeCheck = await canPerformAction(
     isSensitiveAction(opts.action_type) ? 'send_email' : 'browse_web',
@@ -302,26 +384,41 @@ export async function runWebOperatorAction(opts: {
   )
 
   if (!modeCheck.allowed) {
-    const action = await logWebOperatorAction({ ...opts, status: 'blocked', requires_approval: false, operator_id: opts.operator_id ?? null })
-    await updateWebOperatorAction(action.id, { output: { error: modeCheck.reason } })
+    const action = await logWebOperatorAction({ ...opts, ...skillFields, status: 'blocked', requires_approval: false, operator_id: opts.operator_id ?? null })
+    await updateWebOperatorAction(action.id, {
+      output: { error: modeCheck.reason },
+      failure_reason: 'operating_mode_blocked',
+      completed_at: new Date().toISOString(),
+    })
     return { success: false, action, error: modeCheck.reason }
   }
 
   // 2. Check if action requires approval
-  const needsApproval = requiresApproval(opts.action_type, modeCheck.mode)
+  const needsApproval = requiresApproval(opts.action_type, modeCheck.mode) || Boolean(skillDecision?.requires_approval)
   if (needsApproval) {
-    const action = await logWebOperatorAction({ ...opts, status: 'waiting_approval', requires_approval: true, operator_id: opts.operator_id ?? null })
+    const action = await logWebOperatorAction({ ...opts, ...skillFields, status: 'waiting_approval', requires_approval: true, operator_id: opts.operator_id ?? null })
     const approval = await requireOperatorApproval(action.id, {
       project_id: opts.project_id,
       title: opts.description,
-      content: `Web Operator action requested:\nType: ${opts.action_type}\nURL: ${opts.target_url ?? 'n/a'}\nDescription: ${opts.description}`,
+      content: `Web Operator action requested:
+Type: ${opts.action_type}
+Skill: ${skillFields.skill_name ?? 'n/a'}
+URL: ${opts.target_url ?? 'n/a'}
+Description: ${opts.description}
+Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
       agent_role: opts.agent_role ?? 'Web Operator',
     })
-    return { success: false, action, approval, waiting_approval: true }
+    const updated = await db.query(`SELECT * FROM web_operator_actions WHERE id=$1`, [action.id])
+    return {
+      success: false,
+      action: updated.rows[0] ? rowToAction(updated.rows[0]) : action,
+      approval,
+      waiting_approval: true,
+    }
   }
 
   // 3. Log as running
-  const action = await logWebOperatorAction({ ...opts, status: 'running', operator_id: opts.operator_id ?? null })
+  const action = await logWebOperatorAction({ ...opts, ...skillFields, status: 'running', operator_id: opts.operator_id ?? null })
 
   // 4. Check browser runtime
   const browserAvailable = await checkBrowserRuntime()
@@ -469,6 +566,19 @@ function rowToSession(row: Record<string, unknown>): WebOperatorSession {
   }
 }
 
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value === 'object' && value !== null) return value as Record<string, unknown>
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return typeof parsed === 'object' && parsed !== null ? parsed as Record<string, unknown> : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 function rowToAction(row: Record<string, unknown>): WebOperatorAction {
   return {
     id: String(row.id),
@@ -492,6 +602,9 @@ function rowToAction(row: Record<string, unknown>): WebOperatorAction {
     source_task_id: row.source_task_id ? String(row.source_task_id) : null,
     requested_by_role: row.requested_by_role ? String(row.requested_by_role) : null,
     lead_id: row.lead_id ? String(row.lead_id) : null,
+    skill_id: row.skill_id ? String(row.skill_id) : null,
+    skill_name: row.skill_name ? String(row.skill_name) : null,
+    skill_decision: parseJsonObject(row.skill_decision),
     created_at: String(row.created_at),
     completed_at: row.completed_at ? String(row.completed_at) : null,
   }

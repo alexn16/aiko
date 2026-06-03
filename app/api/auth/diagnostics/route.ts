@@ -54,12 +54,13 @@ export async function GET() {
       client_secret_set: !!process.env.OPENAI_OAUTH_CLIENT_SECRET,
       auth_url_set:      !!process.env.OPENAI_OAUTH_AUTH_URL,
       token_url_set:     !!process.env.OPENAI_OAUTH_TOKEN_URL,
+      redirect_uri_set:  !!process.env.OPENAI_OAUTH_REDIRECT_URI,
       scope_set:         !!process.env.OPENAI_OAUTH_SCOPE,
       fully_configured:  !!(
         process.env.OPENAI_OAUTH_CLIENT_ID &&
-        process.env.OPENAI_OAUTH_CLIENT_SECRET &&
         process.env.OPENAI_OAUTH_AUTH_URL &&
-        process.env.OPENAI_OAUTH_TOKEN_URL
+        process.env.OPENAI_OAUTH_TOKEN_URL &&
+        process.env.OPENAI_OAUTH_REDIRECT_URI
       ),
     }
 
@@ -71,7 +72,6 @@ export async function GET() {
       scope_set:         !!process.env.CLAUDE_OAUTH_SCOPE,
       fully_configured:  !!(
         process.env.CLAUDE_OAUTH_CLIENT_ID &&
-        process.env.CLAUDE_OAUTH_CLIENT_SECRET &&
         process.env.CLAUDE_OAUTH_AUTH_URL &&
         process.env.CLAUDE_OAUTH_TOKEN_URL
       ),

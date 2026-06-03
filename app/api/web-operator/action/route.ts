@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       description,
       input,
       operator_name,
+      skill_id,
     } = body as {
       session_id?: string
       project_id?: string
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
       description: string
       input?: Record<string, unknown>
       operator_name?: string
+      skill_id?: string
     }
 
     if (!action_type || !description) {
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
       input: input ?? {},
       operator_id,
       profileKey,
+      skill_id: skill_id ?? null,
     })
 
     return NextResponse.json(result)

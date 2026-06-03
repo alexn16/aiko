@@ -27,7 +27,7 @@ export async function POST() {
   if (id) {
     await db.query(
       `UPDATE ai_role_assignments SET provider_id = NULL
-       WHERE provider_id = $1 AND user_id = $2`,
+       WHERE provider_id = $1 AND (user_id = $2 OR user_id IS NULL)`,
       [id, userId]
     )
     await db.query(`DELETE FROM provider_connections WHERE id = $1`, [id])

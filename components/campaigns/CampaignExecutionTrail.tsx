@@ -47,11 +47,12 @@ function EventRow({ event }: { event: TrailEvent }) {
           </span>
           <span style={{ fontSize: 9, color: '#94a3b8' }}>{timeAgo(event.timestamp)}</span>
           {event.actor && <span style={{ fontSize: 9, color: '#94a3b8' }}>by {event.actor}</span>}
+          {event.skill_name && <span style={{ fontSize: 9, color: '#475569', background: '#f1f5f9', borderRadius: 4, padding: '1px 5px' }}>Skill: {event.skill_name}</span>}
         </div>
         <div style={{ fontSize: 12, color: '#0f172a', marginTop: 2 }}>{event.title}</div>
         {event.detail && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{event.detail}</div>}
         {event.failure_reason && (
-          <div style={{ fontSize: 10, color: '#ef4444', marginTop: 1 }}>✗ {event.failure_reason}</div>
+          <div style={{ fontSize: 10, color: '#ef4444', marginTop: 1 }}>✗ {event.failure_reason === 'skill_blocked' ? 'Skill blocked this action' : event.failure_reason}</div>
         )}
         {event.screenshot_url && (
           <img src={event.screenshot_url} alt="screenshot" style={{ maxWidth: 200, marginTop: 4, borderRadius: 4, border: '1px solid #e2e8f0' }} />
