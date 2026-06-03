@@ -84,20 +84,27 @@ export async function POST(req: NextRequest) {
     }
 
     for (const [role, providerId] of Object.entries(assignments)) {
+      // The migration creates partial unique indexes (not named constraints), so
+      // avoid ON CONFLICT ON CONSTRAINT here. DELETE+INSERT matches
+      // /api/providers/roles and works whether the partial indexes exist or not.
       if (userId) {
         await db.query(
+          `DELETE FROM ai_role_assignments WHERE role = $1 AND user_id = $2`,
+          [role, userId]
+        )
+        await db.query(
           `INSERT INTO ai_role_assignments (role, provider_id, user_id, updated_at)
-           VALUES ($1, $2, $3, NOW())
-           ON CONFLICT ON CONSTRAINT ai_role_asgn_user_uniq
-           DO UPDATE SET provider_id = $2, updated_at = NOW()`,
+           VALUES ($1, $2, $3, NOW())`,
           [role, providerId ?? null, userId]
         )
       } else {
         await db.query(
+          `DELETE FROM ai_role_assignments WHERE role = $1 AND user_id IS NULL`,
+          [role]
+        )
+        await db.query(
           `INSERT INTO ai_role_assignments (role, provider_id, updated_at)
-           VALUES ($1, $2, NOW())
-           ON CONFLICT ON CONSTRAINT ai_role_asgn_global_uniq
-           DO UPDATE SET provider_id = $2, updated_at = NOW()`,
+           VALUES ($1, $2, NOW())`,
           [role, providerId ?? null]
         )
       }

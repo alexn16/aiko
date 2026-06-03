@@ -1,115 +1,113 @@
 # AÏKO Provider Connection Audit
 
-**Date:** 2026-06-01  
-**Auditor:** Runtime inspection of routes, catalog, router, and adapters
+## Correction applied
 
----
+AÏKO now treats `provider_connections` as OpenClaw-style **auth profiles** rather than confusing subscription cards. The model is:
 
-## Summary
+`provider catalog → auth profile → auth method → model selection → role assignment → test call`
 
-| Provider | Type | State | Notes |
-|----------|------|-------|-------|
-| Ollama (local) | Local | ✅ Working | `llama3.1:8b` assigned to CEO |
-| Anthropic API | API key | ✅ Ready | Full adapter; needs `ANTHROPIC_API_KEY` |
-| OpenAI API | API key | ✅ Ready | Full adapter; needs `OPENAI_API_KEY` |
-| OpenRouter | API key | ✅ Ready | OpenAI-compat adapter; needs key |
-| Custom OpenAI-compat | API key | ✅ Ready | Any OpenAI-compat endpoint |
-| Custom Anthropic-compat | API key | ✅ Ready | Any Anthropic-compat endpoint |
-| ChatGPT OAuth | OAuth | ⚠ Needs env vars | Routes real (PKCE); `OPENAI_OAUTH_*` vars not set |
-| Claude Account OAuth | OAuth | ⚠ Needs env vars | Routes real (PKCE); `CLAUDE_OAUTH_*` vars not set |
-| Claude Code CLI | CLI bridge | ✗ Not installed | `~/.config/claude/` not found |
-| Google Gemini | API key | 🔜 Planned | Adapter not yet written |
-| AWS Bedrock | AWS creds | 🔜 Planned | Adapter not yet written |
+Google login is only AÏKO user identity. It is not provider authentication.
 
----
+## Schema / auth profile fields
 
-## What Works Today
+The existing `provider_connections` table remains the storage system. Migration `038_auth_profiles.sql` adds auth-profile vocabulary without duplicating the system:
 
-### Ollama (local)
-- Running at `http://localhost:11434`  
-- Model `llama3.1:8b` installed and assigned to CEO role  
-- Uses `openai_compat` adapter against Ollama's OpenAI-compatible endpoint  
-- Zero config beyond starting Ollama  
+- `id`
+- `provider_catalog_id`
+- `display_name`
+- `auth_method`: `oauth | api_key | local | cli | none`
+- `compatibility`
+- `base_url`
+- `model`
+- `account_email`
+- `status`: `connected | not_configured | not_connected | needs_reauth | error`
+- `last_error`
+- `last_tested_at`
+- `capabilities`
+- `created_at`
+- `updated_at`
+- `api_key_encrypted`
+- `oauth_access_token_encrypted`
+- `oauth_refresh_token_encrypted`
+- `token_expires_at`
+- `local_token_reference`
 
-### Anthropic API (`anthropic_api`)
-- Full adapter at `lib/ai/providers/anthropic.ts`  
-- Uses official `@anthropic-ai/sdk`  
-- Supports `callAnthropic`, `streamAnthropic`, `testAnthropic`  
-- Converts OpenAI-style messages to Anthropic format automatically  
-- Supports `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`, etc.  
-- **To activate:** go to `/connect-ai` → "Anthropic API" → enter your API key  
+Legacy token columns remain for compatibility, but API responses select only safe profile metadata and never return API keys or OAuth tokens.
 
-### OpenAI API (`openai_api`)
-- Full adapter at `lib/ai/providers/openai-compat.ts`  
-- Uses official `openai` SDK  
-- Supports streaming, JSON mode, tool calls (upstream)  
-- **To activate:** go to `/connect-ai` → "OpenAI API" → enter your API key  
+## Providers that are truly working now
 
-### Other OpenAI-compatible providers
-Works with: OpenRouter, Mistral, Qwen, Moonshot, Fireworks, DeepInfra, Chutes, custom endpoints.  
-Same adapter, different base URLs.
+| Provider profile | Auth method | Compatibility | Working condition |
+|---|---:|---|---|
+| Ollama / Local | `local` / `none` | `ollama_native` | Works when an Ollama-compatible local endpoint is running at the configured base URL and the selected model exists. |
+| OpenAI API | `api_key` | `openai_compatible` | Works with a valid OpenAI Platform API key and model. This is not ChatGPT/Codex OAuth. |
+| Anthropic API | `api_key` | `anthropic_messages` | Works with a valid Anthropic API key and model. This is not Claude account or Claude Code auth. |
+| OpenRouter | `api_key` | `openai_compatible` | Works with a valid OpenRouter API key and routable model. |
+| Custom OpenAI-compatible | `api_key` or no key | `openai_compatible` | Works when the configured endpoint implements OpenAI chat completions. |
+| Custom Anthropic-compatible | `api_key` or no key | `anthropic_messages` | Works when the configured endpoint implements Anthropic Messages. |
 
----
+## API-key only providers
 
-## OAuth Providers — Honest State
+The reliable API-key path is first-class for `openai_api`, `anthropic_api`, `openrouter`, and supported OpenAI-compatible/custom providers. They are created from `/connect-ai`, saved to `provider_connections`, tested by `POST /api/providers/:id/test`, and assignable to CEO through `POST /api/providers/roles`.
 
-### ChatGPT / Codex OAuth
-- **Route implementation:** Real PKCE flow at `app/api/providers/oauth/chatgpt/start` and `…/callback`
-- **State validation:** yes  
-- **Token storage:** stored in `provider_connections.oauth_access_token`  
-- **Token refresh:** auto-refresh via `lib/ai/router.ts` `resolveProviderKey()`  
-- **Missing env vars (all required to activate):**
-  - `OPENAI_OAUTH_CLIENT_ID`
-  - `OPENAI_OAUTH_CLIENT_SECRET`
-  - `OPENAI_OAUTH_AUTH_URL`
-  - `OPENAI_OAUTH_TOKEN_URL`
-  - `OPENAI_OAUTH_SCOPE` (optional, has default)
-- **Current behavior:** `/api/providers/oauth/chatgpt/start` returns `HTTP 422` with `{"error":"OAuth not configured","configured":false}` if env vars are missing. No redirect is started, no misleading redirect.
-- **Recommendation:** Use OpenAI API key instead until OAuth credentials are obtained from OpenAI.
+## OAuth-capable but not configured
 
-### Claude Account OAuth
-- **Route implementation:** Real PKCE flow at `app/api/providers/oauth/claude/start` and `…/callback`
-- **Missing env vars:**
-  - `CLAUDE_OAUTH_CLIENT_ID`
-  - `CLAUDE_OAUTH_CLIENT_SECRET`
-  - `CLAUDE_OAUTH_AUTH_URL`
-  - `CLAUDE_OAUTH_TOKEN_URL`
-  - `CLAUDE_OAUTH_SCOPE` (optional)
-- **Current behavior:** Same as ChatGPT OAuth — honest 422 if not configured.
-- **Recommendation:** Use Anthropic API key instead. Claude account OAuth requires a registered OAuth application with Anthropic.
+### ChatGPT / Codex
 
----
+Catalog id: `chatgpt_oauth` (UI label: ChatGPT / Codex). Auth method: `oauth`. This is intentionally separate from `openai_api`.
 
-## Claude Code CLI
-- Checked: `which claude`, `~/.config/claude/`, `$CLAUDE_CODE_OAUTH_TOKEN`  
-- **Status: not installed.** No CLI bridge is possible.  
-- If Claude Code CLI is later installed, a `claude_code` provider catalog entry and adapter would need to be written to bridge CLI → `callAI()`. This is a future option only.
+Required env vars:
 
----
+- `OPENAI_OAUTH_CLIENT_ID`
+- `OPENAI_OAUTH_AUTH_URL`
+- `OPENAI_OAUTH_TOKEN_URL`
+- `OPENAI_OAUTH_REDIRECT_URI`
+- `OPENAI_OAUTH_CLIENT_SECRET` only when the OAuth provider requires it
 
-## Router Architecture
+If any required env var is missing, `/connect-ai` marks ChatGPT/Codex as **not configured**, shows the exact missing names, disables Connect, and tells the user to use OpenAI API key instead.
 
-File: `lib/ai/router.ts`
+### Claude account OAuth
 
-- `callAI(role, messages, opts)` — single entry point for all AI calls
-- `resolveProviderKey(connection)` — handles `api_key` and `oauth` auth types; auto-refreshes OAuth tokens
-- `dispatchCall(connection, messages, opts)` — routes by `compatibility`:
-  - `anthropic_messages` → `callAnthropic()`
-  - `openai_compatible` / `ollama_native` → `callOpenAICompat()`
-  - others → error
-- `NeedsReauthError` — distinct class with `providerId`; callers catch and redirect to `/connect-ai`
+Catalog id: `claude_oauth`. AÏKO does not pretend Claude subscription OAuth works unless real `CLAUDE_OAUTH_*` settings are provided and the exchange succeeds. The preferred reliable path is Anthropic API key. Claude OAuth is shown only as configured/not configured diagnostics.
 
----
+## Claude Code local profile
 
-## Catalog Status After This Audit
+Catalog id: `claude-code-local`. Auth method: `cli`. Compatibility: `claude_code_cli`.
 
-The catalog entries for `chatgpt_oauth` and `claude_oauth` have been updated from `not_available_in_this_build` to `available` (the routes ARE implemented), with updated notes explaining env var requirements. This is the honest state: the feature is built, it just needs operator configuration.
+AÏKO detects whether the server has a `claude` CLI or `CLAUDE_CODE_OAUTH_TOKEN`. If neither is available, `/connect-ai` reports **Claude Code local auth not detected** and points users to Anthropic API key. It is never shown as connected unless a real test succeeds.
 
----
+## Placeholders / unavailable
 
-## Recommended Next Steps
+Catalog entries whose compatibility is not implemented in the router (`google_gemini`, `aws_bedrock`, media providers, planned gateways) must remain unavailable/planned in the UI and must not be shown as connected. The router supports only:
 
-1. **Immediate (no code required):** Go to `/connect-ai` → "Anthropic API" → enter an Anthropic API key. Assign it to CEO for higher-quality reasoning than `llama3.1:8b`.
-2. **If you want ChatGPT OAuth:** Register an OAuth application with OpenAI, set `OPENAI_OAUTH_*` env vars, restart server.
-3. **If you want Claude OAuth:** Register an OAuth application with Anthropic, set `CLAUDE_OAUTH_*` env vars, restart server.
-4. **Claude Code CLI:** Not a current option. Use Anthropic API key instead.
+- `openai_compatible`
+- `ollama_native`
+- `anthropic_messages`
+- `claude_code_cli`
+
+## Exact route from role assignment to `callAI`
+
+1. `/connect-ai` displays sanitized auth profiles from `GET /api/providers` and diagnostics from `GET /api/auth-profiles/diagnostics`.
+2. The user clicks **Assign CEO**, which posts `{ role: 'ceo', provider_id }` to `POST /api/providers/roles`.
+3. `ai_role_assignments.provider_id` points to `provider_connections.id`.
+4. Agents call `callAI({ role: 'ceo', messages, userId })` in `lib/ai/router.ts`.
+5. `getProviderForRole()` resolves in this order:
+   1. role-specific assigned auth profile
+   2. `local_fallback` role assignment
+   3. any connected user auth profile
+   4. global role assignment
+   5. any connected global auth profile
+   6. legacy `model_configs` only if no auth profile exists
+6. The router reads `auth_method`, `compatibility`, `model`, `base_url`, and server-side secrets/tokens.
+7. Dispatch is sent to OpenAI-compatible, Anthropic Messages, Ollama-compatible, or Claude Code CLI adapters.
+8. `POST /api/providers/test-ceo-brain` verifies the exact CEO path through `callAI({ role: 'ceo' })`.
+
+## Compatibility aliases
+
+New ChatGPT/Codex auth profile routes exist at:
+
+- `GET /api/auth-profiles/openai-codex/start`
+- `GET /api/auth-profiles/openai-codex/callback`
+- `POST /api/auth-profiles/openai-codex/refresh`
+- `POST /api/auth-profiles/openai-codex/disconnect`
+
+Existing `/api/providers/oauth/chatgpt/*` routes remain for compatibility.

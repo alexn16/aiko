@@ -3,8 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
-import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail } from '@/lib/web-operator/delegation'
+import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail, delegateToWebOperator } from '@/lib/web-operator/delegation'
 import type { DelegationResult } from '@/lib/web-operator/delegation'
+import { getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
+import { createSystemImprovementProposal } from '@/lib/system-improvements'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
 
@@ -122,13 +124,102 @@ export async function POST(request: NextRequest) {
 
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
 
-      if (isOpenGmail && operatorName) {
+      const recommendedSkill = operatorName
+        ? await getRecommendedSkillForInstruction(command.trim())
+        : null
+      const unknownWebsite = operatorName && !recommendedSkill
+        ? inferUnknownWebsiteFromInstruction(command.trim())
+        : null
+
+      if (unknownWebsite) {
+        await createSystemImprovementProposal({
+          title: `Add Web Operator skill for ${unknownWebsite}`,
+          summary: `Create a governed Web Operator browser workflow for ${unknownWebsite}.`,
+          reason: `CEO asked an operator to work on ${unknownWebsite}, but no Web Operator skill profile exists for that website.`,
+          requested_by_role: 'CEO',
+          related_project_id: result.project_id ?? null,
+          missing_capabilities: [`web_operator_skill:${unknownWebsite}`],
+          proposed_changes: [{
+            capability_key: `web_operator_skill:${unknownWebsite}`,
+            capability_name: `Web Operator skill for ${unknownWebsite}`,
+            change_type: 'add',
+            description: `Define safe browser-only workflow rules for ${unknownWebsite}.`,
+            estimated_complexity: 'moderate',
+          }],
+          risk_level: 'medium',
+          status: 'draft',
+          implementation_prompt: `Add a Web Operator skill for ${unknownWebsite} before attempting automation. Include website_pattern, allowed browser actions, approval-required posting/sending/publishing actions, forbidden CAPTCHA/login bypass/private-data scraping actions, login policy, output types, and smoke tests.`,
+        }).catch(() => {})
+        delegationResult = {
+          status: 'blocked',
+          message: `AÏKO does not have a Web Operator skill for ${unknownWebsite} yet. I created a System Improvement Proposal instead of asking ${operatorName} to automate an unknown website blindly.`,
+        }
+      }
+
+      if (!delegationResult && recommendedSkill?.skill_id === 'canva_design') {
+        delegationResult = await delegateToWebOperator({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          actionType: 'open_url',
+          targetUrl: 'https://www.canva.com/',
+          instruction: `${operatorName}, work on Canva as a safe browser-only draft workflow. Manual login/takeover may be required. Publishing, sharing, and downloading final assets require approval.`,
+          reason: 'Canva Web Operator skill requested',
+          skillId: 'canva_design',
+        }).catch(() => null)
+      } else if (!delegationResult && recommendedSkill?.skill_id === 'facebook_research' && /\b(post|publish|comment|message|join)\b/i.test(command.trim())) {
+        delegationResult = await delegateToWebOperator({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          actionType: /\bmessage\b/i.test(command.trim()) ? 'send_message' : /\bcomment\b/i.test(command.trim()) ? 'post_comment' : /\bjoin\b/i.test(command.trim()) ? 'join_group' : 'create_post',
+          targetUrl: 'https://www.facebook.com/',
+          instruction: `${operatorName}, prepare the requested Facebook action but do not post, message, comment, or join until the approval item is approved.`,
+          reason: 'Facebook action requires explicit approval',
+          skillId: 'facebook_research',
+        }).catch(() => null)
+      } else if (!delegationResult && recommendedSkill?.skill_id === 'facebook_research') {
+        delegationResult = await delegateToWebOperator({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          actionType: 'search',
+          query: command.trim(),
+          instruction: `${operatorName}, research Facebook public pages/groups/posts through browser actions only. Manual login may be required; do not message, comment, join, or post without approval.`,
+          reason: 'Facebook research Web Operator skill requested',
+          skillId: 'facebook_research',
+        }).catch(() => null)
+      } else if (!delegationResult && recommendedSkill?.skill_id === 'linkedin_research') {
+        delegationResult = await delegateToWebOperator({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          actionType: 'search',
+          query: command.trim(),
+          instruction: `${operatorName}, research LinkedIn public company/profile information through browser actions only. Do not send connection requests, messages, or posts without approval.`,
+          reason: 'LinkedIn research Web Operator skill requested',
+          skillId: 'linkedin_research',
+        }).catch(() => null)
+      } else if (!delegationResult && recommendedSkill?.skill_id === 'instagram_research') {
+        delegationResult = await delegateToWebOperator({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          actionType: 'search',
+          query: command.trim(),
+          instruction: `${operatorName}, research Instagram public information through browser actions only. Do not message, comment, follow, or post without approval.`,
+          reason: 'Instagram research Web Operator skill requested',
+          skillId: 'instagram_research',
+        }).catch(() => null)
+      }
+
+      if (!delegationResult && isOpenGmail && operatorName) {
         delegationResult = await delegateOpenGmail({
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
           operatorName,
         }).catch(() => null)
-      } else if (isPrepareEmail && operatorName && emailTo) {
+      } else if (!delegationResult && isPrepareEmail && operatorName && emailTo) {
         delegationResult = await delegateGmailDraft({
           to: emailTo,
           subject: emailSubject ?? 'No subject',
@@ -137,13 +228,13 @@ export async function POST(request: NextRequest) {
           requestedByRole: 'CEO',
           operatorName,
         }).catch(() => null)
-      } else if (isSendEmail && operatorName) {
+      } else if (!delegationResult && isSendEmail && operatorName) {
         delegationResult = await delegateSendGmail({
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
           operatorName,
         }).catch(() => null)
-      } else if (isLeadOutreachIntent) {
+      } else if (!delegationResult && isLeadOutreachIntent) {
         try {
           const { delegateLeadToGmailDraft } = await import('@/lib/outreach/lead-outreach')
           const { listLeads } = await import('@/lib/leads')
@@ -176,11 +267,11 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch { /* non-fatal */ }
-      } else if (
+      } else if (!delegationResult && (
         !!(command.trim().match(/check.*(repl(y|ied|ies)|response|inbox).*lead/i)) ||
         !!(command.trim().match(/has.*(lead|anyone|they).*(repl(ied|ies)|responded)/i)) ||
         !!(command.trim().match(/any.*(repl(y|ies)|response).*(from|gmail)/i))
-      ) {
+      )) {
         // Check Gmail reply status for a lead via Web Operator (browser-only)
         try {
           const { listLeads } = await import('@/lib/leads')
@@ -210,7 +301,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch { /* non-fatal */ }
-      } else if (needsWebResearch) {
+      } else if (!delegationResult && needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({
           query,

@@ -442,3 +442,33 @@ See `AIKO_PROVIDER_CONNECTION_AUDIT.md` for the full audit.
 | Claude Code CLI | ✗ Not installed | N/A |
 
 Catalog entries for `chatgpt_oauth` and `claude_oauth` updated to `status: 'available'` — the routes ARE implemented, they just need operator configuration.
+
+---
+
+## OpenClaw-style auth profile routing update
+
+AÏKO brain routing now follows:
+
+`provider catalog → auth profile → auth method → model → role assignment → test call`
+
+`callAI({ role, messages, userId })` resolves providers through `getProviderForRole()` in this order:
+
+1. Role-specific assigned auth profile in `ai_role_assignments`.
+2. `local_fallback` assignment.
+3. Any connected user-scoped auth profile.
+4. Global role assignment for backward compatibility.
+5. Any connected global auth profile.
+6. Legacy `model_configs` only when no auth profile exists.
+7. Clear error if no provider can be resolved.
+
+Auth method boundaries:
+
+- `oauth`: ChatGPT/Codex account tokens and any real configured OAuth flow.
+- `api_key`: OpenAI API, Anthropic API, OpenRouter, and custom endpoints.
+- `local`: local providers such as Ollama.
+- `cli`: Claude Code CLI/local auth when detected and tested.
+- `none`: local/no-secret providers.
+
+OpenAI API key is separate from ChatGPT/Codex OAuth. Anthropic API key is separate from Claude account/Claude Code auth. Google login identifies the AÏKO user only; it is not provider auth.
+
+`GET /api/auth-profiles/diagnostics` reports `can_ceo_think`, resolved CEO auth profile, auth method, provider, model, missing ChatGPT vars, Claude Code detection, Claude OAuth status, and API fallback availability without secrets.

@@ -77,11 +77,11 @@ Each AÏKO agent role can be assigned a specific AI brain:
 | QA | Quality checks | reasoning |
 | Local Fallback | Offline fallback | local |
 
-Configure roles at `/connect-ai` → "Assign AÏKO brains" section.
+First-run setup is at `/setup`; advanced role/profile management remains at `/connect-ai`.
 
 **How routing works**: Every active AI call goes through `callAI(role)` in `lib/ai/router.ts`, which resolves the provider from `ai_role_assignments` → `provider_connections`. The provider adapter (OpenAI-compatible or Anthropic SDK) is selected based on the `compatibility` column. See `AIKO_BRAIN_ROUTING_REPORT.md` for the full routing diagram and debug guide.
 
-**Legacy note**: Some background agents (`copywriting-agent.ts`, `research-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` — these are not reachable from the current UI and are safe to ignore. `model_configs` is checked by `GET /api/setup` as a final fallback for SetupGate only. All active features (CEO Chat, CEO Reviews, PM Chat, Reports, Lead extraction, Outreach drafting) use `callAI(role)`.
+**Legacy note**: Some background agents (`copywriting-agent.ts`, `research-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` — these are not reachable from the current UI and are safe to ignore. `model_configs` is checked by the setup-state/router path as a final legacy fallback only. All active features (CEO Chat, CEO Reviews, PM Chat, Reports, Lead extraction, Outreach drafting) use `callAI(role)`.
 
 **ChatGPT/Claude OAuth**: The catalog lists "ChatGPT direct" and "Claude direct" as OAuth-based entries. The OAuth flow is implemented — see `OPENAI_OAUTH_*` / `CLAUDE_OAUTH_*` env vars. In `AIKO_AUTH_MODE=optional`, the OAuth flow works without Google login. If env vars are missing, the cards show "not configured" and fall back to API key connections.
 
@@ -835,14 +835,67 @@ In Read Only mode, no external sends are possible at all. In Auto / Approval Req
 
 ### Run
 
+AÏKO is an npm project and uses `package-lock.json`. Public dependencies are resolved from the public npm registry; `.npmrc` pins `registry=https://registry.npmjs.org/` and `legacy-peer-deps=true` so npm can install the current Next 14 / React 18 tree consistently.
+
 ```bash
+rm -rf node_modules .next
 npm install
-npm run dev
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 ```
 
 Open `http://localhost:3001` (or whichever port is configured).
 
+If install fails with `403 Forbidden`, first check local registry/proxy configuration:
+
+```bash
+npm config get registry
+npm config list --location=project
+npm config list --location=user
+```
+
+The expected registry is `https://registry.npmjs.org/`. Do not commit registry credentials or auth tokens.
+
 On first launch with no provider configured, AÏKO shows the setup screen.
+
+
+### OpenClaw-style first-run setup
+
+AÏKO initializes like OpenClaw:
+
+```text
+Install app → first-run wizard → choose provider/auth profile → connect/test provider → assign CEO brain → enter app
+```
+
+1. Install dependencies with npm:
+
+   ```bash
+   npm install
+   ```
+
+2. Set `DATABASE_URL` and run the app:
+
+   ```bash
+   AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+   ```
+
+3. Open `http://localhost:3001/setup`. If no working CEO brain exists, AÏKO redirects dashboard pages to `/setup` automatically.
+4. Choose a provider path:
+   - **ChatGPT / Codex OAuth** when `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI` are configured.
+   - **OpenAI API key** as the reliable OpenAI fallback when ChatGPT OAuth is not configured.
+   - **Claude Code local / Claude OAuth** only when local CLI/auth or OAuth env vars are detected.
+   - **Anthropic API key** as the reliable Claude fallback.
+   - **Ollama local** as the easiest offline/local path when Ollama is running and a model is pulled.
+   - **OpenRouter** or custom compatible endpoints for advanced routing.
+5. Click **Test & Connect**. AÏKO creates an auth profile, runs the provider test, assigns it to CEO, then runs Brain Verification.
+6. When setup succeeds, use **Go to CEO Chat** or **Start First Campaign**.
+
+Google login is optional AÏKO identity in `AIKO_AUTH_MODE=optional`; it does not connect provider accounts. Provider auth is separate and stored as auth profiles. Without ChatGPT/Codex OAuth env vars, use OpenAI API key or Ollama instead. Without Claude Code/Claude OAuth, use Anthropic API key instead.
+
+You can inspect local readiness without printing secrets:
+
+```bash
+npm run setup:check
+```
 
 ### Local setup — environment variables
 
@@ -859,11 +912,11 @@ For a full walkthrough of the zero-login local flow, see **[AIKO_LOCAL_E2E_TEST.
 
 **`AIKO_AUTH_MODE=optional` (default — local / OpenClaw-style use)**
 - **All routes** are accessible without signing in — this is local single-user mode
-- Connect a brain at `/connect-ai`, then go straight to `/ceo` — no Google account required
+- Connect a brain at `/setup`, then go straight to `/ceo` — no Google account required
 - Provider connections and role assignments are stored with `user_id = null` (global)
 - ChatGPT/Codex OAuth and Claude OAuth flow works without Google login
 - Google login is available at `/login` but never mandatory
-- SetupGate redirects to `/connect-ai` if no CEO brain is configured
+- SetupGate redirects to `/setup` if no CEO brain is configured
 - A "Local mode" badge appears in the CEO top bar when not signed in
 
 **`AIKO_AUTH_MODE=required` (multi-user / hosted deployments)**
@@ -890,7 +943,7 @@ Create a Google OAuth app:
 
 #### AI provider (at least one required for CEO Chat)
 
-Connect an AI brain via `/connect-ai`. The fastest path is an OpenAI or Anthropic API key — no extra env vars needed beyond connecting the key in the UI.
+Connect an AI brain via `/setup`. The fastest path is Ollama local, OpenAI API key, or Anthropic API key — no Google login required in local mode.
 
 | Provider | What you need | Where to get it |
 |---|---|---|
@@ -935,7 +988,7 @@ Same fallback behaviour: if vars are missing, the Claude OAuth card shows "not c
 
 #### Verify your setup
 
-After starting the app, go to `/connect-ai` → scroll to **Auth & provider diagnostics** → click **Show** to see:
+After starting the app, go to `/setup` for first-run connection or `/connect-ai` for advanced auth-profile diagnostics to see:
 - Which env vars are configured (boolean only — no values shown)
 - Whether you are signed in, and your internal user ID
 - Whether ChatGPT / Claude OAuth is fully configured
@@ -1124,3 +1177,38 @@ All generated files from all sources are listed at `/files`. Each file shows its
 | `strategy_brief`      | Strategy brief      |
 | `decision_log`        | Decision log        |
 | `project_bundle`      | Project bundle      |
+
+## OpenClaw-style AI auth profiles
+
+AÏKO uses auth profiles for provider connections:
+
+`provider catalog → auth profile → auth method → model selection → role assignment → test call`
+
+Important distinctions:
+
+- ChatGPT/Codex OAuth (`chatgpt_oauth`) is separate from OpenAI API key (`openai_api`).
+- Anthropic API key (`anthropic_api`) is separate from Claude account/Claude Code local auth.
+- Google login is optional AÏKO user identity only; it does not connect ChatGPT, Claude, OpenAI API, or Anthropic API.
+- Ollama, OpenAI API key, Anthropic API key, OpenRouter, and custom endpoint profiles are the reliable working paths unless OAuth is explicitly configured.
+
+ChatGPT/Codex OAuth requires these env vars before the Connect button is enabled:
+
+- `OPENAI_OAUTH_CLIENT_ID`
+- `OPENAI_OAUTH_AUTH_URL`
+- `OPENAI_OAUTH_TOKEN_URL`
+- `OPENAI_OAUTH_REDIRECT_URI`
+- `OPENAI_OAUTH_CLIENT_SECRET` only if required by the OAuth provider
+
+The `/connect-ai` page shows the current CEO brain, saved auth profiles, add-profile cards, diagnostics, missing OAuth variables, Claude Code local detection, and API fallback availability without exposing secrets.
+
+## Web Operator Skills for website workflows
+
+AÏKO routes website work through **Web Operator Skills** instead of native platform APIs. Skills are guardrail profiles for browser workflows such as Canva, Facebook, LinkedIn, Instagram, Gmail, public website reading, and general web research.
+
+- Canva, Facebook, LinkedIn, Instagram, and Gmail workflows are **browser actions**, not native platform API integrations.
+- Manual login/takeover is expected. AÏKO does not store passwords, bypass CAPTCHA, bypass 2FA, or bypass platform protections.
+- Posting, messaging, emailing, sharing, publishing, joining groups, and downloading final assets require approval before the Web Operator proceeds.
+- Forbidden actions such as CAPTCHA solving, paywall bypass, mass messaging, private-profile scraping, and unapproved publishing are blocked and logged.
+- The skill catalog is visible at `/operator-skills`; operator action rows and execution trails show which skill governed each action.
+
+Default skills include `general_web_research`, `gmail_workflow`, `canva_design`, `facebook_research`, `linkedin_research`, `instagram_research`, and `website_reader`. If the CEO asks an operator to use an unknown website, AÏKO creates a System Improvement Proposal for a new skill instead of attempting unsafe unknown automation.

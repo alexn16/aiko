@@ -18,6 +18,14 @@ import {
   clearPendingAction,
 } from '@/lib/web-operator/operators'
 import type { WebOperator } from '@/lib/web-operator/operators'
+import { createSystemImprovementProposal } from '@/lib/system-improvements'
+import {
+  getRecommendedSkillForInstruction,
+  getSkillById,
+  inferUnknownWebsiteFromInstruction,
+  validateSkillAction,
+} from '@/lib/web-operator/skills'
+import type { SkillDecision, WebOperatorSkill } from '@/lib/web-operator/skills'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -33,6 +41,7 @@ export interface DelegationRequest {
   reason?: string
   taskId?: string
   leadId?: string          // links the operator action to a specific lead
+  skillId?: string
 }
 
 export type DelegationStatus = 'completed' | 'approval_required' | 'blocked' | 'failed'
@@ -47,6 +56,9 @@ export interface DelegationResult {
   error?: string
   message: string
   operatorName?: string
+  skillId?: string
+  skillName?: string
+  skillDecision?: SkillDecision
 }
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
@@ -107,6 +119,48 @@ function formatOutputContent(actionType: string, output: Record<string, unknown>
   return JSON.stringify(output, null, 2).slice(0, 2000)
 }
 
+
+async function resolveSkillForDelegation(req: DelegationRequest): Promise<{
+  skill: WebOperatorSkill | null
+  decision: SkillDecision | null
+  unknownWebsite: string | null
+}> {
+  const skill = req.skillId
+    ? await getSkillById(req.skillId)
+    : await getRecommendedSkillForInstruction(`${req.instruction} ${req.targetUrl ?? ''} ${req.query ?? ''}`)
+  const unknownWebsite = skill ? null : inferUnknownWebsiteFromInstruction(req.instruction)
+  const decision = skill ? await validateSkillAction(skill.skill_id, req.actionType, req.payload) : null
+  return { skill, decision, unknownWebsite }
+}
+
+async function createUnknownWebsiteProposal(req: DelegationRequest, website: string): Promise<void> {
+  await createSystemImprovementProposal({
+    title: `Add Web Operator skill for ${website}`,
+    summary: `Create a governed Web Operator browser workflow for ${website}.`,
+    reason: `A Web Operator instruction referenced ${website}, but AÏKO does not have a governed skill profile for that website.`,
+    requested_by_role: req.requestedByRole,
+    related_project_id: req.projectId ?? null,
+    missing_capabilities: [`web_operator_skill:${website}`],
+    proposed_changes: [{
+      capability_key: `web_operator_skill:${website}`,
+      capability_name: `Web Operator skill for ${website}`,
+      change_type: 'add',
+      description: `Define allowed, approval-required, and forbidden browser actions for ${website}.`,
+      estimated_complexity: 'moderate',
+    }],
+    risk_level: 'medium',
+    status: 'draft',
+    implementation_prompt: `Implement an AÏKO Web Operator skill for ${website}. Define website_pattern, safe allowed browser actions, approval-required actions for posting/messaging/sending/publishing, forbidden actions including CAPTCHA/login bypass and private-data scraping, and tests proving unknown automation is blocked until the skill exists.`,
+  }).catch(() => {})
+}
+
+function skillContext(skill: WebOperatorSkill | null, decision: SkillDecision | null): string {
+  if (!skill) return ''
+  return `
+Skill: ${skill.name} (${skill.skill_id})
+Skill policy: ${decision?.reason ?? skill.login_policy}`
+}
+
 function buildCompletionMessage(actionType: string, output: Record<string, unknown>, operatorName?: string): string {
   const opStr = operatorName ? `${operatorName} ` : 'Web Operator '
   if (actionType === 'search') {
@@ -128,6 +182,17 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
   if (!modeCheck.allowed) {
     await sendInternalBlockMessage(req, modeCheck.reason)
     return { status: 'blocked', message: modeCheck.reason, error: modeCheck.reason }
+  }
+
+  const skillResolution = await resolveSkillForDelegation(req)
+  const skill = skillResolution.skill
+  const skillDecision = skillResolution.decision
+
+  if (skillResolution.unknownWebsite) {
+    await createUnknownWebsiteProposal(req, skillResolution.unknownWebsite)
+    const message = `AÏKO does not have a Web Operator skill for ${skillResolution.unknownWebsite} yet, so it created a System Improvement Proposal instead of attempting unsafe unknown automation.`
+    await sendInternalBlockMessage(req, message)
+    return { status: 'blocked', message, error: message }
   }
 
   // 2. Resolve operator
@@ -163,7 +228,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       to_role: req.operatorName ? `Web Operator (${req.operatorName})` : 'Web Operator',
       message_type: 'instruction',
       subject: req.instruction,
-      content: `Action: ${req.actionType}\n${req.targetUrl ? `URL: ${req.targetUrl}\n` : ''}${req.query ? `Query: ${req.query}\n` : ''}Reason: ${req.reason ?? 'Delegated action'}`,
+      content: `Action: ${req.actionType}\n${req.targetUrl ? `URL: ${req.targetUrl}\n` : ''}${req.query ? `Query: ${req.query}\n` : ''}Reason: ${req.reason ?? 'Delegated action'}${skillContext(skill, skillDecision)}`,
     })
   } catch {
     // non-fatal
@@ -206,6 +271,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     operator_id: operator?.id ?? null,
     lead_id: req.leadId ?? null,
     profileKey,
+    skill_id: skill?.skill_id ?? null,
+    skill_name: skill?.name ?? null,
+    skill_decision: skillDecision ?? null,
   })
 
   // Mark operator idle after action
@@ -257,6 +325,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       sessionId: session.id,
       approvalId: result.approval?.id,
       operatorName: operator?.name,
+      skillId: skill?.skill_id,
+      skillName: skill?.name,
+      skillDecision: skillDecision ?? undefined,
       message: `${req.requestedByRole} requested a browser action that needs your approval before proceeding.`,
     }
   }
@@ -267,6 +338,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       actionId: result.action?.id,
       error: result.error,
       operatorName: operator?.name,
+      skillId: skill?.skill_id,
+      skillName: skill?.name,
+      skillDecision: skillDecision ?? undefined,
       message: result.error ?? 'Web Operator action failed.',
     }
   }
@@ -305,6 +379,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     output: actionOutput,
     taskOutputId,
     operatorName: operator?.name,
+    skillId: skill?.skill_id,
+    skillName: skill?.name,
+    skillDecision: skillDecision ?? undefined,
     message: buildCompletionMessage(req.actionType, actionOutput, operator?.name),
   }
 }
@@ -353,6 +430,7 @@ export async function delegateSearch(opts: {
     reason: 'Web search requested',
     taskId: opts.taskId,
     operatorName: opts.operatorName,
+    skillId: 'general_web_research',
   })
 }
 
@@ -372,6 +450,7 @@ export async function delegateReadWebsite(opts: {
     reason: 'Page read requested',
     taskId: opts.taskId,
     operatorName: opts.operatorName,
+    skillId: 'website_reader',
   })
 }
 
@@ -389,6 +468,7 @@ export async function delegateOpenUrl(opts: {
     targetUrl: opts.url,
     reason: 'URL navigation requested',
     operatorName: opts.operatorName,
+    skillId: 'website_reader',
   })
 }
 
@@ -408,6 +488,7 @@ export async function delegateEmailDraft(opts: {
     payload: { to: opts.to, subject: opts.subject, body: opts.body },
     reason: 'Email draft preparation',
     operatorName: opts.operatorName,
+    skillId: 'gmail_workflow',
   })
 }
 
@@ -429,6 +510,7 @@ export async function delegateExternalAction(opts: {
     payload: opts.payload,
     reason: 'Delegated external action',
     operatorName: opts.operatorName,
+    skillId: opts.payload?.skillId ? String(opts.payload.skillId) : undefined,
   })
 }
 
@@ -446,6 +528,7 @@ export async function delegateOpenGmail(opts: {
     actionType: 'open_gmail',
     instruction: 'Open Gmail in browser',
     reason: 'Email workflow',
+    skillId: 'gmail_workflow',
   })
 }
 
@@ -467,6 +550,7 @@ export async function delegateGmailDraft(opts: {
     payload: { to: opts.to, subject: opts.subject, body: opts.body },
     reason: 'Email draft preparation',
     leadId: opts.leadId,
+    skillId: 'gmail_workflow',
   })
 }
 
@@ -493,5 +577,6 @@ export async function delegateSendGmail(opts: {
     actionType: 'send_gmail_draft',
     instruction: 'Send Gmail draft',
     reason: 'Approved email send',
+    skillId: 'gmail_workflow',
   })
 }

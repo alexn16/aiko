@@ -12,7 +12,7 @@
  *   OPENAI_OAUTH_CLIENT_ID
  *   OPENAI_OAUTH_AUTH_URL
  *   OPENAI_OAUTH_TOKEN_URL
- *   OPENAI_OAUTH_REDIRECT_URI  (optional — defaults to {NEXTAUTH_URL}/api/providers/oauth/chatgpt/callback)
+ *   OPENAI_OAUTH_REDIRECT_URI
  */
 
 import { NextResponse } from 'next/server'
@@ -45,7 +45,7 @@ export async function GET() {
     return NextResponse.json(
       {
         configured: false,
-        error: 'ChatGPT/Codex OAuth is not configured on this AÏKO instance. Use OpenAI API key instead, or set OPENAI_OAUTH_CLIENT_ID, OPENAI_OAUTH_AUTH_URL, and OPENAI_OAUTH_TOKEN_URL.',
+        error: 'ChatGPT/Codex OAuth is not configured on this AÏKO instance. Use OpenAI API key instead, or set OPENAI_OAUTH_CLIENT_ID, OPENAI_OAUTH_AUTH_URL, OPENAI_OAUTH_TOKEN_URL, and OPENAI_OAUTH_REDIRECT_URI.',
       },
       { status: 422 }
     )

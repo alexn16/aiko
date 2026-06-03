@@ -46,7 +46,7 @@ export function getOAuthProviderConfig(provider: OAuthProviderId): OAuthProvider
       tokenUrl:     process.env.OPENAI_OAUTH_TOKEN_URL ?? null,
       clientId:     process.env.OPENAI_OAUTH_CLIENT_ID ?? null,
       clientSecret: process.env.OPENAI_OAUTH_CLIENT_SECRET ?? null,
-      redirectUri:  `${base}/api/providers/oauth/chatgpt/callback`,
+      redirectUri:  process.env.OPENAI_OAUTH_REDIRECT_URI ?? `${base}/api/auth-profiles/openai-codex/callback`,
       scope:        process.env.OPENAI_OAUTH_SCOPE ?? 'openid profile email',
       compatibility: 'openai_compatible',
       defaultModel: process.env.OPENAI_OAUTH_DEFAULT_MODEL ?? 'gpt-4o',
@@ -62,7 +62,7 @@ export function getOAuthProviderConfig(provider: OAuthProviderId): OAuthProvider
     tokenUrl:     process.env.CLAUDE_OAUTH_TOKEN_URL ?? null,
     clientId:     process.env.CLAUDE_OAUTH_CLIENT_ID ?? null,
     clientSecret: process.env.CLAUDE_OAUTH_CLIENT_SECRET ?? null,
-    redirectUri:  `${base}/api/providers/oauth/claude/callback`,
+    redirectUri:  process.env.CLAUDE_OAUTH_REDIRECT_URI ?? `${base}/api/providers/oauth/claude/callback`,
     scope:        process.env.CLAUDE_OAUTH_SCOPE ?? 'openid profile email',
     compatibility: 'anthropic_messages',
     defaultModel: process.env.CLAUDE_OAUTH_DEFAULT_MODEL ?? 'claude-opus-4-5',
@@ -70,6 +70,9 @@ export function getOAuthProviderConfig(provider: OAuthProviderId): OAuthProvider
 }
 
 export function isConfigured(cfg: OAuthProviderConfig): boolean {
+  if (cfg.id === 'chatgpt') {
+    return !!(cfg.authUrl && cfg.tokenUrl && cfg.clientId && process.env.OPENAI_OAUTH_REDIRECT_URI)
+  }
   return !!(cfg.authUrl && cfg.tokenUrl && cfg.clientId)
 }
 

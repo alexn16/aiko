@@ -645,3 +645,23 @@ CEO/PM Chat
 - `source_entity_type` values: `strategy_brief`, `decision_log`, `project_bundle` (added alongside existing `executive_report`, `leads_export`)
 - Safety: internal-only; no external sends; no outreach; no Web Operator; no secrets; no absolute paths exposed; `source_text` never included; writes only to `storage/generated-files/`
 - Tests 101–106 added (106 total, all passing)
+
+---
+
+## OpenClaw-style auth profile update
+
+AÏKO now uses OpenClaw-style auth profiles for AI connections. The `/connect-ai` page is organized into current CEO brain, saved auth profiles, add-profile cards, and diagnostics. Each saved profile shows provider, auth method, account/email when known, model, status, last test result, assigned roles, and actions to test, assign to CEO, or delete.
+
+Honest provider boundaries:
+
+- ChatGPT/Codex OAuth is separate from OpenAI API key and is disabled unless `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI` are present.
+- Anthropic API key remains the reliable Claude model path.
+- Claude Code/local is separate from Anthropic API key and is shown only when local auth/CLI is detected and testable.
+- Google login is optional AÏKO identity only.
+- Ollama and API-key profiles remain the reliable working path unless OAuth is configured.
+
+## Web Operator Skills
+
+AÏKO now has Web Operator Skills for governed website workflows. Skills define allowed browser actions, approval-required actions, forbidden actions, login policy, output types, and status for sites/workflows such as Canva, Facebook, LinkedIn, Instagram, Gmail, public website reading, and general web research.
+
+These are not native platform APIs. Canva/Facebook/LinkedIn/Gmail work continues to happen through Web Operator browser actions with manual login/takeover as needed. AÏKO does not store passwords, bypass CAPTCHA/2FA, or bypass platform protections. Posting, sending, messaging, sharing, publishing, joining, and downloading final assets require approval. Unknown website requests create a System Improvement Proposal for a new Web Operator skill instead of blind automation.

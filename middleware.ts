@@ -3,7 +3,7 @@
  *
  * AIKO_AUTH_MODE=optional (default — local / OpenClaw-style use):
  *   All routes are accessible without a session.
- *   SetupGate handles the "no brain → /connect-ai" redirect client-side.
+ *   SetupGate handles the "no brain → /setup" redirect client-side.
  *   API routes scope to user_id = null (global providers) when no session.
  *   Google login is available at /login but never required.
  *
@@ -13,7 +13,11 @@
  *
  * Always public (no auth required in either mode):
  *   /login         — sign-in page
+ *   /setup         — first-run setup wizard
+ *   /connect-ai    — advanced provider settings
  *   /api/auth/**   — NextAuth endpoints
+ *   /api/setup/**  — setup state and completion
+ *   /api/providers/** and /api/auth-profiles/** — provider setup/diagnostics
  */
 
 import { withAuth } from 'next-auth/middleware'
@@ -22,7 +26,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 function isPublicPath(pathname: string): boolean {
   // Always public regardless of mode
   if (pathname.startsWith('/login')) return true
+  if (pathname.startsWith('/setup')) return true
+  if (pathname.startsWith('/connect-ai')) return true
   if (pathname.startsWith('/api/auth/')) return true
+  if (pathname.startsWith('/api/setup')) return true
+  if (pathname.startsWith('/api/providers')) return true
+  if (pathname.startsWith('/api/auth-profiles')) return true
 
   // In optional mode, every route is public — SetupGate guards locally
   const authMode = process.env.AIKO_AUTH_MODE ?? 'optional'

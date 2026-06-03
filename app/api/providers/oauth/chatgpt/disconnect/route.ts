@@ -12,15 +12,13 @@ import { db } from '@/lib/db/client'
 
 export async function POST() {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
-  }
-  const userId = session.user.id
+  const userId = session?.user?.id ?? null
 
-  // Find the ChatGPT provider connection for this user
   const res = await db.query(
     `SELECT id FROM provider_connections
-     WHERE user_id = $1 AND provider_catalog_id = 'chatgpt_oauth'`,
+     WHERE provider_catalog_id = 'chatgpt_oauth' AND (user_id = $1 OR user_id IS NULL)
+     ORDER BY user_id NULLS LAST
+     LIMIT 1`,
     [userId]
   )
   const id = res.rows[0]?.id
@@ -29,7 +27,7 @@ export async function POST() {
     // Clear any role assignments pointing to this provider
     await db.query(
       `UPDATE ai_role_assignments SET provider_id = NULL
-       WHERE provider_id = $1 AND user_id = $2`,
+       WHERE provider_id = $1 AND (user_id = $2 OR user_id IS NULL)`,
       [id, userId]
     )
     await db.query(`DELETE FROM provider_connections WHERE id = $1`, [id])

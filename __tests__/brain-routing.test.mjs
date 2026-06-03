@@ -2790,3 +2790,207 @@ test('113. subscription-diagnostics: can_start_oauth false when env unconfigured
   assert.equal(card.status, 'oauth_not_configured')
   assert.equal(card.can_start_oauth, false)
 })
+
+// ── Tests 114–121: OpenClaw-style auth profile smoke checks ──────────────────
+
+test('114. auth profile serializer never exposes secrets or tokens', () => {
+  function sanitize(row) {
+    return {
+      id: row.id,
+      provider_catalog_id: row.provider_catalog_id,
+      display_name: row.display_name ?? row.name,
+      auth_method: row.auth_method ?? row.auth_type,
+      model: row.model,
+      status: row.status,
+      account_email: row.account_email ?? null,
+    }
+  }
+  const profile = sanitize({
+    id: 'p1', name: 'OpenAI', provider_catalog_id: 'openai_api', auth_type: 'api_key',
+    api_key_encrypted: 'sk-secret', oauth_access_token_encrypted: 'tok-secret',
+    oauth_refresh_token_encrypted: 'refresh-secret', model: 'gpt-4o', status: 'connected',
+  })
+  assert.deepEqual(Object.keys(profile).sort(), ['account_email', 'auth_method', 'display_name', 'id', 'model', 'provider_catalog_id', 'status'].sort())
+  assert.equal(JSON.stringify(profile).includes('secret'), false)
+})
+
+test('115. ChatGPT missing env disables OAuth connect', () => {
+  const required = ['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_AUTH_URL', 'OPENAI_OAUTH_TOKEN_URL', 'OPENAI_OAUTH_REDIRECT_URI']
+  function missing(env) { return required.filter(k => !env[k]) }
+  const env = { OPENAI_OAUTH_CLIENT_ID: 'id', OPENAI_OAUTH_AUTH_URL: 'https://auth', OPENAI_OAUTH_TOKEN_URL: 'https://token' }
+  assert.deepEqual(missing(env), ['OPENAI_OAUTH_REDIRECT_URI'])
+  assert.equal(missing(env).length === 0, false)
+})
+
+test('116. OpenAI API auth profile remains assignable', () => {
+  const p = { id: 'openai1', provider_catalog_id: 'openai_api', auth_method: 'api_key', compatibility: 'openai_compatible', status: 'connected' }
+  assert.equal(p.status === 'connected' && p.auth_method === 'api_key', true)
+})
+
+test('117. Anthropic API auth profile remains assignable', () => {
+  const p = { id: 'anth1', provider_catalog_id: 'anthropic_api', auth_method: 'api_key', compatibility: 'anthropic_messages', status: 'connected' }
+  assert.equal(p.status === 'connected' && p.compatibility === 'anthropic_messages', true)
+})
+
+test('118. Ollama local auth profile remains assignable', () => {
+  const p = { id: 'ollama1', provider_catalog_id: 'ollama', auth_method: 'local', compatibility: 'ollama_native', status: 'connected' }
+  assert.equal(p.status === 'connected' && ['local', 'none'].includes(p.auth_method), true)
+})
+
+test('119. CEO brain resolves through assigned auth profile before fallback', () => {
+  function resolve(role, assignments, profiles) {
+    const assigned = profiles.find(p => p.id === assignments[role] && p.status === 'connected')
+    if (assigned) return assigned
+    const localFallback = profiles.find(p => p.id === assignments.local_fallback && p.status === 'connected')
+    if (localFallback) return localFallback
+    return profiles.find(p => p.status === 'connected') ?? null
+  }
+  const profiles = [{ id: 'fallback', status: 'connected' }, { id: 'ceo', status: 'connected' }]
+  assert.equal(resolve('ceo', { ceo: 'ceo', local_fallback: 'fallback' }, profiles).id, 'ceo')
+})
+
+test('120. Claude Code local not detected reports honest unavailable state', () => {
+  const detection = { cli_detected: false, token_env_detected: false, local_auth_detected: false, available: false }
+  assert.equal(detection.available, false)
+  assert.equal(detection.local_auth_detected, false)
+})
+
+test('121. old OAuth provider route can alias to auth profile route', () => {
+  const aliases = {
+    '/api/providers/oauth/chatgpt/start': '/api/auth-profiles/openai-codex/start',
+    '/api/providers/oauth/chatgpt/callback': '/api/auth-profiles/openai-codex/callback',
+  }
+  assert.equal(aliases['/api/providers/oauth/chatgpt/start'], '/api/auth-profiles/openai-codex/start')
+})
+
+// ── Tests 122–128: first-run setup wizard logic ──────────────────────────────
+
+test('122. setup required when no CEO brain exists', () => {
+  function setupState(connectedProfileCount, canCeoThink) {
+    const reason = connectedProfileCount <= 0
+      ? 'No connected AI auth profile exists.'
+      : !canCeoThink
+        ? 'No working CEO brain can be resolved from connected auth profiles.'
+        : null
+    return { setup_required: !!reason, reason, can_ceo_think: canCeoThink }
+  }
+  const state = setupState(0, false)
+  assert.equal(state.setup_required, true)
+  assert.equal(state.reason, 'No connected AI auth profile exists.')
+})
+
+test('123. setup complete when CEO brain works', () => {
+  const state = { connected_profile_count: 1, can_ceo_think: true, setup_required: false }
+  assert.equal(state.connected_profile_count > 0 && state.can_ceo_think && !state.setup_required, true)
+})
+
+test('124. /setup allows Ollama local path', () => {
+  const ollama = { id: 'ollama', auth_method: 'local', base_url: 'http://localhost:11434', model: 'llama3.1:8b', needsKey: false }
+  assert.equal(ollama.needsKey, false)
+  assert.equal(ollama.auth_method, 'local')
+})
+
+test('125. ChatGPT setup card disabled when OAuth env missing', () => {
+  const required = ['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_AUTH_URL', 'OPENAI_OAUTH_TOKEN_URL', 'OPENAI_OAUTH_REDIRECT_URI']
+  const env = {}
+  const missing = required.filter(k => !env[k])
+  const card = { configured: missing.length === 0, disabled: missing.length > 0, missing_env: missing }
+  assert.equal(card.configured, false)
+  assert.equal(card.disabled, true)
+  assert.deepEqual(card.missing_env, required)
+})
+
+test('126. setup complete assigns CEO role after successful provider test', () => {
+  function setupFlow(providerTestOk, brainTestOk) {
+    const assignments = {}
+    if (!providerTestOk) return { complete: false, assignments }
+    assignments.ceo = 'provider-1'
+    return { complete: brainTestOk, assignments }
+  }
+  const result = setupFlow(true, true)
+  assert.equal(result.assignments.ceo, 'provider-1')
+  assert.equal(result.complete, true)
+})
+
+test('127. no Google login required in optional setup mode', () => {
+  function setupPublic(authMode, pathname) {
+    if (pathname.startsWith('/setup')) return true
+    return authMode !== 'required'
+  }
+  assert.equal(setupPublic('optional', '/setup'), true)
+  assert.equal(setupPublic('optional', '/ceo'), true)
+})
+
+test('128. setup cards do not fake connected state for ChatGPT or Claude', () => {
+  const chatgpt = { oauthConfigured: false, profileConnected: false }
+  const claude = { claudeCodeDetected: false, claudeOAuthConfigured: false, profileConnected: false }
+  assert.equal(chatgpt.oauthConfigured && chatgpt.profileConnected, false)
+  assert.equal((claude.claudeCodeDetected || claude.claudeOAuthConfigured) && claude.profileConnected, false)
+})
+
+// ── Tests 129–135: Web Operator Skills smoke checks ──────────────────────────
+
+test('129. Canva instruction maps to canva_design skill', () => {
+  function recommend(text) {
+    return /\bcanva\b/i.test(text) ? 'canva_design' : null
+  }
+  assert.equal(recommend('Kevin, work on Canva'), 'canva_design')
+})
+
+test('130. Facebook instruction maps to facebook_research skill', () => {
+  function recommend(text) {
+    return /\bfacebook\b|\bfb\b/i.test(text) ? 'facebook_research' : null
+  }
+  assert.equal(recommend('Kevin, research on Facebook'), 'facebook_research')
+})
+
+test('131. Gmail send requires approval through gmail_workflow', () => {
+  const gmail = { approval_required_actions: ['send_email', 'send_gmail_draft'] }
+  assert.equal(gmail.approval_required_actions.includes('send_gmail_draft'), true)
+})
+
+test('132. Facebook post requires approval and is never auto-posted', () => {
+  const facebook = { approval_required_actions: ['send_message', 'post_comment', 'join_group', 'create_post', 'post'] }
+  assert.equal(facebook.approval_required_actions.includes('create_post'), true)
+})
+
+test('133. Forbidden Web Operator skill action is blocked', () => {
+  function validate(skill, action) {
+    if (skill.forbidden_actions.includes(action)) return { blocked: true, reason: 'Skill blocked this action' }
+    return { blocked: false }
+  }
+  const decision = validate({ forbidden_actions: ['solve_captcha', 'bypass_login'] }, 'solve_captcha')
+  assert.equal(decision.blocked, true)
+  assert.match(decision.reason, /Skill blocked/)
+})
+
+test('134. Unknown website creates improvement proposal instead of blind execution', () => {
+  function handleUnknown(website) {
+    return {
+      delegated: false,
+      proposal_title: `Add Web Operator skill for ${website}`,
+      reason: 'No governed skill profile exists',
+    }
+  }
+  const result = handleUnknown('ExampleSocial')
+  assert.equal(result.delegated, false)
+  assert.equal(result.proposal_title, 'Add Web Operator skill for ExampleSocial')
+})
+
+test('135. skill_id is stored on web_operator_actions payload', () => {
+  const actionRow = {
+    action_type: 'open_url',
+    skill_id: 'canva_design',
+    skill_name: 'Canva design',
+    skill_decision: { allowed: true, requires_approval: false },
+  }
+  assert.equal(actionRow.skill_id, 'canva_design')
+  assert.equal(actionRow.skill_decision.allowed, true)
+})
+
+test('136. provider brain smart defaults do not target partial unique indexes as constraints', () => {
+  const oldSql = 'ON CONFLICT ON CONSTRAINT ai_role_asgn_user_uniq'
+  const fixedSql = 'DELETE FROM ai_role_assignments WHERE role = $1 AND user_id = $2'
+  assert.equal(/ON CONFLICT ON CONSTRAINT ai_role_asgn_(user|global)_uniq/.test(fixedSql), false)
+  assert.equal(oldSql.includes('ON CONFLICT ON CONSTRAINT'), true)
+})

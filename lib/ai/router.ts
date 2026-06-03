@@ -19,6 +19,7 @@ import { db } from '@/lib/db/client'
 import type { ChatMessage } from './providers/openai-compat'
 import { callOpenAICompat, streamOpenAICompat, testOpenAICompat } from './providers/openai-compat'
 import { callAnthropic, streamAnthropic, testAnthropic } from './providers/anthropic'
+import { callClaudeCodeCli, testClaudeCodeCli } from './providers/claude-code-cli'
 
 export type AgentRole = 'ceo' | 'research' | 'copywriting' | 'review' | 'qa' | 'local_fallback' | 'project_manager'
 
@@ -30,6 +31,11 @@ export interface ProviderRow {
   base_url: string | null
   model: string | null
   api_key_encrypted: string | null
+  oauth_access_token_encrypted?: string | null
+  oauth_refresh_token_encrypted?: string | null
+  local_token_reference?: string | null
+  display_name?: string | null
+  auth_method?: string | null
   supports_streaming: boolean
   compatibility?: string | null
   auth_type?: string | null
@@ -69,7 +75,7 @@ function isTokenExpired(p: ProviderRow): boolean {
  * On failure: sets status='needs_reauth' and throws NeedsReauthError.
  */
 async function refreshOAuthToken(p: ProviderRow): Promise<string> {
-  const refreshToken = p.oauth_refresh_token
+  const refreshToken = p.oauth_refresh_token_encrypted ?? p.oauth_refresh_token
   if (!refreshToken) {
     await db.query(
       `UPDATE provider_connections SET status='needs_reauth', last_error=$1, updated_at=NOW() WHERE id=$2`,
@@ -122,8 +128,9 @@ async function refreshOAuthToken(p: ProviderRow): Promise<string> {
 
     await db.query(
       `UPDATE provider_connections
-       SET oauth_access_token=$1, oauth_refresh_token=$2, token_expires_at=$3,
-           status='connected', last_error=NULL, updated_at=NOW()
+       SET oauth_access_token=$1, oauth_refresh_token=$2,
+           oauth_access_token_encrypted=$1, oauth_refresh_token_encrypted=$2,
+           token_expires_at=$3, status='connected', last_error=NULL, updated_at=NOW()
        WHERE id=$4`,
       [newAccessToken, newRefreshToken, expiresAt, p.id]
     )
@@ -166,12 +173,14 @@ function getOAuthClientSecret(p: ProviderRow): string {
  * For api_key providers, returns the stored encrypted key.
  */
 async function resolveProviderKey(p: ProviderRow): Promise<string> {
-  if (p.auth_type !== 'oauth') {
+  const method = p.auth_method ?? p.auth_type
+  if (method !== 'oauth') {
     return p.api_key_encrypted ?? ''
   }
 
   // OAuth flow
-  if (!p.oauth_access_token) {
+  const accessToken = p.oauth_access_token_encrypted ?? p.oauth_access_token
+  if (!accessToken) {
     throw new NeedsReauthError(p.id, `Your ${p.name} connection needs re-authentication. Please reconnect.`)
   }
 
@@ -179,7 +188,7 @@ async function resolveProviderKey(p: ProviderRow): Promise<string> {
     return refreshOAuthToken(p)
   }
 
-  return p.oauth_access_token
+  return accessToken
 }
 
 // ── Provider lookup ────────────────────────────────────────────────────────────
@@ -189,9 +198,11 @@ async function resolveProviderKey(p: ProviderRow): Promise<string> {
  *
  * Lookup order when userId provided:
  *   1. User-scoped role assignment → connected provider
- *   2. Any connected provider owned by this user
- *   3. Global (user_id IS NULL) role assignment → connected provider
- *   4. Any global connected provider
+ *   2. User/global local_fallback role assignment → connected provider
+ *   3. Any connected provider owned by this user
+ *   4. Global (user_id IS NULL) role assignment → connected provider
+ *   5. Any global connected provider
+ *   6. Legacy model_configs only when no auth profile exists
  *
  * Lookup order when userId is null/undefined (background agents):
  *   1. Global role assignment → connected provider
@@ -212,7 +223,20 @@ export async function getProviderForRole(
     )
     if (assigned.rows[0]) return assigned.rows[0]
 
-    // 2. Any connected provider for this user
+    // 2. Local fallback role assignment, first user-scoped then global
+    const localFallback = await db.query(
+      `SELECT p.* FROM provider_connections p
+       JOIN ai_role_assignments r ON r.provider_id = p.id
+       WHERE r.role = 'local_fallback'
+         AND (r.user_id = $1 OR r.user_id IS NULL)
+         AND p.status IN ('connected', 'needs_reauth')
+       ORDER BY r.user_id NULLS LAST
+       LIMIT 1`,
+      [userId]
+    )
+    if (localFallback.rows[0]) return localFallback.rows[0]
+
+    // 3. Any connected provider for this user
     const fallback = await db.query(
       `SELECT * FROM provider_connections
        WHERE status IN ('connected', 'needs_reauth') AND user_id = $1
@@ -232,13 +256,47 @@ export async function getProviderForRole(
   )
   if (globalAssigned.rows[0]) return globalAssigned.rows[0]
 
-  // 4. Any global connected provider
+  if (role !== 'local_fallback') {
+    const globalLocalFallback = await db.query(
+      `SELECT p.* FROM provider_connections p
+       JOIN ai_role_assignments r ON r.provider_id = p.id
+       WHERE r.role = 'local_fallback' AND r.user_id IS NULL
+         AND p.status IN ('connected', 'needs_reauth')
+       LIMIT 1`
+    )
+    if (globalLocalFallback.rows[0]) return globalLocalFallback.rows[0]
+  }
+
+  // 4. Any global connected auth profile
   const globalFallback = await db.query(
     `SELECT * FROM provider_connections
      WHERE status IN ('connected', 'needs_reauth') AND user_id IS NULL
      ORDER BY created_at ASC LIMIT 1`
   )
-  return globalFallback.rows[0] ?? null
+  if (globalFallback.rows[0]) return globalFallback.rows[0]
+
+  return getLegacyModelConfigProvider(role)
+}
+
+async function getLegacyModelConfigProvider(role: AgentRole): Promise<ProviderRow | null> {
+  try {
+    const res = await db.query(
+      `SELECT id::text, 'Legacy model config' AS name, 'legacy_model_config' AS type, 'connected' AS status,
+              base_url, model, api_key AS api_key_encrypted, true AS supports_streaming,
+              false AS supports_tools, true AS supports_chat,
+              'openai_compatible' AS compatibility,
+              NULL AS provider_catalog_id, 'api_key' AS auth_type, 'api_key' AS auth_method,
+              NULL AS account_email, NULL AS token_expires_at, NULL AS user_id
+       FROM model_configs
+       WHERE agent_slot = $1 OR agent_slot = 'default'
+       ORDER BY CASE WHEN agent_slot = $1 THEN 0 ELSE 1 END
+       LIMIT 1`,
+      [role]
+    )
+    return res.rows[0] ?? null
+  } catch {
+    return null
+  }
 }
 
 /** Returns any connected provider for a user (or global if no userId). */
@@ -266,7 +324,7 @@ export async function getAllProviders(userId?: string | null): Promise<ProviderR
       `SELECT id, name, type, status, base_url, model,
               '' as api_key_encrypted,
               supports_chat, supports_tools, supports_streaming,
-              compatibility, provider_catalog_id, auth_type,
+              compatibility, provider_catalog_id, auth_type, auth_method, display_name,
               account_email, token_expires_at,
               last_tested_at, last_error, created_at, updated_at,
               user_id
@@ -282,7 +340,7 @@ export async function getAllProviders(userId?: string | null): Promise<ProviderR
     `SELECT id, name, type, status, base_url, model,
             '' as api_key_encrypted,
             supports_chat, supports_tools, supports_streaming,
-            compatibility, provider_catalog_id, auth_type,
+            compatibility, provider_catalog_id, auth_type, auth_method, display_name,
             account_email, token_expires_at,
             last_tested_at, last_error, created_at, updated_at,
             user_id
@@ -352,7 +410,7 @@ export async function getAllRoleProviders(userId?: string | null): Promise<RoleP
     const res = await db.query(`
       SELECT r.role, r.provider_id,
              p.name AS provider_name, p.type AS provider_type,
-             p.provider_catalog_id, p.compatibility, p.auth_type,
+             p.provider_catalog_id, p.compatibility, p.auth_type, p.auth_method, p.display_name,
              p.model, p.status, p.last_error, p.last_tested_at, p.account_email
       FROM ai_role_assignments r
       LEFT JOIN provider_connections p ON p.id = r.provider_id
@@ -364,7 +422,7 @@ export async function getAllRoleProviders(userId?: string | null): Promise<RoleP
   const res = await db.query(`
     SELECT r.role, r.provider_id,
            p.name AS provider_name, p.type AS provider_type,
-           p.provider_catalog_id, p.compatibility, p.auth_type,
+           p.provider_catalog_id, p.compatibility, p.auth_type, p.auth_method, p.display_name,
            p.model, p.status, p.last_error, p.last_tested_at, p.account_email
     FROM ai_role_assignments r
     LEFT JOIN provider_connections p ON p.id = r.provider_id
@@ -436,6 +494,7 @@ function getCompatibility(p: ProviderRow): string {
   if (p.compatibility) return p.compatibility
   if (['openai_api', 'ollama', 'openai_compatible', 'custom', 'chatgpt_direct'].includes(p.type)) return 'openai_compatible'
   if (['anthropic_api', 'anthropic_compatible', 'claude_direct'].includes(p.type)) return 'anthropic_messages'
+  if (['claude-code-local'].includes(p.type)) return 'claude_code_cli'
   return p.type
 }
 
@@ -448,6 +507,10 @@ async function dispatchCall(
   const model  = p.model ?? ''
   const baseURL = p.base_url ?? ''
   const compat = getCompatibility(p)
+
+  if (compat === 'claude_code_cli') {
+    return callClaudeCodeCli(messages)
+  }
 
   if (compat === 'anthropic_messages') {
     return callAnthropic(key, model, messages, {
@@ -477,6 +540,12 @@ async function dispatchStream(
   const model   = p.model ?? ''
   const baseURL = p.base_url ?? ''
   const compat  = getCompatibility(p)
+
+  if (compat === 'claude_code_cli') {
+    const text = await callClaudeCodeCli(messages)
+    opts.onChunk(text)
+    return
+  }
 
   if (compat === 'anthropic_messages') {
     return streamAnthropic(key, model, messages, {
@@ -509,8 +578,8 @@ export async function testProvider(id: string): Promise<{ ok: boolean; error?: s
   if (!p) return { ok: false, error: 'Provider not found' }
 
   // OAuth providers — can't test without a real user auth flow. Mark connected if token present.
-  if (p.auth_type === 'oauth') {
-    if (p.oauth_access_token) {
+  if ((p.auth_method ?? p.auth_type) === 'oauth') {
+    if (p.oauth_access_token_encrypted ?? p.oauth_access_token) {
       await db.query(
         `UPDATE provider_connections
          SET status='connected', last_tested_at=NOW(), last_error=NULL, updated_at=NOW()
@@ -528,7 +597,9 @@ export async function testProvider(id: string): Promise<{ ok: boolean; error?: s
     const baseURL = p.base_url ?? ''
     const compat = getCompatibility(p)
 
-    if (compat === 'anthropic_messages') {
+    if (compat === 'claude_code_cli') {
+      await testClaudeCodeCli()
+    } else if (compat === 'anthropic_messages') {
       await testAnthropic(key, model, baseURL || undefined)
     } else if (compat === 'openai_compatible' || compat === 'ollama_native') {
       await testOpenAICompat(baseURL, key, model)

@@ -32,6 +32,9 @@ interface Action {
   is_sensitive: boolean
   requires_approval: boolean
   approval_item_id: string | null
+  skill_id: string | null
+  skill_name: string | null
+  skill_decision: Record<string, unknown> | null
   created_at: string
 }
 
@@ -458,7 +461,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
               <thead>
                 <tr>
-                  {['Time', 'Type', 'Status', 'URL / Title', 'Screenshot', 'Failure', 'Actions'].map(h => (
+                  {['Time', 'Type', 'Skill', 'Status', 'URL / Title', 'Screenshot', 'Failure', 'Actions'].map(h => (
                     <th key={h} style={{
                       textAlign: 'left', padding: '4px 8px',
                       color: '#94a3b8', fontWeight: 600, fontSize: 9,
@@ -478,6 +481,14 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                     </td>
                     <td style={{ padding: '6px 8px', fontFamily: 'DM Mono, monospace', color: '#6366f1' }}>
                       {a.action_type}
+                    </td>
+                    <td style={{ padding: '6px 8px', color: '#475569' }}>
+                      {a.skill_name ? (
+                        <div>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: '#0f172a' }}>{a.skill_name}</span>
+                          <div style={{ fontSize: 8, color: '#94a3b8', fontFamily: 'DM Mono, monospace' }}>{a.skill_id}</div>
+                        </div>
+                      ) : '—'}
                     </td>
                     <td style={{ padding: '6px 8px' }}>
                       <span style={{
@@ -509,7 +520,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                       )}
                     </td>
                     <td style={{ padding: '6px 8px', color: '#ef4444', fontSize: 9 }}>
-                      {a.failure_reason ?? ''}
+                      {a.failure_reason === 'skill_blocked' ? 'Skill blocked this action' : (a.failure_reason ?? '')}
                     </td>
                     <td style={{ padding: '6px 8px', minWidth: 120 }}>
                       {/* Approved-but-not-executed — show Resume button */}
