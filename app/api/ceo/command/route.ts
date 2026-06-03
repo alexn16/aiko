@@ -367,6 +367,20 @@ export async function POST(request: NextRequest) {
         } catch { /* non-fatal */ }
       }
 
+      // ── Enrich delegation message with browser session and takeover guidance ──
+      if (delegationResult && operatorName) {
+        if (delegationResult.status === 'blocked' && delegationResult.message?.includes('needs your help')) {
+          // CAPTCHA/login detected — make sure CEO also relays this clearly
+          // (delegation already set the right message; we just preserve it)
+        } else if (delegationResult.status === 'completed' || delegationResult.status === 'approval_required') {
+          // Append a note about the browser session and manual takeover policy
+          const takeover = ` ${operatorName} will open the site in their browser session. If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+          if (delegationResult.message && !delegationResult.message.includes('take over')) {
+            delegationResult = { ...delegationResult, message: delegationResult.message + takeover }
+          }
+        }
+      }
+
       // If a recommended operator exists, append a mention to the CEO response
       let responseText = String(result.response ?? '')
       if (

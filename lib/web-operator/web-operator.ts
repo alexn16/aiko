@@ -345,6 +345,7 @@ export async function runWebOperatorAction(opts: {
   action: WebOperatorAction
   error?: string
   waiting_approval?: boolean
+  waiting_user?: boolean
   approval?: ApprovalItem
 }> {
   const skillResolution = await resolveSkillForAction(opts)
@@ -502,6 +503,58 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
     return { success: true, action: updated.rows[0] ? rowToAction(updated.rows[0]) : action }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
+
+    // ── Manual takeover required (CAPTCHA / login / security checkpoint) ──
+    // Do NOT mark as failed — mark as waiting_user so user can take over.
+    const isManualTakeover =
+      err instanceof Error && err.name === 'ManualTakeoverRequired'
+    if (isManualTakeover) {
+      const takeoverErr = err as { pageState?: { waiting_reason?: string; url?: string; title?: string; screenshot_url?: string | null } }
+      const ps = takeoverErr.pageState ?? {}
+      await updateWebOperatorAction(action.id, {
+        status: 'waiting_user',
+        output: {
+          waiting_for_user: true,
+          waiting_reason: ps.waiting_reason ?? 'manual_takeover_required',
+          url: ps.url ?? null,
+        },
+        failure_reason: ps.waiting_reason ?? 'manual_takeover_required',
+        page_title: ps.title ?? null,
+        completed_at: new Date().toISOString(),
+      })
+
+      // Update operator status to waiting_user
+      if (opts.operator_id) {
+        await db.query(
+          `UPDATE web_operators SET
+            status='waiting_user',
+            requires_user_input=true,
+            waiting_reason=$1,
+            current_url=$2,
+            updated_at=NOW()
+           WHERE id=$3`,
+          [ps.waiting_reason ?? 'manual_takeover_required', ps.url ?? null, opts.operator_id]
+        ).catch(() => {})
+        // Store the pending action so Resume can retry it
+        await db.query(
+          `UPDATE web_operators SET
+            pending_action_type=$1,
+            pending_action_payload=$2,
+            pending_action_created_at=NOW()
+           WHERE id=$3`,
+          [opts.action_type, JSON.stringify(opts.input ?? {}), opts.operator_id]
+        ).catch(() => {})
+      }
+
+      const updated = await db.query(`SELECT * FROM web_operator_actions WHERE id=$1`, [action.id])
+      return {
+        success: false,
+        action: updated.rows[0] ? rowToAction(updated.rows[0]) : action,
+        error: errMsg,
+        waiting_user: true,
+      }
+    }
+
     const failure_reason = (err as { failure_reason?: string }).failure_reason ?? 'unknown_error'
     await updateWebOperatorAction(action.id, {
       status: 'failed',

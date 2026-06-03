@@ -2,6 +2,7 @@
 // Handles actual browser actions via the existing lib/browser/controller utilities.
 
 import type { Page, BrowserContext, BrowserContextOptions } from 'playwright'
+import { detectPageState, ManualTakeoverRequired } from '@/lib/web-operator/page-state-detector'
 type GmailFillToResult = { success: boolean; output: Record<string, unknown> }
 import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
@@ -502,9 +503,16 @@ export async function executeWebAction(
 
         const { result: coreOutput, retryCount } = await withRetry(async () => {
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+
+          // Detect CAPTCHA/login/security screens — stop and hand off to user
+          const detectedState = await detectPageState(page)
+          if (detectedState.requires_manual_takeover) {
+            throw new ManualTakeoverRequired(detectedState)
+          }
+
           const title = await page.title()
           const bodyText = await page.evaluate(() => document.body?.innerText?.slice(0, 5000) ?? '')
-          return { title, body_text: bodyText, url: page.url() }
+          return { title, body_text: bodyText, url: page.url(), text_preview: bodyText }
         }, opts.action_type)
 
         const pageState = await capturePageState(page)
@@ -525,6 +533,12 @@ export async function executeWebAction(
           const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
           await page.goto(ddgUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
 
+          // Check for CAPTCHA/block on DDG
+          const ddgState = await detectPageState(page)
+          if (ddgState.requires_manual_takeover) {
+            throw new ManualTakeoverRequired(ddgState)
+          }
+
           // DuckDuckGo HTML endpoint result selectors
           const ddgResults = await page.evaluate(() => {
             const items = Array.from(document.querySelectorAll('.result__title a, .result__a'))
@@ -543,6 +557,13 @@ export async function executeWebAction(
           // Fallback: Google
           const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`
           await page.goto(googleUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+
+          // Check for Google CAPTCHA/unusual traffic block
+          const googleState = await detectPageState(page)
+          if (googleState.requires_manual_takeover) {
+            throw new ManualTakeoverRequired(googleState)
+          }
+
           const googleResults = await page.evaluate(() => {
             // Try multiple selector patterns Google uses
             const links = Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]

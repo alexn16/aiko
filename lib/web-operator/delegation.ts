@@ -340,6 +340,21 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
   }
 
   if (!result.success) {
+    // ── Manual takeover required (CAPTCHA / login / security checkpoint) ──
+    if ((result as { waiting_user?: boolean }).waiting_user) {
+      const name = operator?.name ?? 'The operator'
+      return {
+        status: 'blocked',
+        actionId: result.action?.id,
+        operatorName: operator?.name,
+        skillId: skill?.skill_id,
+        skillName: skill?.name,
+        skillDecision: skillDecision ?? undefined,
+        message: `${name} needs your help. Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`,
+        error: result.error,
+      }
+    }
+
     // Produce a clean user-facing message for known error patterns
     const rawError = result.error ?? 'Web Operator action failed.'
     let userMessage = rawError

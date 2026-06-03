@@ -469,28 +469,52 @@ export async function markLoginCompleted(
   if (!op) return { success: false, was_logged_in: false, message: 'Operator not found' }
 
   try {
-    const { executeDetectGmailLogin } = await import('./playwright-executor')
-    const result = await executeDetectGmailLogin({ profileKey: op.browser_profile_key })
-    const isLoggedIn = result.output?.is_logged_in === true
+    // Generic check: look at the current browser page state.
+    // If it's no longer a login/CAPTCHA/security page, mark as ready to resume.
+    const { getOperatorPage } = await import('./playwright-executor')
+    const { detectPageState } = await import('./page-state-detector')
 
-    if (isLoggedIn) {
+    const page = await getOperatorPage(op.browser_profile_key)
+    const state = await detectPageState(page)
+
+    // Also save latest session state (cookies) after user logged in
+    const { saveOperatorStorageState } = await import('./playwright-executor')
+    await saveOperatorStorageState(op.browser_profile_key).catch(() => {})
+
+    if (!state.requires_manual_takeover) {
+      // Page is no longer a blocker — user cleared it
       await updateOperatorMemory(operator_id, {
         requires_user_input: false,
         waiting_reason: null,
-        memory_summary: 'Logged in. Ready to continue workflow.',
+        memory_summary: 'User completed login/CAPTCHA. Ready to continue workflow.',
       })
       await updateOperatorStatus(operator_id, 'ready_to_resume', {
         current_task: op.pending_action_type ? `Resume: ${op.pending_action_type}` : 'Ready',
+        current_url: state.url || op.current_url,
       })
-      return { success: true, was_logged_in: true, message: 'Login confirmed. Operator is ready to resume.' }
+      return { success: true, was_logged_in: true, message: 'Cleared. Operator is ready to resume.' }
     } else {
-      return { success: false, was_logged_in: false, message: 'Still not logged in. Please complete the login in the operator browser and try again.' }
+      return {
+        success: false,
+        was_logged_in: false,
+        message: `The browser still shows: ${state.user_message ?? state.type.replace(/_/g, ' ')}. Please complete the action and try again.`,
+      }
     }
   } catch (err) {
+    // If browser context is gone (headless, closed), treat user claim as authoritative
+    // and mark ready_to_resume anyway — they say they completed it.
+    await updateOperatorMemory(operator_id, {
+      requires_user_input: false,
+      waiting_reason: null,
+      memory_summary: 'User marked login/CAPTCHA completed (browser state unavailable).',
+    })
+    await updateOperatorStatus(operator_id, 'ready_to_resume', {
+      current_task: op.pending_action_type ? `Resume: ${op.pending_action_type}` : 'Ready',
+    })
     return {
-      success: false,
-      was_logged_in: false,
-      message: `Could not verify login: ${err instanceof Error ? err.message : String(err)}`,
+      success: true,
+      was_logged_in: true,
+      message: `Marked as completed. ${err instanceof Error ? '(Could not verify browser state.)' : ''} Click Resume to continue.`,
     }
   }
 }

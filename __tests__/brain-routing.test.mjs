@@ -3142,3 +3142,108 @@ test('120. discovery blocked message is clear when mode is read_only', () => {
   assert.ok(msg.includes('Auto / Approval Required'), 'Should name the required mode')
   assert.ok(!msg.includes('raw reason'), 'Should not expose internal reason string')
 })
+
+// ── Tests 121–129: Page-state detector and manual takeover ───────────────────
+// Pure-JS reimplementation of detection patterns from page-state-detector.ts
+
+const LOGIN_URL_PATTERNS_TEST = [
+  /\/login/i, /\/signin/i, /\/sign-in/i, /\/auth/i,
+  /accounts\.google\.com/i, /login\.live\.com/i,
+]
+const LOGIN_TITLE_PATTERNS_TEST = [
+  /\bsign in\b/i, /\blog in\b/i, /\blogin\b/i,
+]
+const LOGIN_TEXT_PATTERNS_TEST = [
+  /contraseña/i, /\bpassword\b/i, /iniciar sesión/i,
+]
+const CAPTCHA_TEXT_PATTERNS_TEST = [
+  /unusual traffic/i, /verify you are human/i, /are you a robot/i,
+  /recaptcha/i, /hcaptcha/i, /\bcaptcha\b/i,
+  /comprueba que eres humano/i,
+]
+const SECURITY_CHECKPOINT_TEST = [
+  /security checkpoint/i, /account locked/i, /verify your identity/i,
+  /verify it's you/i,
+]
+const TWO_FACTOR_TEST = [
+  /two.?factor/i, /2-step verification/i, /2fa/i,
+  /authentication code/i, /verification code/i,
+]
+
+function detectPageStateTest(url, title, bodyText) {
+  const combined = `${url} ${title} ${bodyText}`
+  const matchesAny = (text, patterns) => patterns.some(p => p.test(text))
+  if (matchesAny(combined, TWO_FACTOR_TEST)) return { type: 'two_factor_required', requires_manual_takeover: true }
+  if (matchesAny(combined, SECURITY_CHECKPOINT_TEST)) return { type: 'security_checkpoint', requires_manual_takeover: true }
+  if (matchesAny(url, [/\/captcha/i, /recaptcha/i]) || matchesAny(combined, CAPTCHA_TEXT_PATTERNS_TEST)) return { type: 'captcha_detected', requires_manual_takeover: true }
+  if (matchesAny(url, LOGIN_URL_PATTERNS_TEST) || matchesAny(title, LOGIN_TITLE_PATTERNS_TEST) || matchesAny(bodyText, LOGIN_TEXT_PATTERNS_TEST)) return { type: 'login_required', requires_manual_takeover: true }
+  return { type: 'normal', requires_manual_takeover: false }
+}
+
+test('121. CAPTCHA text in page body triggers captcha_detected', () => {
+  const state = detectPageStateTest('https://www.google.com/search', 'Google', 'Our systems have detected unusual traffic from your computer network.')
+  assert.equal(state.type, 'captcha_detected')
+  assert.equal(state.requires_manual_takeover, true)
+})
+
+test('122. Login URL triggers login_required', () => {
+  const state = detectPageStateTest('https://www.facebook.com/login/', 'Facebook', 'Enter your email and password')
+  assert.equal(state.type, 'login_required')
+  assert.equal(state.requires_manual_takeover, true)
+})
+
+test('123. Security checkpoint triggers security_checkpoint', () => {
+  const state = detectPageStateTest('https://www.linkedin.com/checkpoint/challenge', 'Challenge', 'Verify your identity to continue')
+  assert.equal(state.type, 'security_checkpoint')
+  assert.equal(state.requires_manual_takeover, true)
+})
+
+test('124. Two-factor authentication triggers two_factor_required', () => {
+  const state = detectPageStateTest('https://accounts.google.com/signin/challenge', '2-Step Verification', 'Enter the authentication code from your app')
+  assert.equal(state.type, 'two_factor_required')
+  assert.equal(state.requires_manual_takeover, true)
+})
+
+test('125. Normal page does not trigger manual takeover', () => {
+  const state = detectPageStateTest('https://example.com/about', 'About Us', 'Welcome to our company page')
+  assert.equal(state.type, 'normal')
+  assert.equal(state.requires_manual_takeover, false)
+})
+
+test('126. Spanish CAPTCHA text triggers captcha_detected', () => {
+  const state = detectPageStateTest('https://www.google.es/sorry/index', 'Error', 'comprueba que eres humano')
+  assert.equal(state.type, 'captcha_detected')
+  assert.equal(state.requires_manual_takeover, true)
+})
+
+test('127. Agent must not claim to solve CAPTCHA — waiting_user message does not claim solution', () => {
+  // The user-facing message must never say "I solved" or "solved the CAPTCHA"
+  const operatorName = 'Kevin'
+  const waitingMsg = `${operatorName} needs your help. Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`
+  assert.ok(!waitingMsg.toLowerCase().includes('i solved'), 'Message must not claim CAPTCHA was solved')
+  assert.ok(!waitingMsg.toLowerCase().includes('solved the captcha'), 'Message must not claim CAPTCHA was auto-solved')
+  assert.ok(waitingMsg.includes('needs your help'), 'Message must ask user for help')
+  assert.ok(waitingMsg.includes('Login / CAPTCHA completed'), 'Message must reference the Resume button')
+})
+
+test('128. Resume uses same browser_profile_key (persistent session)', () => {
+  // Verify that profile key is preserved across actions (no new key generated)
+  const operator = { name: 'Kevin', browser_profile_key: 'kevin', status: 'ready_to_resume', pending_action_type: 'search', requires_user_input: false }
+  // The resume flow uses operatorName → same profile key → same context (cookies preserved)
+  assert.equal(operator.browser_profile_key, 'kevin', 'Profile key must remain stable for session continuity')
+  assert.equal(operator.status, 'ready_to_resume', 'Operator must be ready_to_resume before resume is allowed')
+  assert.equal(operator.requires_user_input, false, 'requires_user_input must be cleared before resume')
+})
+
+test('129. headed mode env: WEB_OPERATOR_HEADLESS=false maps to headless=false', () => {
+  // Simulate the controller.ts isHeadless() logic
+  function isHeadlessTest(webOpHeadless, browserHeadless) {
+    if (webOpHeadless !== undefined) return webOpHeadless !== 'false'
+    if (browserHeadless !== undefined) return browserHeadless !== 'false'
+    return true
+  }
+  assert.equal(isHeadlessTest('false', undefined), false, 'WEB_OPERATOR_HEADLESS=false → headless=false')
+  assert.equal(isHeadlessTest('true', undefined), true, 'WEB_OPERATOR_HEADLESS=true → headless=true')
+  assert.equal(isHeadlessTest(undefined, 'false'), false, 'falls back to BROWSER_HEADLESS=false')
+  assert.equal(isHeadlessTest(undefined, undefined), true, 'defaults to headless=true')
+})

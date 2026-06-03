@@ -90,6 +90,21 @@ function truncate(str: string | null | undefined, n = 50): string {
   return str.length > n ? str.slice(0, n) + '…' : str
 }
 
+function waitingReasonLabel(reason: string | null): string {
+  if (!reason) return 'The operator has stopped and needs you to take over.'
+  if (reason.includes('captcha')) return 'A CAPTCHA appeared. Please solve it in the browser, then click "Login / CAPTCHA completed". The operator will not attempt to bypass it automatically.'
+  if (reason.includes('login')) return 'Login is required. Please sign in in the browser, then click "Login / CAPTCHA completed".'
+  if (reason.includes('security_checkpoint') || reason.includes('checkpoint')) return 'A security checkpoint appeared. Please complete it in the browser, then click "Login / CAPTCHA completed".'
+  if (reason.includes('two_factor') || reason.includes('2fa')) return 'Two-factor authentication is required. Please complete it in the browser, then click "Login / CAPTCHA completed".'
+  return `The operator is paused: ${reason.replace(/_/g, ' ')}. Please resolve this in the browser and click "Login / CAPTCHA completed".`
+}
+
+// Detect headed mode from a server-rendered hint in meta or a client-side env check
+// (window is not available server-side, so we use a safe fallback)
+const isHeadedMode = typeof window !== 'undefined'
+  ? document.querySelector('meta[name="web-operator-headless"]')?.getAttribute('content') === 'false'
+  : false
+
 export default function OperatorDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [operator, setOperator] = useState<WebOperator | null>(null)
@@ -289,23 +304,32 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
-      {/* Waiting state banner */}
+      {/* Waiting state banner — CAPTCHA / login / security checkpoint */}
       {operator.requires_user_input && (
         <div style={{
           background: '#fffbeb',
-          border: '1px solid #fde68a',
+          border: '2px solid #f59e0b',
           borderRadius: 10,
-          padding: '16px 20px',
+          padding: '18px 20px',
           marginBottom: 16,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
-            Operator waiting for user input
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
+            ⚠ {operator.name} needs your help
           </div>
-          {operator.waiting_reason && (
-            <div style={{ fontSize: 13, color: '#78350f', marginBottom: 12 }}>
-              Reason: {operator.waiting_reason}
+          <div style={{ fontSize: 13, color: '#78350f', marginBottom: 4, lineHeight: 1.5 }}>
+            {waitingReasonLabel(operator.waiting_reason)}
+          </div>
+          {operator.current_url && (
+            <div style={{ fontSize: 11, color: '#b45309', marginBottom: 12, fontFamily: 'DM Mono, monospace' }}>
+              Currently at: <a href={operator.current_url} target="_blank" rel="noopener noreferrer"
+                style={{ color: '#b45309' }}>{operator.current_url.slice(0, 80)}</a>
             </div>
           )}
+          <div style={{ fontSize: 12, color: '#92400e', marginBottom: 14, lineHeight: 1.6 }}>
+            {isHeadedMode
+              ? 'Open the browser window and complete the action manually. Then click "Login / CAPTCHA completed" below.'
+              : 'The browser is running in headless mode. Restart with WEB_OPERATOR_HEADLESS=false to see and interact with the browser window. Then click "Login / CAPTCHA completed".'}
+          </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
               onClick={() => doAction('mark_login_completed')}
@@ -315,9 +339,10 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                 background: '#f59e0b',
                 color: '#ffffff',
                 border: '1px solid #f59e0b',
+                fontWeight: 700,
               }}
             >
-              {actionLoading === 'mark_login_completed' ? 'Checking…' : 'Mark login completed'}
+              {actionLoading === 'mark_login_completed' ? 'Checking…' : '✓ Login / CAPTCHA completed'}
             </button>
             <button
               onClick={() => doAction('mark_user_controlling')}
@@ -329,7 +354,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                 border: '1px solid #8b5cf6',
               }}
             >
-              {actionLoading === 'mark_user_controlling' ? 'Updating…' : 'Mark: I\'m in control'}
+              {actionLoading === 'mark_user_controlling' ? 'Updating…' : 'I\'m taking over'}
             </button>
           </div>
         </div>
