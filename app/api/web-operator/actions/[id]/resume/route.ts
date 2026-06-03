@@ -134,6 +134,11 @@ export async function POST(
       skill_decision: typeof row.skill_decision === 'object' && row.skill_decision !== null
         ? row.skill_decision as Record<string, unknown>
         : null,
+      playbook_id: row.playbook_id ? String(row.playbook_id) : null,
+      playbook_name: row.playbook_name ? String(row.playbook_name) : null,
+      playbook_plan: typeof row.playbook_plan === 'object' && row.playbook_plan !== null
+        ? row.playbook_plan as Record<string, unknown>
+        : null,
     }
 
     // 7. Execute via approved-executor (checks browser runtime + runs playwright)

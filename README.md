@@ -1270,3 +1270,15 @@ AÏKO routes website work through **Web Operator Skills** instead of native plat
 - The skill catalog is visible at `/operator-skills`; operator action rows and execution trails show which skill governed each action.
 
 Default skills include `general_web_research`, `gmail_workflow`, `canva_design`, `facebook_research`, `linkedin_research`, `instagram_research`, and `website_reader`. If the CEO asks an operator to use an unknown website, AÏKO creates a System Improvement Proposal for a new skill instead of attempting unsafe unknown automation.
+
+## Web Operator Playbooks for safe workflows
+
+Web Operator Playbooks sit on top of skills. **Skills define safety policy; playbooks define safe step-by-step workflows.** A playbook describes the known-site steps AÏKO should plan after opening a site, where manual takeover is expected, which steps require approval, and which steps are forbidden.
+
+- Playbooks are browser workflow plans only. They do not add native Facebook, Canva, LinkedIn, Instagram, or Gmail APIs.
+- Playbooks start with transparent planning and the first safe browser step; selector-dependent or uncertain steps are not executed blindly.
+- Login, CAPTCHA, 2FA, and security checkpoints still pause into manual takeover.
+- Publishing, posting, joining, messaging, sending, sharing, and final downloads still require approval.
+- The playbook catalog is visible at `/operator-playbooks`; operator action rows store `playbook_id`, `playbook_name`, and the planned steps JSON when a playbook is selected.
+
+Default playbooks include `canva_instagram_draft`, `facebook_group_research`, `linkedin_company_research`, `gmail_open_and_check`, `gmail_prepare_draft`, and `general_site_research`.

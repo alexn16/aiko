@@ -3,6 +3,7 @@ import { canPerformAction, getModeState } from '@/lib/operating-mode'
 import { createApprovalItem } from '@/lib/approvals'
 import { getSkillById, getSkillForUrl, getRecommendedSkillForInstruction, validateSkillAction } from '@/lib/web-operator/skills'
 import type { SkillDecision, WebOperatorSkill } from '@/lib/web-operator/skills'
+import type { PlaybookExecutionPlan } from '@/lib/web-operator/playbooks'
 import type { ModeState } from '@/lib/operating-mode'
 import type { ApprovalItem } from '@/lib/approvals'
 
@@ -63,6 +64,9 @@ export interface WebOperatorAction {
   skill_id: string | null
   skill_name: string | null
   skill_decision: Record<string, unknown> | null
+  playbook_id: string | null
+  playbook_name: string | null
+  playbook_plan: Record<string, unknown> | null
   created_at: string
   completed_at: string | null
 }
@@ -186,14 +190,17 @@ export async function logWebOperatorAction(params: {
   skill_id?: string | null
   skill_name?: string | null
   skill_decision?: Record<string, unknown> | SkillDecision | null
+  playbook_id?: string | null
+  playbook_name?: string | null
+  playbook_plan?: Record<string, unknown> | PlaybookExecutionPlan | null
 }): Promise<WebOperatorAction> {
   const result = await db.query(
     `INSERT INTO web_operator_actions
        (session_id, project_id, agent_role, action_type, target_url,
         description, input, status, requires_approval,
         source_task_id, requested_by_role, operator_id, lead_id,
-        skill_id, skill_name, skill_decision)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        skill_id, skill_name, skill_decision, playbook_id, playbook_name, playbook_plan)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      RETURNING *`,
     [
       params.session_id ?? null,
@@ -212,6 +219,9 @@ export async function logWebOperatorAction(params: {
       params.skill_id ?? null,
       params.skill_name ?? null,
       params.skill_decision ? JSON.stringify(params.skill_decision) : null,
+      params.playbook_id ?? null,
+      params.playbook_name ?? null,
+      params.playbook_plan ? JSON.stringify(params.playbook_plan) : null,
     ]
   )
   return rowToAction(result.rows[0])
@@ -233,6 +243,9 @@ export async function updateWebOperatorAction(
     skill_id: string | null
     skill_name: string | null
     skill_decision: Record<string, unknown> | SkillDecision | null
+    playbook_id: string | null
+    playbook_name: string | null
+    playbook_plan: Record<string, unknown> | PlaybookExecutionPlan | null
   }>
 ): Promise<void> {
   const sets: string[] = []
@@ -252,6 +265,9 @@ export async function updateWebOperatorAction(
   if (fields.skill_id !== undefined) { sets.push(`skill_id=$${idx++}`); values.push(fields.skill_id) }
   if (fields.skill_name !== undefined) { sets.push(`skill_name=$${idx++}`); values.push(fields.skill_name) }
   if (fields.skill_decision !== undefined) { sets.push(`skill_decision=$${idx++}`); values.push(fields.skill_decision ? JSON.stringify(fields.skill_decision) : null) }
+  if (fields.playbook_id !== undefined) { sets.push(`playbook_id=$${idx++}`); values.push(fields.playbook_id) }
+  if (fields.playbook_name !== undefined) { sets.push(`playbook_name=$${idx++}`); values.push(fields.playbook_name) }
+  if (fields.playbook_plan !== undefined) { sets.push(`playbook_plan=$${idx++}`); values.push(fields.playbook_plan ? JSON.stringify(fields.playbook_plan) : null) }
 
   if (sets.length === 0) return
   values.push(id)
@@ -340,6 +356,9 @@ export async function runWebOperatorAction(opts: {
   skill_id?: string | null
   skill_name?: string | null
   skill_decision?: Record<string, unknown> | SkillDecision | null
+  playbook_id?: string | null
+  playbook_name?: string | null
+  playbook_plan?: Record<string, unknown> | PlaybookExecutionPlan | null
 }): Promise<{
   success: boolean
   action: WebOperatorAction
@@ -356,11 +375,17 @@ export async function runWebOperatorAction(opts: {
     skill_name: skill?.name ?? opts.skill_name ?? null,
     skill_decision: skillDecision ?? null,
   }
+  const playbookFields = {
+    playbook_id: opts.playbook_id ?? null,
+    playbook_name: opts.playbook_name ?? null,
+    playbook_plan: opts.playbook_plan ?? null,
+  }
 
   if (skillDecision?.blocked) {
     const action = await logWebOperatorAction({
       ...opts,
       ...skillFields,
+      ...playbookFields,
       status: 'blocked',
       requires_approval: false,
       operator_id: opts.operator_id ?? null,
@@ -385,7 +410,7 @@ export async function runWebOperatorAction(opts: {
   )
 
   if (!modeCheck.allowed) {
-    const action = await logWebOperatorAction({ ...opts, ...skillFields, status: 'blocked', requires_approval: false, operator_id: opts.operator_id ?? null })
+    const action = await logWebOperatorAction({ ...opts, ...skillFields, ...playbookFields, status: 'blocked', requires_approval: false, operator_id: opts.operator_id ?? null })
     await updateWebOperatorAction(action.id, {
       output: { error: modeCheck.reason },
       failure_reason: 'operating_mode_blocked',
@@ -397,13 +422,14 @@ export async function runWebOperatorAction(opts: {
   // 2. Check if action requires approval
   const needsApproval = requiresApproval(opts.action_type, modeCheck.mode) || Boolean(skillDecision?.requires_approval)
   if (needsApproval) {
-    const action = await logWebOperatorAction({ ...opts, ...skillFields, status: 'waiting_approval', requires_approval: true, operator_id: opts.operator_id ?? null })
+    const action = await logWebOperatorAction({ ...opts, ...skillFields, ...playbookFields, status: 'waiting_approval', requires_approval: true, operator_id: opts.operator_id ?? null })
     const approval = await requireOperatorApproval(action.id, {
       project_id: opts.project_id,
       title: opts.description,
       content: `Web Operator action requested:
 Type: ${opts.action_type}
 Skill: ${skillFields.skill_name ?? 'n/a'}
+Playbook: ${playbookFields.playbook_name ?? 'n/a'}
 URL: ${opts.target_url ?? 'n/a'}
 Description: ${opts.description}
 Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
@@ -419,7 +445,7 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
   }
 
   // 3. Log as running
-  const action = await logWebOperatorAction({ ...opts, ...skillFields, status: 'running', operator_id: opts.operator_id ?? null })
+  const action = await logWebOperatorAction({ ...opts, ...skillFields, ...playbookFields, status: 'running', operator_id: opts.operator_id ?? null })
 
   // 4. Check browser runtime
   const browserAvailable = await checkBrowserRuntime()
@@ -537,12 +563,12 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
         ).catch(() => {})
         // Store the pending action so Resume can retry it
         await db.query(
-          `UPDATE web_operators SET
+        `UPDATE web_operators SET
             pending_action_type=$1,
             pending_action_payload=$2,
             pending_action_created_at=NOW()
            WHERE id=$3`,
-          [opts.action_type, JSON.stringify(opts.input ?? {}), opts.operator_id]
+          [opts.action_type, JSON.stringify({ ...(opts.input ?? {}), ...(opts.playbook_plan ? { playbook: opts.playbook_plan } : {}) }), opts.operator_id]
         ).catch(() => {})
       }
 
@@ -658,6 +684,9 @@ function rowToAction(row: Record<string, unknown>): WebOperatorAction {
     skill_id: row.skill_id ? String(row.skill_id) : null,
     skill_name: row.skill_name ? String(row.skill_name) : null,
     skill_decision: parseJsonObject(row.skill_decision),
+    playbook_id: row.playbook_id ? String(row.playbook_id) : null,
+    playbook_name: row.playbook_name ? String(row.playbook_name) : null,
+    playbook_plan: parseJsonObject(row.playbook_plan),
     created_at: String(row.created_at),
     completed_at: row.completed_at ? String(row.completed_at) : null,
   }

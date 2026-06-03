@@ -264,6 +264,12 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Tables:** `web_operator_sessions`, `web_operator_actions`, `approval_items`
 - **Status:** partial — data model and approval flow complete; actual Playwright execution requires a connected browser runtime
 
+### Web Operator Skills & Playbooks
+- **What it does:** Skills define the safety policy for browser-only website work. Playbooks define the safe workflow plan for known sites after skill detection, including planned steps, manual takeover points, approval gates, forbidden steps, and output shape.
+- **Main files:** `lib/web-operator/skills.ts`, `lib/web-operator/playbooks.ts`, `lib/web-operator/site-intents.ts`
+- **Tables:** `web_operator_skills`, `web_operator_playbooks`, `web_operator_actions`
+- **Status:** complete — known-site workflows open the target website directly, attach skill/playbook metadata to action rows, pause for login/CAPTCHA/security, and keep posting/sending/publishing actions approval-gated.
+
 ### Web Operator Delegation
 - **What it does:** Higher-level wrapper that agents call instead of the Web Operator directly. Checks mode, sends an internal message, resolves or starts a session, runs the action, and saves results as `agent_task_outputs`. Convenience wrappers: `delegateSearch`, `delegateReadWebsite`, `delegateEmailDraft`, `delegateExternalAction`.
 - **Main files:** `lib/web-operator/delegation.ts`

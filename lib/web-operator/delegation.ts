@@ -27,6 +27,11 @@ import {
 } from '@/lib/web-operator/skills'
 import type { SkillDecision, WebOperatorSkill } from '@/lib/web-operator/skills'
 import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
+import {
+  createPlaybookExecutionPlan,
+  getRecommendedPlaybookForInstruction,
+} from '@/lib/web-operator/playbooks'
+import type { PlaybookExecutionPlan } from '@/lib/web-operator/playbooks'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -43,6 +48,7 @@ export interface DelegationRequest {
   taskId?: string
   leadId?: string          // links the operator action to a specific lead
   skillId?: string
+  playbookId?: string
 }
 
 export type DelegationStatus = 'completed' | 'approval_required' | 'blocked' | 'failed'
@@ -60,6 +66,9 @@ export interface DelegationResult {
   skillId?: string
   skillName?: string
   skillDecision?: SkillDecision
+  playbookId?: string
+  playbookName?: string
+  playbookPlan?: PlaybookExecutionPlan
 }
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
@@ -162,6 +171,20 @@ Skill: ${skill.name} (${skill.skill_id})
 Skill policy: ${decision?.reason ?? skill.login_policy}`
 }
 
+function playbookContext(plan: PlaybookExecutionPlan | null): string {
+  if (!plan) return ''
+  const safeSteps = plan.steps
+    .filter(step => !step.requires_approval && !step.forbidden)
+    .slice(0, 6)
+    .map(step => step.step_type)
+    .join(', ')
+  return `
+Playbook: ${plan.playbook_name} (${plan.playbook_id})
+Planned safe steps: ${safeSteps || 'n/a'}
+Approval gates: ${plan.approval_gates.join(', ') || 'none'}
+Forbidden steps: ${plan.forbidden_steps.join(', ') || 'none'}`
+}
+
 function buildCompletionMessage(actionType: string, output: Record<string, unknown>, operatorName?: string): string {
   const opStr = operatorName ? `${operatorName} ` : 'Web Operator '
   if (actionType === 'search') {
@@ -207,6 +230,19 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
   const skillResolution = await resolveSkillForDelegation(req)
   const skill = skillResolution.skill
   const skillDecision = skillResolution.decision
+  const playbook = skill
+    ? await getRecommendedPlaybookForInstruction(`${req.instruction} ${req.targetUrl ?? ''} ${req.query ?? ''}`, skill.skill_id)
+    : null
+  const playbookPlan = await createPlaybookExecutionPlan({
+    playbookId: req.playbookId ?? playbook?.playbook_id ?? null,
+    skillId: skill?.skill_id ?? null,
+    instruction: req.instruction,
+    context: {
+      action_type: req.actionType,
+      target_url: req.targetUrl ?? null,
+      query: req.query ?? null,
+    },
+  })
 
   if (skillResolution.unknownWebsite) {
     await createUnknownWebsiteProposal(req, skillResolution.unknownWebsite)
@@ -237,6 +273,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     if (req.query) safePayload.query = req.query
     if (req.targetUrl) safePayload.url = req.targetUrl
     if (req.payload) Object.assign(safePayload, req.payload)
+    if (playbookPlan) safePayload.playbook = playbookPlan
     await storePendingAction(operator.id, req.actionType, safePayload).catch(() => {})
   }
 
@@ -248,7 +285,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       to_role: req.operatorName ? `Web Operator (${req.operatorName})` : 'Web Operator',
       message_type: 'instruction',
       subject: req.instruction,
-      content: `Action: ${req.actionType}\n${req.targetUrl ? `URL: ${req.targetUrl}\n` : ''}${req.query ? `Query: ${req.query}\n` : ''}Reason: ${req.reason ?? 'Delegated action'}${skillContext(skill, skillDecision)}`,
+      content: `Action: ${req.actionType}\n${req.targetUrl ? `URL: ${req.targetUrl}\n` : ''}${req.query ? `Query: ${req.query}\n` : ''}Reason: ${req.reason ?? 'Delegated action'}${skillContext(skill, skillDecision)}${playbookContext(playbookPlan)}`,
     })
   } catch {
     // non-fatal
@@ -294,6 +331,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     skill_id: skill?.skill_id ?? null,
     skill_name: skill?.name ?? null,
     skill_decision: skillDecision ?? null,
+    playbook_id: playbookPlan?.playbook_id ?? null,
+    playbook_name: playbookPlan?.playbook_name ?? null,
+    playbook_plan: playbookPlan ?? null,
   })
 
   // Mark operator idle after action
@@ -356,6 +396,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       skillId: skill?.skill_id,
       skillName: skill?.name,
       skillDecision: skillDecision ?? undefined,
+      playbookId: playbookPlan?.playbook_id,
+      playbookName: playbookPlan?.playbook_name,
+      playbookPlan: playbookPlan ?? undefined,
       message: `${req.requestedByRole} requested a browser action that needs your approval before proceeding.`,
     }
   }
@@ -365,7 +408,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     if ((result as { waiting_user?: boolean }).waiting_user) {
       const name = operator?.name ?? 'The operator'
       const directPrefix = skill?.skill_id && req.targetUrl
-        ? `${name} opened ${siteNameForSkill(skill.skill_id)} directly and needs your help.`
+        ? playbookPlan
+          ? `${name} opened ${siteNameForSkill(skill.skill_id)} directly using the ${playbookPlan.playbook_name} playbook and needs your help.`
+          : `${name} opened ${siteNameForSkill(skill.skill_id)} directly and needs your help.`
         : `${name} needs your help.`
       return {
         status: 'blocked',
@@ -374,6 +419,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
         skillId: skill?.skill_id,
         skillName: skill?.name,
         skillDecision: skillDecision ?? undefined,
+        playbookId: playbookPlan?.playbook_id,
+        playbookName: playbookPlan?.playbook_name,
+        playbookPlan: playbookPlan ?? undefined,
         message: `${directPrefix} Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`,
         error: result.error,
       }
@@ -393,6 +441,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       skillId: skill?.skill_id,
       skillName: skill?.name,
       skillDecision: skillDecision ?? undefined,
+      playbookId: playbookPlan?.playbook_id,
+      playbookName: playbookPlan?.playbook_name,
+      playbookPlan: playbookPlan ?? undefined,
       message: userMessage,
     }
   }
@@ -434,6 +485,9 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     skillId: skill?.skill_id,
     skillName: skill?.name,
     skillDecision: skillDecision ?? undefined,
+    playbookId: playbookPlan?.playbook_id,
+    playbookName: playbookPlan?.playbook_name,
+    playbookPlan: playbookPlan ?? undefined,
     message: buildCompletionMessage(req.actionType, actionOutput, operator?.name),
   }
 }

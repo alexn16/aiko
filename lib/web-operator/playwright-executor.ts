@@ -197,6 +197,13 @@ export async function executeAction(opts: {
     is_sensitive: false,
     requires_approval: false,
     approval_item_id: null,
+    lead_id: null,
+    skill_id: null,
+    skill_name: null,
+    skill_decision: null,
+    playbook_id: null,
+    playbook_name: null,
+    playbook_plan: null,
     source_task_id: null,
     requested_by_role: null,
     created_at: new Date().toISOString(),
@@ -307,6 +314,19 @@ async function executeCreateGmailDraft(opts: { profileKey?: string; to?: string;
 
   if (!page.url().includes('mail.google.com')) {
     await page.goto('https://mail.google.com/', { waitUntil: 'domcontentloaded', timeout: 15000 })
+  }
+
+  const url = page.url()
+  if (url.includes('accounts.google.com') || url.includes('signin') || url.includes('ServiceLogin')) {
+    const detectedState = await detectPageState(page)
+    throw new ManualTakeoverRequired({
+      ...detectedState,
+      type: 'login_required',
+      requires_manual_takeover: true,
+      waiting_reason: 'login_required',
+      user_message: 'Gmail login required. Please log in manually in the operator browser window, then click "Login / CAPTCHA completed".',
+      is_sensitive: true,
+    })
   }
 
   const composeSelectors = [

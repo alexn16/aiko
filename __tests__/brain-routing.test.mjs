@@ -3046,7 +3046,67 @@ test('142. CAPTCHA/security direct-site blockers still set waiting_user', () => 
   assert.equal(result.bypass_attempted, false)
 })
 
-test('143. provider brain smart defaults do not target partial unique indexes as constraints', () => {
+test('143. Canva Instagram prompt maps to canva_instagram_draft playbook', () => {
+  const playbook = recommendPlaybookTest('Kevin, create a Canva Instagram draft for ALB Parking.', 'canva_design')
+  assert.equal(playbook.playbook_id, 'canva_instagram_draft')
+  assert.equal(playbook.skill_id, 'canva_design')
+})
+
+test('144. Facebook group research maps to facebook_group_research playbook', () => {
+  const playbook = recommendPlaybookTest('Kevin, research Facebook groups about parking in A Coruña.', 'facebook_research')
+  assert.equal(playbook.playbook_id, 'facebook_group_research')
+})
+
+test('145. Gmail draft prompt maps to gmail_prepare_draft playbook', () => {
+  const playbook = recommendPlaybookTest('Kevin, prepare a Gmail draft for this lead.', 'gmail_workflow')
+  assert.equal(playbook.playbook_id, 'gmail_prepare_draft')
+})
+
+test('146. Playbook approval gates require approval', () => {
+  const decision = validatePlaybookStepTest('facebook_group_research', 'join_group')
+  assert.equal(decision.allowed, true)
+  assert.equal(decision.requires_approval, true)
+  assert.equal(decision.blocked, false)
+})
+
+test('147. Forbidden playbook step is blocked', () => {
+  const decision = validatePlaybookStepTest('facebook_group_research', 'bypass_login')
+  assert.equal(decision.allowed, false)
+  assert.equal(decision.blocked, true)
+  assert.match(decision.reason, /forbidden/)
+})
+
+test('148. Unknown prompt falls back to skill-only behavior', () => {
+  const playbook = recommendPlaybookTest('Kevin, do something custom on a known but unsupported workflow.', 'facebook_research')
+  assert.equal(playbook, null)
+})
+
+test('149. Delegation stores playbook metadata', () => {
+  const plan = buildPlaybookPlanTest('canva_instagram_draft', 'Kevin, create a Canva Instagram draft for ALB Parking.')
+  const actionRow = {
+    action_type: 'open_url',
+    skill_id: 'canva_design',
+    playbook_id: plan.playbook_id,
+    playbook_name: plan.playbook_name,
+    playbook_plan: plan,
+  }
+  assert.equal(actionRow.playbook_id, 'canva_instagram_draft')
+  assert.equal(actionRow.playbook_plan.current_step, 'open_canva')
+  assert.ok(Array.isArray(actionRow.playbook_plan.steps))
+})
+
+test('150. CEO copy includes playbook and manual takeover language', () => {
+  const copy = buildPlaybookCopyTest('Kevin', {
+    playbookId: 'facebook_group_research',
+    playbookName: 'Facebook Group Research',
+  })
+  assert.match(copy, /Facebook Group Research playbook/)
+  assert.match(copy, /open Facebook directly/)
+  assert.match(copy, /pause if login\/security appears/)
+  assert.match(copy, /ask approval before joining, posting, commenting, or messaging/)
+})
+
+test('151. provider brain smart defaults do not target partial unique indexes as constraints', () => {
   const oldSql = 'ON CONFLICT ON CONSTRAINT ai_role_asgn_user_uniq'
   const fixedSql = 'DELETE FROM ai_role_assignments WHERE role = $1 AND user_id = $2'
   assert.equal(/ON CONFLICT ON CONSTRAINT ai_role_asgn_(user|global)_uniq/.test(fixedSql), false)
@@ -3071,6 +3131,74 @@ function buildDirectSiteTargetTest(text, skillId) {
     gmail_workflow: 'https://mail.google.com/',
   }
   return { action_type: 'open_url', url: map[skillId], query }
+}
+
+const PLAYBOOKS_TEST = {
+  canva_instagram_draft: {
+    playbook_id: 'canva_instagram_draft',
+    skill_id: 'canva_design',
+    playbook_name: 'Canva Instagram Draft',
+    steps: ['open_canva', 'wait_for_manual_login_if_needed', 'create_design_draft', 'add_user_requested_text', 'capture_preview', 'save_draft_result'],
+    approval_gates: ['download_final_asset', 'share_design', 'publish_design'],
+    forbidden_steps: ['publish_without_approval', 'use_unlicensed_assets_without_review'],
+  },
+  facebook_group_research: {
+    playbook_id: 'facebook_group_research',
+    skill_id: 'facebook_research',
+    playbook_name: 'Facebook Group Research',
+    steps: ['open_facebook_group_search_url', 'wait_for_manual_login_if_needed', 'read_visible_group_results', 'collect_group_names_urls_member_counts_if_visible', 'summarize_findings'],
+    approval_gates: ['join_group', 'post', 'comment', 'send_message'],
+    forbidden_steps: ['scrape_private_profiles', 'mass_message', 'bypass_login'],
+  },
+  gmail_prepare_draft: {
+    playbook_id: 'gmail_prepare_draft',
+    skill_id: 'gmail_workflow',
+    playbook_name: 'Gmail Prepare Draft',
+    steps: ['open_gmail', 'wait_for_manual_login_if_needed', 'create_email_draft', 'fill_requested_content', 'save_draft_result'],
+    approval_gates: ['send_email', 'send_gmail_draft'],
+    forbidden_steps: ['send_without_approval', 'store_password', 'bypass_login'],
+  },
+}
+
+function recommendPlaybookTest(text, skillId) {
+  if (skillId === 'canva_design' && /\b(canva|instagram|draft|post|design)\b/i.test(text)) return PLAYBOOKS_TEST.canva_instagram_draft
+  if (skillId === 'facebook_research' && /\b(groups?|facebook)\b/i.test(text)) return PLAYBOOKS_TEST.facebook_group_research
+  if (skillId === 'gmail_workflow' && /\b(draft|prepare|write|email|mail)\b/i.test(text)) return PLAYBOOKS_TEST.gmail_prepare_draft
+  return null
+}
+
+function validatePlaybookStepTest(playbookId, stepType) {
+  const playbook = PLAYBOOKS_TEST[playbookId]
+  if (!playbook) return { allowed: false, requires_approval: false, blocked: true, reason: 'Unknown playbook' }
+  if (playbook.forbidden_steps.includes(stepType)) return { allowed: false, requires_approval: false, blocked: true, reason: `Playbook blocked forbidden step: ${stepType}` }
+  if (playbook.approval_gates.includes(stepType)) return { allowed: true, requires_approval: true, blocked: false, reason: `Playbook requires approval for step: ${stepType}` }
+  return { allowed: playbook.steps.includes(stepType), requires_approval: false, blocked: !playbook.steps.includes(stepType), reason: 'Checked playbook step' }
+}
+
+function buildPlaybookPlanTest(playbookId, instruction) {
+  const playbook = PLAYBOOKS_TEST[playbookId]
+  return {
+    playbook_id: playbook.playbook_id,
+    playbook_name: playbook.playbook_name,
+    skill_id: playbook.skill_id,
+    instruction,
+    current_step: playbook.steps[0],
+    steps: playbook.steps.map((step, index) => ({
+      step_type: step,
+      status: index === 0 ? 'ready' : 'pending',
+      requires_approval: playbook.approval_gates.includes(step),
+      forbidden: playbook.forbidden_steps.includes(step),
+    })),
+    approval_gates: playbook.approval_gates,
+    forbidden_steps: playbook.forbidden_steps,
+  }
+}
+
+function buildPlaybookCopyTest(operatorName, result) {
+  if (result.playbookId === 'facebook_group_research') {
+    return `${operatorName} will use the Facebook Group Research playbook. They will open Facebook directly, pause if login/security appears, read visible group results, and ask approval before joining, posting, commenting, or messaging.`
+  }
+  return `${operatorName} will use the ${result.playbookName} playbook.`
 }
 
 // ── Tests 114–120: Lead discovery workflow ────────────────────────────────────

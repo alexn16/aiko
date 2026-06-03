@@ -24,6 +24,30 @@ function extractSearchQuery(command: string, _parsed: Record<string, unknown>): 
     .slice(0, 200)
 }
 
+function playbookDelegationCopy(operatorName: string, result: DelegationResult): string {
+  if (!result.playbookName) {
+    const siteName = result.skillId ? siteNameForSkill(result.skillId) : 'the site'
+    const directCopy = ['Facebook', 'LinkedIn', 'Instagram', 'Canva', 'Gmail'].includes(siteName)
+      ? `${operatorName} will open ${siteName} directly in their browser session.`
+      : `${operatorName} will open the site in their browser session.`
+    return `${directCopy} If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+  }
+
+  if (result.playbookId === 'facebook_group_research') {
+    return `${operatorName} will use the Facebook Group Research playbook. They will open Facebook directly, pause if login/security appears, read visible group results, and ask approval before joining, posting, commenting, or messaging.`
+  }
+  if (result.playbookId === 'canva_instagram_draft') {
+    return `${operatorName} will use the Canva Instagram Draft playbook. They will open Canva directly, pause if login/security appears, create only a safe draft, and ask approval before publishing, sharing, or downloading final assets.`
+  }
+  if (result.playbookId === 'gmail_prepare_draft') {
+    return `${operatorName} will use the Gmail Prepare Draft playbook. They will open Gmail directly, pause if login/security appears, prepare a draft, and ask approval before sending.`
+  }
+  if (result.playbookId === 'gmail_open_and_check') {
+    return `${operatorName} will use the Gmail Open and Check playbook. They will open Gmail directly, pause if login/security appears, and only read visible mail context requested by you.`
+  }
+  return `${operatorName} will use the ${result.playbookName} playbook. If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -200,6 +224,18 @@ export async function POST(request: NextRequest) {
           requestedByRole: 'CEO',
           operatorName,
         }).catch(() => null)
+      } else if (!delegationResult && isPrepareEmail && operatorName && recommendedSkill?.skill_id === 'gmail_workflow' && !emailTo) {
+        delegationResult = await delegateToWebOperator({
+          projectId: result.project_id ?? undefined,
+          requestedByRole: 'CEO',
+          operatorName,
+          actionType: 'create_email_draft',
+          targetUrl: 'https://mail.google.com/',
+          payload: { body: command.trim() },
+          instruction: `${operatorName}, open Gmail directly and prepare the requested draft. Do not send without approval.`,
+          reason: 'Gmail draft preparation',
+          skillId: 'gmail_workflow',
+        }).catch(() => null)
       } else if (!delegationResult && isPrepareEmail && operatorName && emailTo) {
         delegationResult = await delegateGmailDraft({
           to: emailTo,
@@ -354,12 +390,7 @@ export async function POST(request: NextRequest) {
           // CAPTCHA/login detected — make sure CEO also relays this clearly
           // (delegation already set the right message; we just preserve it)
         } else if (delegationResult.status === 'completed' || delegationResult.status === 'approval_required') {
-          // Append a note about the browser session and manual takeover policy
-          const siteName = delegationResult.skillId ? siteNameForSkill(delegationResult.skillId) : 'the site'
-          const directCopy = ['Facebook', 'LinkedIn', 'Instagram', 'Canva', 'Gmail'].includes(siteName)
-            ? `${operatorName} will open ${siteName} directly in their browser session.`
-            : `${operatorName} will open the site in their browser session.`
-          const takeover = ` ${directCopy} If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+          const takeover = ` ${playbookDelegationCopy(operatorName, delegationResult)}`
           if (delegationResult.message && !delegationResult.message.includes('take over')) {
             delegationResult = { ...delegationResult, message: delegationResult.message + takeover }
           }
@@ -418,6 +449,8 @@ export async function POST(request: NextRequest) {
           message: delegationResult.message,
           actionId: delegationResult.actionId,
           taskOutputId: delegationResult.taskOutputId,
+          playbookId: delegationResult.playbookId,
+          playbookName: delegationResult.playbookName,
         } : null,
       })
     }

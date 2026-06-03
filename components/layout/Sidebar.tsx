@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   // { href: '/tool-runs',  label: 'Tool Runs' },  // hidden from nav — available at /tool-runs for debugging
   { href: '/operators',  label: 'Operators' },
   { href: '/operator-skills', label: 'Operator Skills' },
+  { href: '/operator-playbooks', label: 'Operator Playbooks' },
   { href: '/agents',     label: 'Agents' },
   { href: '/files',      label: 'Files' },
   { href: '/functions',  label: 'Functions' },

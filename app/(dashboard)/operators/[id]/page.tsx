@@ -35,7 +35,25 @@ interface Action {
   skill_id: string | null
   skill_name: string | null
   skill_decision: Record<string, unknown> | null
+  playbook_id: string | null
+  playbook_name: string | null
+  playbook_plan: Record<string, unknown> | null
   created_at: string
+}
+
+type PlaybookPlanStep = {
+  step_type?: string
+  label?: string
+  status?: string
+  requires_approval?: boolean
+  forbidden?: boolean
+}
+
+type PlaybookPlanView = {
+  playbook_id?: string
+  playbook_name?: string
+  current_step?: string | null
+  steps?: PlaybookPlanStep[]
 }
 
 interface OperatorStatusResponse {
@@ -105,6 +123,11 @@ function waitingReasonLabel(reason: string | null): string {
   if (reason.includes('security_checkpoint') || reason.includes('checkpoint')) return 'A security checkpoint appeared. Please complete it in the browser, then click "Login / CAPTCHA completed".'
   if (reason.includes('two_factor') || reason.includes('2fa')) return 'Two-factor authentication is required. Please complete it in the browser, then click "Login / CAPTCHA completed".'
   return `The operator is paused: ${reason.replace(/_/g, ' ')}. Please resolve this in the browser and click "Login / CAPTCHA completed".`
+}
+
+function getPendingPlaybook(payload: Record<string, unknown> | null): PlaybookPlanView | null {
+  const playbook = payload?.playbook
+  return playbook && typeof playbook === 'object' ? playbook as PlaybookPlanView : null
 }
 
 export default function OperatorDetailPage({ params }: { params: { id: string } }) {
@@ -213,6 +236,14 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
   }
 
   const showResume = operator.status === 'ready_to_resume' || !!operator.pending_action_type
+  const pendingPlaybook = getPendingPlaybook(operator.pending_action_payload)
+  const actionPlaybook = actions.find(a => a.playbook_id || a.playbook_plan)
+  const currentPlaybook: PlaybookPlanView | null = pendingPlaybook
+    ?? (actionPlaybook?.playbook_plan as PlaybookPlanView | null)
+    ?? (actionPlaybook?.playbook_id ? {
+      playbook_id: actionPlaybook.playbook_id,
+      playbook_name: actionPlaybook.playbook_name ?? undefined,
+    } : null)
 
   const handleResumeAction = async (actionId: string) => {
     setResumingAction(prev => ({ ...prev, [actionId]: true }))
@@ -394,6 +425,38 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         </div>
       )}
 
+      {/* Current playbook */}
+      {currentPlaybook && (
+        <div style={CARD}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Current playbook
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+            {currentPlaybook.playbook_name ?? currentPlaybook.playbook_id}
+          </div>
+          <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'DM Mono, monospace', marginTop: 2 }}>
+            {currentPlaybook.playbook_id}
+          </div>
+          {currentPlaybook.current_step && (
+            <div style={{ marginTop: 10, fontSize: 12, color: '#475569' }}>
+              Current step: <span style={{ fontFamily: 'DM Mono, monospace', color: '#6366f1' }}>{currentPlaybook.current_step}</span>
+            </div>
+          )}
+          {Array.isArray(currentPlaybook.steps) && currentPlaybook.steps.length > 0 && (
+            <ol style={{ margin: '12px 0 0', paddingLeft: 18, color: '#475569', fontSize: 12, lineHeight: 1.6 }}>
+              {currentPlaybook.steps.slice(0, 8).map((step, index) => (
+                <li key={`${step.step_type ?? index}`}>
+                  <span style={{ fontFamily: 'DM Mono, monospace' }}>{step.step_type ?? step.label}</span>
+                  {step.requires_approval ? <span style={{ marginLeft: 8, color: '#d97706', fontWeight: 600 }}>approval</span> : null}
+                  {step.forbidden ? <span style={{ marginLeft: 8, color: '#dc2626', fontWeight: 600 }}>blocked</span> : null}
+                  {step.status ? <span style={{ marginLeft: 8, color: '#94a3b8' }}>{step.status}</span> : null}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+
       {/* Pending action card */}
       {operator.pending_action_type && (
         <div style={{
@@ -504,6 +567,11 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                         <div>
                           <span style={{ fontSize: 9, fontWeight: 600, color: '#0f172a' }}>{a.skill_name}</span>
                           <div style={{ fontSize: 8, color: '#94a3b8', fontFamily: 'DM Mono, monospace' }}>{a.skill_id}</div>
+                          {a.playbook_name && (
+                            <div style={{ marginTop: 3, fontSize: 8, color: '#6366f1', fontFamily: 'DM Mono, monospace' }}>
+                              {a.playbook_name}
+                            </div>
+                          )}
                         </div>
                       ) : '—'}
                     </td>
