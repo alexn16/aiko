@@ -567,3 +567,54 @@ Explicit known-site work should open the known website directly instead of routi
 | Direct-site smoke tests | ✅ Added |
 | CAPTCHA/login/security behavior | ✅ Preserved: `waiting_user` on blockers |
 | Approval behavior | ✅ Preserved: Facebook post stays `waiting_approval` |
+
+---
+
+## Strategy Execution Planner Runtime Validation — 2026-06-04
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Environment
+
+| Check | Result |
+|---|---|
+| Browser mode | ✅ Headed mode configured (`WEB_OPERATOR_HEADLESS=false`) |
+| App port | ✅ `http://localhost:3001` |
+| Migration | ✅ `042_project_strategy_execution_plans.sql` applied |
+| Project | ✅ ALB Parking resolved to `4b283048-da9f-452a-913b-0e152267d085` |
+
+### Runtime tests
+
+| Prompt / action | Result |
+|---|---|
+| `For ALB Parking, the best strategy is to contact property owners through WhatsApp. Can AÏKO execute this?` | ✅ Created `Execution Plan: WhatsApp Web`; status `needs_capabilities`; missing `whatsapp_web` skill and `whatsapp_outreach` playbook; created System Improvement Proposal; `delegation=null`; no WhatsApp opened and no message sent. |
+| `For ALB Parking, use Reddit research to validate parking pain points.` | ✅ Created `Execution Plan: Reddit`; status `needs_capabilities` because Reddit skill/playbook are not installed locally; created System Improvement Proposal; no Web Operator action executed. |
+| `Create tasks from the Reddit execution plan.` | ✅ Created 4 internal `agent_tasks`; missing-capability execution steps are `blocked`; no Web Operator action executed. |
+| Project workspace `/projects/[id]` → `Execution Plan` tab | ✅ Shows recommended channel, strategy summary, required skills/playbooks, missing capabilities, approval gates, execution steps, and task/proposal links. |
+
+### Safety verification
+
+Baseline before runtime checks:
+
+```json
+{"web_operator_actions":28,"plans":0,"tasks":29}
+```
+
+After runtime checks:
+
+```json
+{"web_operator_actions":28,"plans":2,"tasks":33,"proposals":2}
+```
+
+`web_operator_actions` stayed unchanged. The planner created internal plans, proposals, and tasks only.
+
+### Issues found/fixed
+
+| Issue | Fix |
+|---|---|
+| CEO model base text could still mention Web Operator delegation for strategy-planner prompts | Planner intents now replace the response text with internal-plan status and return a sanitized `strategy_execution_plan_created` action. |
+| Missing-capability labels rendered `WhatsApp Web Web Operator...` | Capability label generation now avoids duplicate `Web`. |

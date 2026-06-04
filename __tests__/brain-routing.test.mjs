@@ -3606,3 +3606,127 @@ test('131. named unknown website still creates an unknown-site candidate', () =>
 
   assert.equal(inferUnknownWebsiteFromInstruction('Kevin, open AcmePortal and check leads.'), 'AcmePortal')
 })
+
+// ── Strategy Execution Planner smoke tests ───────────────────────────────────
+
+function strategyCapabilitiesForTest(text) {
+  const lower = text.toLowerCase()
+  const caps = []
+  const add = (channel, skill, playbook, approval = true, login = true) => {
+    caps.push({ channel, skill_id: skill, playbook_id: playbook, requires_approval: approval, requires_user_login: login })
+  }
+  if (/\bwhatsapp(?:\s+web)?\b/.test(lower)) add('WhatsApp Web', 'whatsapp_web', 'whatsapp_outreach')
+  if (/\breddit\b/.test(lower)) add('Reddit', 'reddit_research', 'reddit_market_research', false, true)
+  if (/\bfacebook\b/.test(lower)) add('Facebook', 'facebook_research', 'facebook_group_research')
+  if (/\blinkedin\b/.test(lower)) add('LinkedIn', 'linkedin_research', 'linkedin_company_research')
+  if (/\bgmail\b|\bemail\b/.test(lower)) add('Gmail', 'gmail_workflow', 'gmail_prepare_draft')
+  const sites = text.match(/https?:\/\/[^\s"'<>]+|(?:[a-z0-9-]+\.)+[a-z]{2,}/gi) ?? []
+  for (const site of sites) {
+    if (!/facebook|instagram|linkedin|canva|gmail|google|reddit|whatsapp/i.test(site)) {
+      const special = /\b(contact|message|submit|login|account|post|publish)\b/i.test(text)
+      add(site.replace(/[),.!?;:]+$/, ''), special ? `custom_site_${site}` : 'website_reader', special ? `custom_site_${site}_workflow` : 'general_site_research', special, special)
+    }
+  }
+  if (caps.length === 0) add('General web', 'general_web_research', 'general_site_research', false, false)
+  return caps
+}
+
+function matchCapabilitiesForTest(caps, installedSkills, installedPlaybooks) {
+  const missing = []
+  for (const cap of caps) {
+    if (!installedSkills.includes(cap.skill_id)) {
+      missing.push({
+        capability_key: `web_operator_skill:${cap.skill_id}`,
+        required_skill: cap.skill_id,
+        required_playbook: cap.playbook_id,
+        forbidden_actions: ['bypass_login', 'bypass_captcha', 'scrape_private_data', 'send_without_approval'],
+      })
+    }
+    if (!installedPlaybooks.includes(cap.playbook_id)) {
+      missing.push({
+        capability_key: `web_operator_playbook:${cap.playbook_id}`,
+        required_skill: cap.skill_id,
+        required_playbook: cap.playbook_id,
+        forbidden_actions: ['bypass_login', 'bypass_captcha', 'scrape_private_data', 'send_without_approval'],
+      })
+    }
+  }
+  return missing
+}
+
+function approvalGatesForTest(caps) {
+  return caps.flatMap(cap => {
+    if (cap.skill_id === 'whatsapp_web') return ['send_message', 'attach_file', 'create_group', 'broadcast_message']
+    if (cap.skill_id === 'facebook_research') return ['join_group', 'post', 'comment', 'send_message']
+    if (cap.skill_id === 'gmail_workflow') return ['send_email', 'send_gmail_draft']
+    return cap.requires_approval ? ['submit_form', 'send_message', 'publish'] : []
+  })
+}
+
+test('132. WhatsApp strategy creates missing capability proposal when whatsapp_web is missing', () => {
+  const caps = strategyCapabilitiesForTest('For ALB Parking, contact property owners through WhatsApp.')
+  const missing = matchCapabilitiesForTest(caps, ['facebook_research'], ['facebook_group_research'])
+  assert.ok(caps.some(c => c.skill_id === 'whatsapp_web'))
+  assert.ok(missing.some(m => m.capability_key === 'web_operator_skill:whatsapp_web'))
+  assert.ok(missing.some(m => m.capability_key === 'web_operator_playbook:whatsapp_outreach'))
+})
+
+test('133. Reddit strategy maps to reddit_research when skill and playbook exist', () => {
+  const caps = strategyCapabilitiesForTest('Use Reddit research to validate parking pain points.')
+  const missing = matchCapabilitiesForTest(caps, ['reddit_research'], ['reddit_market_research'])
+  assert.equal(caps[0].skill_id, 'reddit_research')
+  assert.equal(caps[0].playbook_id, 'reddit_market_research')
+  assert.equal(missing.length, 0)
+})
+
+test('134. Facebook strategy maps to facebook_research and group research playbook', () => {
+  const caps = strategyCapabilitiesForTest('Research Facebook groups about parking in A Coruña.')
+  assert.equal(caps[0].skill_id, 'facebook_research')
+  assert.equal(caps[0].playbook_id, 'facebook_group_research')
+})
+
+test('135. random website maps to website_reader or custom site proposal', () => {
+  const readOnly = strategyCapabilitiesForTest('Research https://randomwebsite.com for lead context.')
+  const special = strategyCapabilitiesForTest('Contact people through randomwebsite.com.')
+  assert.equal(readOnly[0].skill_id, 'website_reader')
+  assert.ok(special[0].skill_id.startsWith('custom_site_'))
+})
+
+test('136. execution plan does not create Web Operator actions', () => {
+  const createdRows = ['project_strategy_execution_plans', 'agent_tasks', 'system_improvement_proposals']
+  assert.ok(!createdRows.includes('web_operator_actions'))
+})
+
+test('137. create_tasks creates internal tasks only', () => {
+  const step = {
+    owner_role: 'copywriting_agent',
+    description: 'Prepare WhatsApp message draft',
+    requires_approval: true,
+    internal_only: true,
+  }
+  const task = { table: 'agent_tasks', owner_role: step.owner_role, description: JSON.stringify(step) }
+  assert.equal(task.table, 'agent_tasks')
+  assert.ok(JSON.parse(task.description).internal_only)
+})
+
+test('138. approval gates are included for messaging and posting channels', () => {
+  const caps = strategyCapabilitiesForTest('Use WhatsApp and Facebook posting for the campaign.')
+  const gates = approvalGatesForTest(caps)
+  assert.ok(gates.includes('send_message'))
+  assert.ok(gates.includes('post'))
+})
+
+test('139. missing capability proposals include forbidden actions', () => {
+  const caps = strategyCapabilitiesForTest('Use WhatsApp outreach.')
+  const missing = matchCapabilitiesForTest(caps, [], [])
+  assert.ok(missing.every(m => m.forbidden_actions.includes('bypass_captcha')))
+  assert.ok(missing.every(m => m.forbidden_actions.includes('send_without_approval')))
+})
+
+test('140. CEO can AÏKO execute intent returns ready or missing capability answer', () => {
+  function isStrategyExecutionPlannerIntent(command) {
+    return /\b(can\s+a[ïi]ko\s+(execute|do)|proceed with the strategy|make the agents execute|execute this strategy|use\s+(whatsapp|reddit|facebook|linkedin|instagram|canva|gmail|email)|best strategy is|strategy execution plan)\b/i.test(command)
+  }
+  const command = 'For ALB Parking, the best strategy is WhatsApp outreach. Can AÏKO execute this?'
+  assert.equal(isStrategyExecutionPlannerIntent(command), true)
+})

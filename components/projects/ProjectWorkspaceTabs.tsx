@@ -63,7 +63,7 @@ interface Props {
   hasProvider: boolean
 }
 
-type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'research' | 'leads' | 'operator' | 'decisions' | 'files'
+type Tab = 'overview' | 'pm-chat' | 'reports' | 'agents' | 'activity' | 'comms' | 'tasks' | 'outputs' | 'approvals' | 'campaigns' | 'execution-plan' | 'research' | 'leads' | 'operator' | 'decisions' | 'files'
 
 const STATUS_DOT: Record<string, string> = {
   active: '#10b981', browsing: '#3b82f6', writing: '#f59e0b',
@@ -271,6 +271,306 @@ function StrategyBriefStrip({ projectId }: { projectId: string }) {
       <div style={{ fontSize: 10, color: '#15803d', marginTop: 8 }}>
         🔒 Guidance only — does not trigger research or outreach.
       </div>
+    </div>
+  )
+}
+
+// ── Strategy Execution Plan Panel ─────────────────────────────────────────────
+
+interface StrategyExecutionPlanData {
+  id: string
+  title: string
+  objective: string
+  recommended_channel: string
+  target_audience: string
+  strategy_summary: string
+  required_agents: Array<{ role?: string; name?: string; responsibility?: string }>
+  required_skills: Array<{ skill_id: string; name: string; available: boolean; reason: string }>
+  required_playbooks: Array<{ playbook_id: string; name: string; skill_id: string; available: boolean; reason: string }>
+  execution_steps: Array<{
+    step_id: string
+    owner_role: string
+    description: string
+    skill_id?: string
+    playbook_id?: string
+    requires_user_login?: boolean
+    requires_approval: boolean
+    missing_capability?: boolean
+  }>
+  approval_gates: Array<{ action?: string; channel?: string; reason?: string }>
+  missing_capabilities: Array<{
+    capability_key: string
+    channel: string
+    name: string
+    reason: string
+    approval_gates: string[]
+    forbidden_actions: string[]
+  }>
+  system_improvement_ids: string[]
+  status: string
+  created_at: string
+}
+
+function StatusPill({ children, tone }: { children: React.ReactNode; tone: 'green' | 'amber' | 'slate' | 'red' }) {
+  const colors = {
+    green: { bg: '#dcfce7', color: '#166534' },
+    amber: { bg: '#fef3c7', color: '#92400e' },
+    slate: { bg: '#f1f5f9', color: '#475569' },
+    red:   { bg: '#fee2e2', color: '#991b1b' },
+  }[tone]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      padding: '2px 7px', borderRadius: 999,
+      background: colors.bg, color: colors.color,
+      fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+      letterSpacing: '0.04em',
+    }}>
+      {children}
+    </span>
+  )
+}
+
+function ProjectStrategyExecutionPanel({ projectId }: { projectId: string }) {
+  const [plans, setPlans] = useState<StrategyExecutionPlanData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [working, setWorking] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  async function loadPlans() {
+    setLoading(true)
+    fetch(`/api/projects/${projectId}/strategy-execution-plans`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setPlans(Array.isArray(d?.plans) ? d.plans : []))
+      .catch(() => setMessage('Could not load execution plans.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { loadPlans() }, [projectId])
+
+  async function generatePlan() {
+    setWorking('generate')
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/projects/${projectId}/strategy-execution-plans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ create_missing_capability_proposals: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setMessage(data.error ?? 'Could not generate execution plan.')
+        return
+      }
+      await loadPlans()
+      setMessage(data.ready_to_execute
+        ? 'AÏKO has the required skills/playbooks. You can create tasks.'
+        : 'AÏKO cannot execute this strategy yet. It needs capabilities first.')
+    } catch (err) {
+      setMessage(String(err))
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  async function createTasks(planId: string) {
+    setWorking('tasks')
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/strategy-execution-plans/${planId}/create-tasks`, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setMessage(data.error ?? 'Could not create tasks.')
+        return
+      }
+      await loadPlans()
+      setMessage(`Created ${data.tasks_created ?? 0} internal task${data.tasks_created === 1 ? '' : 's'}.`)
+    } catch (err) {
+      setMessage(String(err))
+    } finally {
+      setWorking(null)
+    }
+  }
+
+  const latest = plans[0]
+  const ready = latest && latest.missing_capabilities.length === 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ ...CARD, padding: '18px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div>
+            <div style={LABEL}>Execution Plan</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+              Strategy to capability check to internal tasks
+            </div>
+          </div>
+          <button
+            onClick={generatePlan}
+            disabled={working === 'generate'}
+            style={{
+              background: '#0f172a', color: '#ffffff', border: 'none',
+              borderRadius: 8, padding: '8px 14px', fontSize: 12,
+              fontWeight: 700, cursor: working === 'generate' ? 'default' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {working === 'generate' ? 'Generating...' : 'Generate execution plan'}
+          </button>
+        </div>
+
+        {message && (
+          <div style={{
+            marginBottom: 12, padding: '9px 11px',
+            background: message.includes('cannot') ? '#fffbeb' : '#f8fafc',
+            border: `1px solid ${message.includes('cannot') ? '#fde68a' : '#e2e8f0'}`,
+            borderRadius: 8, fontSize: 12, color: message.includes('cannot') ? '#92400e' : '#475569',
+          }}>
+            {message}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>Loading plans...</div>
+        ) : !latest ? (
+          <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+            No execution plan yet. Generate one from the current project strategy brief, or ask the CEO whether AÏKO can execute a specific campaign strategy.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{
+              padding: '12px 14px',
+              background: ready ? '#f0fdf4' : '#fffbeb',
+              border: `1px solid ${ready ? '#bbf7d0' : '#fde68a'}`,
+              borderRadius: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: ready ? '#14532d' : '#92400e' }}>
+                  {ready ? 'AÏKO has the required skills/playbooks.' : 'AÏKO cannot execute this strategy yet.'}
+                </div>
+                <StatusPill tone={ready ? 'green' : 'amber'}>{latest.status.replace(/_/g, ' ')}</StatusPill>
+              </div>
+              <div style={{ fontSize: 12, color: '#475569' }}>
+                Channel: <b>{latest.recommended_channel || 'Not set'}</b>
+              </div>
+              {latest.strategy_summary && (
+                <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6, marginTop: 6 }}>
+                  {latest.strategy_summary.slice(0, 420)}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => createTasks(latest.id)}
+                disabled={working === 'tasks'}
+                style={{
+                  background: '#16a34a', color: '#ffffff', border: 'none',
+                  borderRadius: 7, padding: '7px 12px', fontSize: 12,
+                  fontWeight: 700, cursor: working === 'tasks' ? 'default' : 'pointer',
+                }}
+              >
+                {working === 'tasks' ? 'Creating...' : 'Create tasks from plan'}
+              </button>
+              <Link href="/system" style={{ color: '#6366f1', fontSize: 12, fontWeight: 700, textDecoration: 'none', padding: '7px 0' }}>
+                Open improvement proposals
+              </Link>
+              <Link href={`/start-campaign?project_id=${projectId}`} style={{ color: '#6366f1', fontSize: 12, fontWeight: 700, textDecoration: 'none', padding: '7px 0' }}>
+                Open First Campaign Flow
+              </Link>
+              <Link href="/operator-skills" style={{ color: '#6366f1', fontSize: 12, fontWeight: 700, textDecoration: 'none', padding: '7px 0' }}>
+                Open Operator Skills
+              </Link>
+              <Link href="/operator-playbooks" style={{ color: '#6366f1', fontSize: 12, fontWeight: 700, textDecoration: 'none', padding: '7px 0' }}>
+                Open Playbooks
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {latest && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ ...CARD, padding: '16px 18px' }}>
+            <div style={LABEL}>Required capabilities</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {latest.required_skills.map(skill => (
+                <div key={skill.skill_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
+                  <span style={{ color: '#334155' }}>{skill.name}</span>
+                  <StatusPill tone={skill.available ? 'green' : 'red'}>{skill.available ? 'available' : 'missing'}</StatusPill>
+                </div>
+              ))}
+              {latest.required_playbooks.map(playbook => (
+                <div key={playbook.playbook_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
+                  <span style={{ color: '#334155' }}>{playbook.name}</span>
+                  <StatusPill tone={playbook.available ? 'green' : 'red'}>{playbook.available ? 'available' : 'missing'}</StatusPill>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...CARD, padding: '16px 18px' }}>
+            <div style={LABEL}>Approvals and missing items</div>
+            {latest.missing_capabilities.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {latest.missing_capabilities.map(missing => (
+                  <div key={missing.capability_key} style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 10px' }}>
+                    <div style={{ fontWeight: 700 }}>{missing.name}</div>
+                    <div style={{ marginTop: 3, lineHeight: 1.5 }}>{missing.reason}</div>
+                    <div style={{ marginTop: 4, color: '#64748b' }}>
+                      Forbidden: {missing.forbidden_actions.slice(0, 4).join(', ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {latest.approval_gates.map((gate, i) => (
+                  <div key={`${gate.channel}-${gate.action}-${i}`} style={{ fontSize: 12, color: '#334155' }}>
+                    <b>{gate.channel}</b>: {String(gate.action ?? '').replace(/_/g, ' ')}
+                  </div>
+                ))}
+                {latest.approval_gates.length === 0 && (
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>No approval gates detected.</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {latest && (
+        <div style={{ ...CARD, padding: '16px 18px' }}>
+          <div style={LABEL}>Execution steps</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {latest.execution_steps.map((step, i) => (
+              <div key={step.step_id} style={{
+                display: 'grid', gridTemplateColumns: '30px 1fr auto',
+                gap: 10, alignItems: 'center',
+                padding: '9px 10px',
+                background: step.missing_capability ? '#fffbeb' : '#f8fafc',
+                border: `1px solid ${step.missing_capability ? '#fde68a' : '#e2e8f0'}`,
+                borderRadius: 7,
+              }}>
+                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#94a3b8' }}>{i + 1}</div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{step.description}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                    Owner: {step.owner_role.replace(/_/g, ' ')}
+                    {step.skill_id && ` · Skill: ${step.skill_id}`}
+                    {step.playbook_id && ` · Playbook: ${step.playbook_id}`}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                  {step.requires_user_login && <StatusPill tone="amber">manual login</StatusPill>}
+                  {step.requires_approval && <StatusPill tone="slate">approval</StatusPill>}
+                  {step.missing_capability && <StatusPill tone="red">blocked</StatusPill>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1049,6 +1349,7 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
     { id: 'outputs',   label: 'Outputs' },
     { id: 'approvals', label: 'Approvals' },
     { id: 'campaigns', label: 'Campaigns' },
+    { id: 'execution-plan', label: 'Execution Plan' },
     { id: 'research',  label: 'Research' },
     { id: 'leads',     label: 'Leads' },
     { id: 'operator',  label: 'Operator' },
@@ -1405,6 +1706,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
             <div style={{ maxWidth: 760 }}>
               <ProjectCampaignsPanel projectId={project.id} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Execution Plan ──────────────────────────────────────────────── */}
+        {tab === 'execution-plan' && (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
+            <div style={{ maxWidth: 980 }}>
+              <ProjectStrategyExecutionPanel projectId={project.id} />
             </div>
           </div>
         )}

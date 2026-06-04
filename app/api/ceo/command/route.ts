@@ -8,6 +8,13 @@ import type { DelegationResult } from '@/lib/web-operator/delegation'
 import { extractFirstUrl, getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
 import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
 import { createSystemImprovementProposal } from '@/lib/system-improvements'
+import { findProjectByNameOrAlias } from '@/lib/project-context'
+import {
+  createExecutionTasksFromPlan,
+  findLatestStrategyExecutionPlanByHint,
+  generateStrategyExecutionPlanFromText,
+  type StrategyExecutionPlan,
+} from '@/lib/strategy-execution-planner'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
 
@@ -48,6 +55,28 @@ function playbookDelegationCopy(operatorName: string, result: DelegationResult):
   return `${operatorName} will use the ${result.playbookName} playbook. If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
 }
 
+function isStrategyExecutionPlannerIntent(command: string): boolean {
+  return /\b(can\s+a[ïi]ko\s+(execute|do)|proceed with the strategy|make the agents execute|execute this strategy|use\s+(whatsapp|reddit|facebook|linkedin|instagram|canva|gmail|email)|best strategy is|strategy execution plan)\b/i.test(command)
+}
+
+function isCreateStrategyTasksIntent(command: string): boolean {
+  return /\bcreate tasks? from\b.*\bexecution plan\b/i.test(command)
+}
+
+function extractProjectNameFromCommand(command: string): string | null {
+  const match = command.match(/\bfor\s+([^,.]+?)(?:,|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
+  if (!match) return null
+  return match[1].trim().replace(/\s+/g, ' ')
+}
+
+function hintFromStrategyCommand(command: string): string {
+  const lower = command.toLowerCase()
+  for (const hint of ['whatsapp', 'reddit', 'facebook', 'linkedin', 'instagram', 'canva', 'gmail', 'email']) {
+    if (lower.includes(hint)) return hint
+  }
+  return command.slice(0, 80)
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -75,6 +104,13 @@ export async function POST(request: NextRequest) {
 
       // Auto-delegate web research if intent detected
       let delegationResult: DelegationResult | null = null
+      let strategyExecution: {
+        plan: StrategyExecutionPlan
+        missing_capabilities: string[]
+        proposals_created: number
+        tasks_created: number
+        ready_to_execute: boolean
+      } | null = null
 
       // Detect operator control commands
       const lcCommand = command.trim().toLowerCase()
@@ -148,6 +184,43 @@ export async function POST(request: NextRequest) {
       )
 
       const needsWebResearch = detectWebResearchIntent(command.trim(), result as unknown as Record<string, unknown>)
+
+      if (isCreateStrategyTasksIntent(command.trim())) {
+        try {
+          const plan = await findLatestStrategyExecutionPlanByHint(hintFromStrategyCommand(command.trim()))
+          if (plan) {
+            const created = await createExecutionTasksFromPlan(plan.id)
+            strategyExecution = {
+              plan: created.plan,
+              missing_capabilities: created.plan.missing_capabilities.map(m => m.name),
+              proposals_created: 0,
+              tasks_created: created.tasks.length,
+              ready_to_execute: created.plan.missing_capabilities.length === 0,
+            }
+          }
+        } catch { /* non-fatal */ }
+      } else if (isStrategyExecutionPlannerIntent(command.trim())) {
+        try {
+          const projectName = extractProjectNameFromCommand(command.trim())
+          const project = projectName ? await findProjectByNameOrAlias(projectName) : null
+          const projectId = String(result.project_id ?? project?.id ?? '')
+          if (projectId) {
+            const created = await generateStrategyExecutionPlanFromText({
+              projectId,
+              strategyText: command.trim(),
+              createdByRole: 'CEO',
+              createMissingCapabilityProposals: true,
+            })
+            strategyExecution = {
+              plan: created.plan,
+              missing_capabilities: created.plan.missing_capabilities.map(m => m.name),
+              proposals_created: created.proposals.length,
+              tasks_created: 0,
+              ready_to_execute: created.plan.missing_capabilities.length === 0,
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
 
       const recommendedSkill = operatorName
         ? await getRecommendedSkillForInstruction(command.trim())
@@ -318,7 +391,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch { /* non-fatal */ }
-      } else if (!delegationResult && needsWebResearch) {
+      } else if (!strategyExecution && !delegationResult && needsWebResearch) {
         const query = extractSearchQuery(command.trim(), result as unknown as Record<string, unknown>)
         delegationResult = await delegateSearch({
           query,
@@ -399,6 +472,19 @@ export async function POST(request: NextRequest) {
 
       // If a recommended operator exists, append a mention to the CEO response
       let responseText = String(result.response ?? '')
+      if (strategyExecution) {
+        const missing = strategyExecution.missing_capabilities
+        const planCopy = strategyExecution.ready_to_execute
+          ? `AÏKO can prepare this campaign internally. I created the ${strategyExecution.plan.title} plan, and it is ready for task creation.`
+          : `AÏKO cannot execute this strategy yet. I created the ${strategyExecution.plan.title} plan and flagged the missing capabilities: ${missing.join(', ')}.`
+        const proposalCopy = strategyExecution.proposals_created > 0
+          ? ` I also created ${strategyExecution.proposals_created} System Improvement Proposal${strategyExecution.proposals_created === 1 ? '' : 's'} for approval before adding capabilities.`
+          : ''
+        const taskCopy = strategyExecution.tasks_created > 0
+          ? ` I created ${strategyExecution.tasks_created} internal task${strategyExecution.tasks_created === 1 ? '' : 's'} from the plan. No external action was executed.`
+          : ' No external action was executed.'
+        responseText = `${planCopy}${proposalCopy}${taskCopy}`
+      }
       if (
         String(result.intent) === 'create_project' &&
         strategyBrief &&
@@ -440,9 +526,20 @@ export async function POST(request: NextRequest) {
         ...result,
         response:            responseText,
         capability_gap:      capabilityGap,
+        actions:             strategyExecution ? [{
+          type: 'strategy_execution_plan_created',
+          data: {
+            plan_id: strategyExecution.plan.id,
+            status: strategyExecution.plan.status,
+            ready_to_execute: strategyExecution.ready_to_execute,
+            missing_capabilities: strategyExecution.missing_capabilities,
+            tasks_created: strategyExecution.tasks_created,
+          },
+        }] : result.actions,
         start_campaign_url:  startCampaignUrl,
         launch_template:     launchTemplate,
         strategy_brief:      strategyBrief,
+        strategy_execution:   strategyExecution,
         recall_chips:        recallChips,
         delegation: delegationResult ? {
           status: delegationResult.status,

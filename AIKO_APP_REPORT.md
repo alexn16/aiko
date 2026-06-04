@@ -270,6 +270,12 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Tables:** `web_operator_skills`, `web_operator_playbooks`, `web_operator_actions`
 - **Status:** complete — known-site workflows open the target website directly, attach skill/playbook metadata to action rows, pause for login/CAPTCHA/security, and keep posting/sending/publishing actions approval-gated.
 
+### Strategy Execution Planner
+- **What it does:** Connects project strategy to execution without external automation. It turns a campaign strategy into required agents, Web Operator skills, playbooks, approval gates, internal execution steps, internal tasks, and System Improvement Proposals for missing capabilities.
+- **Main files:** `lib/strategy-execution-planner.ts`, `app/api/projects/[id]/strategy-execution-plans/route.ts`, `app/api/strategy-execution-plans/[id]/create-tasks/route.ts`, `components/projects/ProjectWorkspaceTabs.tsx`
+- **Tables:** `project_strategy_execution_plans`, `agent_tasks`, `custom_agents`, `system_improvement_proposals`
+- **Status:** complete — planner is internal-only. It does not open websites, create Web Operator actions, send messages, post, publish, scrape, approve actions, resume actions, or modify code.
+
 ### Web Operator Delegation
 - **What it does:** Higher-level wrapper that agents call instead of the Web Operator directly. Checks mode, sends an internal message, resolves or starts a session, runs the action, and saves results as `agent_task_outputs`. Convenience wrappers: `delegateSearch`, `delegateReadWebsite`, `delegateEmailDraft`, `delegateExternalAction`.
 - **Main files:** `lib/web-operator/delegation.ts`
@@ -315,6 +321,7 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 | 017 | 017_web_operator.sql | `web_operator_sessions`, `web_operator_actions` |
 | 018 | 018_web_operator_delegation.sql | Adds columns to `web_operator_actions` |
 | 019 | 019_system_capabilities.sql | `system_capabilities`, `system_improvement_proposals` |
+| 042 | 042_project_strategy_execution_plans.sql | `project_strategy_execution_plans` |
 
 ### Key tables
 
@@ -339,6 +346,7 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 | `tool_runs` | Immutable log of every tool execution with input/output and permission mode |
 | `web_operator_sessions` | Browser automation sessions |
 | `web_operator_actions` | Individual browser actions with type, status, approval linkage |
+| `project_strategy_execution_plans` | Strategy-to-capability plans with required agents, skills, playbooks, approval gates, missing capabilities, and execution steps |
 | `operating_mode` | Singleton: current mode, pause state, daily send limit and counter |
 | `mode_action_log` | Audit log of every operating mode permission check |
 | `system_capabilities` | Feature flag/status map for all AÏKO capabilities |

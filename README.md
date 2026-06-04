@@ -1277,6 +1277,16 @@ Web Operator Playbooks sit on top of skills. **Skills define safety policy; play
 
 - Playbooks are browser workflow plans only. They do not add native Facebook, Canva, LinkedIn, Instagram, or Gmail APIs.
 - Playbooks start with transparent planning and the first safe browser step; selector-dependent or uncertain steps are not executed blindly.
+
+## Strategy Execution Planner
+
+The Strategy Execution Planner connects project strategy to execution planning:
+
+`Strategy → capability check → execution plan → internal tasks or System Improvement Proposals`
+
+It is internal planning only. It may create `project_strategy_execution_plans`, internal `agent_tasks`, default marketing-agent specs, and `system_improvement_proposals` when a required skill/playbook is missing. It must not open websites, create Web Operator actions, send messages, post, publish, scrape private data, bypass login/CAPTCHA/security, approve actions, resume operators, or modify code.
+
+Web Operator Skills define safety rules. Web Operator Playbooks define safe workflows. The Strategy Execution Planner decides which skills/playbooks a strategy needs and whether AÏKO can proceed with internal task creation or must ask the user to approve a capability improvement first.
 - Login, CAPTCHA, 2FA, and security checkpoints still pause into manual takeover.
 - Publishing, posting, joining, messaging, sending, sharing, and final downloads still require approval.
 - The playbook catalog is visible at `/operator-playbooks`; operator action rows store `playbook_id`, `playbook_name`, and the planned steps JSON when a playbook is selected.
