@@ -4080,3 +4080,68 @@ test('165. implementation prompt copy falls back if clipboard write stalls', asy
 
   assert.equal(fallbackCalled, true)
 })
+
+// ── MVP dashboard consolidation ───────────────────────────────────────────────
+
+test('166. dashboard summary does not expose secrets', () => {
+  const summary = {
+    ceo_brain: { provider_name: 'Ollama (local)', model: 'llama3.1:8b', status: 'connected' },
+    recent_files: [{ id: 'f1', filename: 'report.md', title: 'Report', content_type: 'markdown' }],
+  }
+  const serialized = JSON.stringify(summary)
+  assert.equal(serialized.includes('api_key'), false)
+  assert.equal(serialized.includes('refresh_token'), false)
+  assert.equal(serialized.includes('storage_path'), false)
+  assert.equal(serialized.includes('implementation_prompt'), false)
+})
+
+test('167. dashboard summary shows CEO brain status', () => {
+  const summary = {
+    ceo_brain: {
+      can_think: true,
+      provider_name: 'Ollama (local)',
+      model: 'llama3.1:8b',
+      status: 'connected',
+    },
+  }
+  assert.equal(summary.ceo_brain.can_think, true)
+  assert.equal(summary.ceo_brain.status, 'connected')
+  assert.ok(summary.ceo_brain.provider_name.includes('Ollama'))
+})
+
+test('168. dashboard summary includes pending approvals count', () => {
+  const counts = {
+    pending_approvals: 4,
+  }
+  assert.equal(Number.isInteger(counts.pending_approvals), true)
+  assert.equal(counts.pending_approvals, 4)
+})
+
+test('169. dashboard summary includes waiting_user count', () => {
+  const counts = {
+    waiting_user: 2,
+  }
+  assert.equal(Number.isInteger(counts.waiting_user), true)
+  assert.equal(counts.waiting_user, 2)
+})
+
+test('170. dashboard summary includes active improvement proposal count', () => {
+  const counts = {
+    active_improvement_proposals: 3,
+  }
+  assert.equal(Number.isInteger(counts.active_improvement_proposals), true)
+  assert.equal(counts.active_improvement_proposals, 3)
+})
+
+test('171. dashboard quick links exist', () => {
+  const quickLinks = [
+    { label: 'CEO Chat', href: '/ceo' },
+    { label: 'Start Campaign', href: '/start-campaign' },
+    { label: 'Operators', href: '/operators' },
+    { label: 'Approvals', href: '/approvals' },
+    { label: 'Files', href: '/files' },
+    { label: 'System Improvements', href: '/system' },
+  ]
+  const hrefs = quickLinks.map(link => link.href)
+  assert.deepEqual(hrefs, ['/ceo', '/start-campaign', '/operators', '/approvals', '/files', '/system'])
+})

@@ -89,7 +89,7 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 
 - `/ceo` — **CEO Chat** (default home). Speak to the CEO, create projects, coordinate the company.
 - `/connect-ai` — Connect and manage AI providers, assign roles.
-- `/dashboard` — operational overview (metrics, active agents, activity)
+- `/dashboard` — MVP owner overview: brain/setup status, operating mode, projects, Web Operators, approvals, improvements, warnings, recent files/reports/decisions, and manual smoke-test checklist.
 - `/office` — Live Office (run agents, monitor activity, browser stream)
 - `/leads` — lead table, scraping, enrichment
 - `/approvals` — **Approval Center** (canonical). Review and approve agent outputs before external use. `/approval` redirects here.
@@ -105,6 +105,63 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 - `/system` — Capability map, strategy checker, and improvement proposals
 - `/projects` — multi-project overview
 - `/projects/[id]` — per-project workspace (memory, agents, activity)
+
+## MVP operating guide
+
+### Start the app locally
+
+```bash
+npm install
+npm run dev
+```
+
+For local validation with visible browser sessions:
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+Open `http://localhost:3001/dashboard` for the owner overview. The dashboard is read-only: it reports setup, safety, counts, warnings, recent records, and quick links without running external actions.
+
+### Connect a brain
+
+Open `/setup` or `/connect-ai`. AÏKO is honest about provider state:
+
+- ChatGPT/Codex is connected only when ChatGPT OAuth is configured and a connected OAuth profile exists.
+- Claude is connected only when Claude OAuth, Anthropic API, or local Claude Code auth is available.
+- Ollama is a local fallback profile and may be shown as the active CEO brain in local development.
+
+CEO Chat requires a real connected and tested provider assigned to the CEO role.
+
+### Create a project
+
+Open `/ceo` and ask the CEO to create a project. AÏKO creates the project workspace, assigns or recommends a Project Manager, records decisions, creates a strategy brief, and prepares a first-campaign launch checklist. No external messages are sent.
+
+### Run the first campaign
+
+Open `/start-campaign`. Use the guided flow to choose a project, pick an operator, research leads, prepare drafts, approve risky actions, resume approved Web Operator actions, check replies, and inspect execution trails. Approval Center remains the gate before any external-facing action.
+
+### Supervise Web Operators
+
+Open `/operators` or `/operators/[id]`. Web Operators use browser sessions, Skills, Playbooks, and step tracking. If a login, CAPTCHA, QR code, or security checkpoint appears, the operator enters `waiting_user` and the user must take over manually. AÏKO does not bypass login/CAPTCHA/security checks.
+
+### Use files and reports
+
+Use project Reports tabs and `/reports` for executive summaries. Use `/files` to see generated Markdown, JSON, CSV, project bundles, strategy briefs, and decision logs. File exports are internal artifacts; they do not send outreach.
+
+### Self-improvement loop
+
+When a strategy needs a missing capability, the Strategy Execution Planner creates an internal execution plan and a System Improvement Proposal. `/system` shows capability gaps, Codex-ready implementation prompts, proposal lifecycle status, validation guard messages, and the Self-Improvement Timeline.
+
+AÏKO does not silently modify its own code. The user approves a proposal, copies the prompt to Codex or another coding tool externally, tracks branch/commit/PR metadata, and marks the proposal validated only after build/tests/runtime checks pass. For Web Operator capability proposals, validation is blocked unless the referenced skill and playbook rows exist.
+
+### What is not connected by default
+
+- ChatGPT/Codex OAuth may be unconfigured in local dev.
+- Claude OAuth/API/CLI may be unconfigured in local dev.
+- Native platform APIs such as WhatsApp, LinkedIn, Facebook, Gmail, Canva, CRM, or Meta Business Suite are not assumed.
+- Missing platform capabilities become proposals, not automatic implementations.
+- AÏKO does not auto-send email, WhatsApp, Facebook, LinkedIn, or other external messages.
 
 ## CEO Chat vs Project Manager Chat
 
