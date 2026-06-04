@@ -3,6 +3,12 @@ import { createAgentTask, type AgentTask } from '@/lib/agents/tasks'
 import { createCustomAgent, listCustomAgents, type CustomAgent } from '@/lib/custom-agents'
 import { getProjectStrategyBrief, type ProjectStrategyBrief } from '@/lib/project-strategy-brief'
 import { createSystemImprovementProposal, type SystemImprovementProposal } from '@/lib/system-improvements'
+import {
+  generateCapabilityImplementationPrompt,
+  type CapabilityImplementationSpec,
+  type PlaybookImplementationSpec,
+  type SkillImplementationSpec,
+} from '@/lib/system-improvement-prompts'
 import { getSkillById } from '@/lib/web-operator/skills'
 import { getPlaybookById } from '@/lib/web-operator/playbooks'
 
@@ -56,6 +62,13 @@ export interface MissingCapability {
   approval_gates: string[]
   forbidden_actions: string[]
   implementation_prompt: string
+  skill_spec?: SkillImplementationSpec
+  playbook_spec?: PlaybookImplementationSpec
+  database_changes?: string[]
+  api_routes?: string[]
+  ui_changes?: string[]
+  test_plan?: string[]
+  runtime_validation_plan?: string[]
 }
 
 export interface ExecutionStep {
@@ -419,10 +432,112 @@ function implementationPromptFor(capability: RequiredCapability): string {
   return `Add a browser-only Web Operator capability for ${capability.channel}.\n\nRequired skill: ${capability.skill_id}\nRequired playbook: ${capability.playbook_id}\n\nSafety rules:\n- manual login/security/CAPTCHA takeover only\n- no native platform APIs\n- no automatic posting, publishing, sending, joining, or messaging\n- public/visible data only\n\nApproval gates:\n${gates.map(g => `- ${g}`).join('\n')}\n\nForbidden actions:\n${forbidden.map(f => `- ${f}`).join('\n')}\n\nImplement the skill/playbook, tests, and UI metadata before AÏKO tries to execute this channel.`
 }
 
+function websitePatternFor(capability: RequiredCapability): string {
+  const lower = capability.channel.toLowerCase()
+  if (lower.includes('whatsapp')) return 'web.whatsapp.com'
+  if (lower.includes('reddit')) return 'reddit.com'
+  if (lower.includes('google maps')) return 'google.com/maps|maps.google.com'
+  if (lower.includes('google sheets')) return 'docs.google.com/spreadsheets'
+  if (lower.includes('notion')) return 'notion.so'
+  if (lower.includes('meta')) return 'business.facebook.com|business.meta.com'
+  if (lower.includes('tiktok')) return 'tiktok.com'
+  if (lower.includes('youtube')) return 'youtube.com'
+  if (lower.includes('wordpress')) return 'wordpress.com|wp-admin'
+  if (lower.includes('webflow')) return 'webflow.com'
+  return capability.source ?? '*'
+}
+
+function allowedActionsFor(capability: RequiredCapability): string[] {
+  const lower = capability.channel.toLowerCase()
+  if (lower.includes('whatsapp')) return ['open_whatsapp_web', 'open_url', 'wait_for_manual_login', 'search_existing_contact', 'prepare_draft_message', 'preview_recipient', 'read_visible_reply_snippets']
+  if (lower.includes('reddit')) return ['open_url', 'search_subreddits', 'read_public_threads', 'collect_public_posts', 'summarize_findings']
+  if (lower.includes('google maps')) return ['open_url', 'search_public_businesses', 'read_visible_business_results', 'collect_public_business_info', 'summarize_findings']
+  if (lower.includes('sheets')) return ['open_url', 'read_visible_sheet_context', 'prepare_update_plan']
+  if (lower.includes('notion')) return ['open_url', 'read_visible_page_context', 'prepare_page_draft']
+  if (lower.includes('meta') || lower.includes('tiktok') || lower.includes('youtube')) return ['open_url', 'read_visible_public_content', 'prepare_content_draft', 'capture_preview']
+  if (lower.includes('wordpress') || lower.includes('webflow')) return ['open_url', 'read_visible_admin_context', 'prepare_content_draft', 'capture_preview']
+  return ['open_url', 'read_visible_public_content', 'prepare_draft', 'summarize_findings']
+}
+
+function outputTypesFor(capability: RequiredCapability): string[] {
+  const lower = capability.channel.toLowerCase()
+  if (lower.includes('whatsapp')) return ['message_draft', 'approval_item', 'conversation_summary']
+  if (lower.includes('reddit')) return ['research_brief', 'pain_point_summary', 'source_list']
+  if (lower.includes('sheets') || lower.includes('notion')) return ['draft_update', 'approval_item']
+  return ['research_brief', 'draft', 'approval_item']
+}
+
+function skillSpecFor(capability: RequiredCapability): SkillImplementationSpec {
+  return {
+    skill_id: capability.skill_id,
+    name: capability.name,
+    website_pattern: websitePatternFor(capability),
+    description: `${capability.channel} browser-only workflow. User login/security takeover is required when needed; risky actions require approval.`,
+    allowed_actions: allowedActionsFor(capability),
+    approval_required_actions: approvalGatesFor(capability),
+    forbidden_actions: forbiddenActionsFor(capability),
+    login_policy: capability.requires_user_login ? 'manual_login_or_qr_only_no_bypass' : 'manual_login_if_needed_no_bypass',
+    output_types: outputTypesFor(capability),
+  }
+}
+
+function playbookSpecFor(capability: RequiredCapability): PlaybookImplementationSpec {
+  const lower = capability.channel.toLowerCase()
+  if (lower.includes('whatsapp')) {
+    return {
+      playbook_id: capability.playbook_id,
+      skill_id: capability.skill_id,
+      name: 'WhatsApp Outreach',
+      description: 'Open WhatsApp Web directly, pause for QR/manual login, prepare a draft message, and request approval before sending.',
+      trigger_patterns: ['whatsapp', 'whatsapp web', 'outreach', 'draft message'],
+      steps: ['open_whatsapp_web', 'wait_for_qr_or_manual_login_if_needed', 'search_existing_contact', 'prepare_message_draft', 'preview_recipient_and_message', 'request_send_approval', 'send_only_after_approval_and_resume'],
+      approval_gates: approvalGatesFor(capability),
+      forbidden_steps: ['mass_messaging', 'broadcast_without_approval', 'scrape_contacts', 'bypass_qr_or_login', 'send_without_approval'],
+      output_schema: { type: 'object', properties: { recipient: { type: 'string' }, draft_message: { type: 'string' }, approval_item_id: { type: 'string' }, limitations: { type: 'string' } } },
+    }
+  }
+  return {
+    playbook_id: capability.playbook_id,
+    skill_id: capability.skill_id,
+    name: capability.name,
+    description: `Safe ${capability.channel} browser workflow with manual takeover and approval gates.`,
+    trigger_patterns: [capability.channel.toLowerCase(), capability.skill_id.replace(/_/g, ' ')],
+    steps: ['open_site_directly', 'wait_for_manual_login_if_needed', 'read_visible_public_context', 'prepare_safe_draft_or_summary', 'request_approval_before_risky_action'],
+    approval_gates: approvalGatesFor(capability),
+    forbidden_steps: forbiddenActionsFor(capability),
+    output_schema: { type: 'object', properties: { summary: { type: 'string' }, sources: { type: 'array' }, limitations: { type: 'string' } } },
+  }
+}
+
+function testPlanFor(capability: RequiredCapability): string[] {
+  return [
+    `${capability.channel} strategy maps to ${capability.skill_id}.`,
+    `${capability.channel} strategy maps to ${capability.playbook_id}.`,
+    `Approval-required actions include ${approvalGatesFor(capability).join(', ')}.`,
+    `Forbidden actions include ${forbiddenActionsFor(capability).slice(0, 4).join(', ')}.`,
+    'Login/CAPTCHA/security checkpoints set waiting_user and never claim bypass.',
+    'Risky send/post/message/publish actions create approval items and do not execute silently.',
+  ]
+}
+
+function runtimePlanFor(capability: RequiredCapability): string[] {
+  const openTarget = capability.skill_id === 'whatsapp_web' ? 'https://web.whatsapp.com/' : capability.channel
+  return [
+    'Run WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev.',
+    `Ask CEO for a ${capability.channel} strategy and confirm the skill/playbook are selected.`,
+    `Confirm the operator opens ${openTarget} directly only after the approved implementation path is invoked.`,
+    'Confirm QR/login/CAPTCHA/security pauses for manual takeover.',
+    'Confirm approval is required before any send/post/message/publish/join/attach action.',
+    'Confirm no fake success is reported when login/security blocks the workflow.',
+  ]
+}
+
 function missingFor(capability: RequiredCapability, kind: MissingCapability['capability_type']): MissingCapability {
   const capabilityLabel = capability.channel.endsWith(' Web')
     ? `${capability.channel} Operator`
     : `${capability.channel} Web Operator`
+  const skillSpec = skillSpecFor(capability)
+  const playbookSpec = playbookSpecFor(capability)
   return {
     capability_key: `${kind}:${kind === 'web_operator_skill' ? capability.skill_id : capability.playbook_id}`,
     capability_type: kind,
@@ -437,6 +552,13 @@ function missingFor(capability: RequiredCapability, kind: MissingCapability['cap
     approval_gates: approvalGatesFor(capability),
     forbidden_actions: forbiddenActionsFor(capability),
     implementation_prompt: implementationPromptFor(capability),
+    skill_spec: skillSpec,
+    playbook_spec: playbookSpec,
+    database_changes: ['Add or seed web_operator_skills entry.', 'Add or seed web_operator_playbooks entry.', 'Use existing web_operator_actions approval metadata; add columns only if the current schema cannot store skill/playbook metadata.'],
+    api_routes: ['Expose capability through existing /api/web-operator/skills and /api/web-operator/playbooks responses.', 'Use existing Web Operator delegation/resume routes; add no native platform API routes.'],
+    ui_changes: ['Show the skill on /operator-skills.', 'Show the playbook on /operator-playbooks.', 'Ensure /operators/[id] shows waiting_user, approval gates, current URL, and playbook steps.'],
+    test_plan: testPlanFor(capability),
+    runtime_validation_plan: runtimePlanFor(capability),
   }
 }
 
@@ -787,6 +909,41 @@ export async function createMissingCapabilityProposals(
     const title = missing.required_skill === 'whatsapp_web'
       ? 'Add WhatsApp Web Operator Skill and Playbook'
       : `${missing.name}`
+    const implementationSpec: CapabilityImplementationSpec = {
+      missing_capability_id: missing.capability_key,
+      capability_name: title,
+      platform: missing.channel,
+      why_needed: missing.reason,
+      skill_spec: missing.skill_spec ?? {
+        skill_id: missing.required_skill,
+        name: title,
+        website_pattern: '*',
+        description: missing.reason,
+        allowed_actions: ['open_url', 'read_visible_page', 'prepare_draft'],
+        approval_required_actions: missing.approval_gates,
+        forbidden_actions: missing.forbidden_actions,
+        login_policy: 'manual_login_only_no_bypass',
+        output_types: ['research_brief', 'draft', 'approval_item'],
+      },
+      playbook_spec: missing.playbook_spec ?? {
+        playbook_id: missing.required_playbook,
+        skill_id: missing.required_skill,
+        name: title,
+        description: missing.reason,
+        trigger_patterns: [missing.channel.toLowerCase()],
+        steps: ['open_site_directly', 'wait_for_manual_login_if_needed', 'prepare_draft', 'request_approval'],
+        approval_gates: missing.approval_gates,
+        forbidden_steps: missing.forbidden_actions,
+        output_schema: { type: 'object', properties: { summary: { type: 'string' } } },
+      },
+      safety_rules: missing.safety_rules,
+      database_changes: missing.database_changes ?? [],
+      api_routes: missing.api_routes ?? [],
+      ui_changes: missing.ui_changes ?? [],
+      test_plan: missing.test_plan ?? [],
+      runtime_validation_plan: missing.runtime_validation_plan ?? [],
+    }
+    const generatedPrompt = generateCapabilityImplementationPrompt(implementationSpec)
     const proposal = await createSystemImprovementProposal({
       title,
       summary: `${missing.channel} needs a governed Web Operator skill/playbook before this strategy can be executed.`,
@@ -804,7 +961,8 @@ export async function createMissingCapabilityProposals(
       }],
       risk_level: 'medium',
       status: 'draft',
-      implementation_prompt: missing.implementation_prompt,
+      implementation_prompt: generatedPrompt.implementation_prompt,
+      proposal_metadata: generatedPrompt as unknown as Record<string, unknown>,
     })
     proposals.push(proposal)
   }

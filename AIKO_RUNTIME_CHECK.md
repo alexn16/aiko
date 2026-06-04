@@ -618,3 +618,38 @@ After runtime checks:
 |---|---|
 | CEO model base text could still mention Web Operator delegation for strategy-planner prompts | Planner intents now replace the response text with internal-plan status and return a sanitized `strategy_execution_plan_created` action. |
 | Missing-capability labels rendered `WhatsApp Web Web Operator...` | Capability label generation now avoids duplicate `Web`. |
+
+---
+
+## Codex-Ready Missing Capability Prompt Validation — 2026-06-04
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime test
+
+Prompt:
+
+```text
+For ALB Parking, best strategy is WhatsApp outreach. Can AÏKO execute this?
+```
+
+Result:
+
+| Check | Result |
+|---|---|
+| Proposal visible in `/system` | ✅ `Add WhatsApp Web Operator Skill and Playbook` |
+| Implementation prompt visible | ✅ `View implementation prompt` expands Codex-ready prompt |
+| Copy prompt works | ✅ `Copy prompt for Codex` shows `Copied` |
+| Missing capability shown | ✅ `web_operator_skill:whatsapp_web` |
+| Safety rules shown | ✅ Manual login, no CAPTCHA bypass, approval gates |
+| Prompt includes skill/playbook | ✅ `whatsapp_web`, `whatsapp_outreach` |
+| Prompt includes risky approval gates | ✅ `send_message`, `attach_file`, `create_group`, `broadcast_message` |
+| Prompt includes forbidden actions | ✅ `mass_messaging`, `spam`, `scrape_contacts`, login/CAPTCHA bypass |
+| Prompt includes tests/runtime plan | ✅ Smoke tests and headed runtime checklist |
+| External execution | ✅ None; `delegation=null`, no Web Operator action executed |
+
+Note: during local dev, the background scheduler logged invalid legacy API-key errors unrelated to this feature. The proposal creation, prompt endpoint, `/system` UI, tests, and build were unaffected.

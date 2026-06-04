@@ -283,8 +283,8 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 - **Status:** complete (dependent on browser runtime for execution)
 
 ### System Capabilities & Improvements
-- **What it does:** `system_capabilities` tracks all features with status (available/partial/missing/planned/blocked). `checkCapabilitiesForStrategy` keyword-matches a strategy text against the capability map. `generateCapabilityGapReport` calls the LLM to produce an `implementation_prompt` and creates a `system_improvement_proposals` record.
-- **Main files:** `lib/system-capabilities.ts`, `lib/system-improvements.ts`
+- **What it does:** `system_capabilities` tracks all features with status (available/partial/missing/planned/blocked). `checkCapabilitiesForStrategy` keyword-matches a strategy text against the capability map. Missing Web Operator capabilities now create Codex-ready implementation prompts with structured skill specs, playbook specs, safety rules, tests, and runtime validation plans.
+- **Main files:** `lib/system-capabilities.ts`, `lib/system-improvements.ts`, `lib/system-improvement-prompts.ts`
 - **Tables:** `system_capabilities`, `system_improvement_proposals`
 - **Status:** complete
 
@@ -322,6 +322,7 @@ The system also maintains a `system_capabilities` map and a `system_improvement_
 | 018 | 018_web_operator_delegation.sql | Adds columns to `web_operator_actions` |
 | 019 | 019_system_capabilities.sql | `system_capabilities`, `system_improvement_proposals` |
 | 042 | 042_project_strategy_execution_plans.sql | `project_strategy_execution_plans` |
+| 043 | 043_system_improvement_prompt_metadata.sql | Adds `proposal_metadata` to `system_improvement_proposals` |
 
 ### Key tables
 

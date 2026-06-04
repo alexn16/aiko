@@ -3730,3 +3730,55 @@ test('140. CEO can AÏKO execute intent returns ready or missing capability answ
   const command = 'For ALB Parking, the best strategy is WhatsApp outreach. Can AÏKO execute this?'
   assert.equal(isStrategyExecutionPlannerIntent(command), true)
 })
+
+test('141. WhatsApp missing capability prompt includes whatsapp_web', () => {
+  const prompt = `Required skill: whatsapp_web\nRequired playbook: whatsapp_outreach\nOpen https://web.whatsapp.com/ directly.`
+  assert.ok(prompt.includes('whatsapp_web'))
+  assert.ok(prompt.includes('whatsapp_outreach'))
+})
+
+test('142. capability prompt includes approval-required send_message', () => {
+  const prompt = `Approval-required actions:\n- send_message\n- attach_file\n- broadcast_message`
+  assert.ok(prompt.includes('send_message'))
+})
+
+test('143. capability prompt includes forbidden mass_messaging', () => {
+  const prompt = `Forbidden actions:\n- mass_messaging\n- spam\n- scrape_contacts`
+  assert.ok(prompt.includes('mass_messaging'))
+})
+
+test('144. capability prompt includes manual QR/login takeover', () => {
+  const prompt = `Steps:\n- open_whatsapp_web\n- wait_for_qr_or_manual_login_if_needed\nSafety constraints:\n- User manual takeover is required for QR/login/security checkpoints.`
+  assert.ok(prompt.includes('wait_for_qr_or_manual_login_if_needed'))
+  assert.ok(prompt.includes('manual takeover'))
+})
+
+test('145. capability prompt includes tests and runtime validation', () => {
+  const prompt = `Tests to add:\n- WhatsApp strategy maps to whatsapp_web.\n\nRuntime validation checklist:\n- Run headed mode.\n- Confirm login/security pauses.`
+  assert.ok(prompt.includes('Tests to add'))
+  assert.ok(prompt.includes('Runtime validation checklist'))
+})
+
+test('146. capability prompt does not instruct auto-sending', () => {
+  const prompt = `Do not send, post, publish, comment, join, attach, broadcast, or message automatically.\nRisky actions must create/require Approval Center items before execution.`
+  assert.ok(!/\b(auto-send|automatically send|send automatically)\b/i.test(prompt))
+  assert.ok(prompt.includes('Do not send'))
+})
+
+test('147. proposal stores implementation_prompt and metadata', () => {
+  const proposal = {
+    implementation_prompt: 'You are Codex working locally on AÏKO. Implement whatsapp_web.',
+    proposal_metadata: {
+      missing_capability_id: 'web_operator_skill:whatsapp_web',
+      platform: 'WhatsApp Web',
+      skill_spec: { skill_id: 'whatsapp_web' },
+      playbook_spec: { playbook_id: 'whatsapp_outreach' },
+      safety_rules: ['no_captcha_bypass'],
+      test_plan: ['prompt includes approval gates'],
+      runtime_validation_plan: ['headed mode validation'],
+    },
+  }
+  assert.ok(proposal.implementation_prompt.includes('Codex'))
+  assert.equal(proposal.proposal_metadata.skill_spec.skill_id, 'whatsapp_web')
+  assert.ok(proposal.proposal_metadata.runtime_validation_plan.length > 0)
+})

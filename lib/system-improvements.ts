@@ -29,6 +29,7 @@ export interface SystemImprovementProposal {
   risk_level: 'low' | 'medium' | 'high'
   status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'implemented' | 'archived'
   implementation_prompt: string
+  proposal_metadata: Record<string, unknown>
   created_at: string
   updated_at: string
   approved_at: string | null
@@ -48,6 +49,7 @@ export interface CreateProposalParams {
   risk_level?: 'low' | 'medium' | 'high'
   status?: SystemImprovementProposal['status']
   implementation_prompt?: string
+  proposal_metadata?: Record<string, unknown>
 }
 
 export interface ListProposalFilters {
@@ -71,8 +73,9 @@ export async function createSystemImprovementProposal(
   const result = await db.query(
     `INSERT INTO system_improvement_proposals
        (title, summary, reason, requested_by_role, related_project_id, related_strategy,
-        missing_capabilities, proposed_changes, risk_level, status, implementation_prompt)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        missing_capabilities, proposed_changes, risk_level, status, implementation_prompt,
+        proposal_metadata)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING *`,
     [
       params.title,
@@ -86,6 +89,7 @@ export async function createSystemImprovementProposal(
       params.risk_level ?? 'medium',
       params.status ?? 'draft',
       params.implementation_prompt ?? '',
+      JSON.stringify(params.proposal_metadata ?? {}),
     ]
   )
   return rowToProposal(result.rows[0])
@@ -235,9 +239,25 @@ function rowToProposal(row: Record<string, unknown>): SystemImprovementProposal 
     risk_level: row.risk_level as SystemImprovementProposal['risk_level'],
     status: row.status as SystemImprovementProposal['status'],
     implementation_prompt: String(row.implementation_prompt ?? ''),
+    proposal_metadata: normalizeObject(row.proposal_metadata),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     approved_at: row.approved_at ? String(row.approved_at) : null,
     project_name: row.project_name ? String(row.project_name) : undefined,
   }
+}
+
+function normalizeObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
 }

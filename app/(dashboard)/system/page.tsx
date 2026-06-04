@@ -37,6 +37,27 @@ interface SystemImprovementProposal {
   risk_level: 'low' | 'medium' | 'high'
   status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'implemented' | 'archived'
   implementation_prompt: string
+  proposal_metadata?: {
+    missing_capability_id?: string
+    platform?: string
+    capability_name?: string
+    safety_rules?: string[]
+    skill_spec?: {
+      skill_id?: string
+      allowed_actions?: string[]
+      approval_required_actions?: string[]
+      forbidden_actions?: string[]
+    }
+    playbook_spec?: {
+      playbook_id?: string
+      steps?: string[]
+      approval_gates?: string[]
+      forbidden_steps?: string[]
+    }
+    test_plan?: string[]
+    runtime_validation_plan?: string[]
+    implementation_prompt?: string
+  }
   created_at: string
   updated_at: string
   approved_at: string | null
@@ -94,6 +115,8 @@ export default function SystemPage() {
   const [checkResult, setCheckResult] = useState<CapabilityCheckResult | null>(null)
   const [checkProposal, setCheckProposal] = useState<SystemImprovementProposal | null>(null)
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set())
+  const [promptTextById, setPromptTextById] = useState<Record<string, string>>({})
+  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     const [capRes, propRes] = await Promise.all([
@@ -111,6 +134,48 @@ export default function SystemPage() {
     const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
   }, [loadData])
+
+  useEffect(() => {
+    const proposalId = new URLSearchParams(window.location.search).get('proposal')
+    if (proposalId) {
+      setExpandedPrompts(prev => new Set(prev).add(proposalId))
+      loadImplementationPrompt(proposalId)
+    }
+  }, [])
+
+  async function loadImplementationPrompt(id: string) {
+    if (promptTextById[id]) return
+    try {
+      const res = await fetch(`/api/system/improvements/${id}/implementation-prompt`)
+      const data = await res.json()
+      if (data?.prompt?.implementation_prompt) {
+        setPromptTextById(prev => ({ ...prev, [id]: data.prompt.implementation_prompt }))
+      }
+    } catch {
+      // keep existing prompt text if fetch fails
+    }
+  }
+
+  async function copyPromptForCodex(p: SystemImprovementProposal) {
+    const text = promptTextById[p.id] || p.proposal_metadata?.implementation_prompt || p.implementation_prompt
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-9999px'
+      textarea.style.top = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    setCopiedPromptId(p.id)
+    setTimeout(() => setCopiedPromptId(current => current === p.id ? null : current), 1800)
+  }
 
   // ── Check strategy ────────────────────────────────────────────────────────
 
@@ -380,6 +445,10 @@ export default function SystemPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {proposals.map(p => {
               const promptExpanded = expandedPrompts.has(p.id)
+              const promptText = promptTextById[p.id] || p.proposal_metadata?.implementation_prompt || p.implementation_prompt
+              const safetyRules = p.proposal_metadata?.safety_rules ?? []
+              const forbiddenActions = p.proposal_metadata?.skill_spec?.forbidden_actions ?? p.proposal_metadata?.playbook_spec?.forbidden_steps ?? []
+              const approvalActions = p.proposal_metadata?.skill_spec?.approval_required_actions ?? p.proposal_metadata?.playbook_spec?.approval_gates ?? []
               return (
                 <div
                   key={p.id}
@@ -413,6 +482,28 @@ export default function SystemPage() {
                     </div>
                   )}
 
+                  {/* Structured metadata */}
+                  {(p.proposal_metadata?.platform || p.proposal_metadata?.skill_spec?.skill_id || p.proposal_metadata?.playbook_spec?.playbook_id) && (
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '1fr 1fr',
+                      gap: 8, marginBottom: 10,
+                      fontSize: 11, color: '#475569',
+                    }}>
+                      <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 7, padding: '8px 10px' }}>
+                        <b>Platform:</b> {p.proposal_metadata?.platform ?? 'Unknown'}
+                      </div>
+                      <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 7, padding: '8px 10px' }}>
+                        <b>Skill:</b> {p.proposal_metadata?.skill_spec?.skill_id ?? 'Not specified'}
+                      </div>
+                      <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 7, padding: '8px 10px' }}>
+                        <b>Playbook:</b> {p.proposal_metadata?.playbook_spec?.playbook_id ?? 'Not specified'}
+                      </div>
+                      <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 7, padding: '8px 10px' }}>
+                        <b>Missing:</b> {p.proposal_metadata?.missing_capability_id ?? p.missing_capabilities[0] ?? 'Not specified'}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Missing capabilities chips */}
                   {p.missing_capabilities.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 10 }}>
@@ -427,24 +518,59 @@ export default function SystemPage() {
                     </div>
                   )}
 
+                  {(safetyRules.length > 0 || approvalActions.length > 0 || forbiddenActions.length > 0) && (
+                    <div style={{ marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {safetyRules.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#475569' }}>
+                          <b>Safety rules:</b> {safetyRules.slice(0, 5).join(', ')}
+                        </div>
+                      )}
+                      {approvalActions.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#475569' }}>
+                          <b>Approval required:</b> {approvalActions.slice(0, 6).join(', ')}
+                        </div>
+                      )}
+                      {forbiddenActions.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#991b1b' }}>
+                          <b>Forbidden:</b> {forbiddenActions.slice(0, 6).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* View implementation prompt toggle */}
-                  {p.implementation_prompt && (
+                  {promptText && (
                     <div style={{ marginBottom: 10 }}>
-                      <button
-                        onClick={() => setExpandedPrompts(prev => {
-                          const next = new Set(prev)
-                          if (next.has(p.id)) next.delete(p.id)
-                          else next.add(p.id)
-                          return next
-                        })}
-                        style={{
-                          background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
-                          fontSize: 11, color: '#64748b', padding: '4px 10px', cursor: 'pointer',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {promptExpanded ? 'Hide implementation prompt' : 'View implementation prompt'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => {
+                            setExpandedPrompts(prev => {
+                              const next = new Set(prev)
+                              if (next.has(p.id)) next.delete(p.id)
+                              else next.add(p.id)
+                              return next
+                            })
+                            if (!promptExpanded) loadImplementationPrompt(p.id)
+                          }}
+                          style={{
+                            background: 'none', border: '1px solid #e2e8f0', borderRadius: 6,
+                            fontSize: 11, color: '#64748b', padding: '4px 10px', cursor: 'pointer',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {promptExpanded ? 'Hide implementation prompt' : 'View implementation prompt'}
+                        </button>
+                        <button
+                          onClick={() => copyPromptForCodex(p)}
+                          style={{
+                            background: '#0f172a', border: '1px solid #0f172a', borderRadius: 6,
+                            fontSize: 11, color: '#ffffff', padding: '4px 10px', cursor: 'pointer',
+                            fontWeight: 500,
+                          }}
+                        >
+                          {copiedPromptId === p.id ? 'Copied' : 'Copy prompt for Codex'}
+                        </button>
+                      </div>
                       {promptExpanded && (
                         <div style={{
                           marginTop: 10, padding: '12px 14px',
@@ -453,7 +579,7 @@ export default function SystemPage() {
                           fontSize: 12, color: '#374151', lineHeight: 1.7,
                           whiteSpace: 'pre-wrap', fontFamily: 'DM Mono, monospace',
                         }}>
-                          {p.implementation_prompt}
+                          {promptText}
                         </div>
                       )}
                     </div>

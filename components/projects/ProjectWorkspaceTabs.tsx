@@ -513,15 +513,26 @@ function ProjectStrategyExecutionPanel({ projectId }: { projectId: string }) {
             <div style={LABEL}>Approvals and missing items</div>
             {latest.missing_capabilities.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {latest.missing_capabilities.map(missing => (
+                {latest.missing_capabilities.map((missing, index) => {
+                  const proposalId = latest.system_improvement_ids[index] ?? latest.system_improvement_ids[0]
+                  return (
                   <div key={missing.capability_key} style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 10px' }}>
                     <div style={{ fontWeight: 700 }}>{missing.name}</div>
                     <div style={{ marginTop: 3, lineHeight: 1.5 }}>{missing.reason}</div>
                     <div style={{ marginTop: 4, color: '#64748b' }}>
                       Forbidden: {missing.forbidden_actions.slice(0, 4).join(', ')}
                     </div>
+                    {proposalId && (
+                      <Link
+                        href={`/system?proposal=${proposalId}`}
+                        style={{ display: 'inline-block', marginTop: 7, color: '#6366f1', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
+                      >
+                        View Codex prompt
+                      </Link>
+                    )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
