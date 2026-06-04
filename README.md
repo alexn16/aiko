@@ -163,6 +163,139 @@ AÏKO does not silently modify its own code. The user approves a proposal, copie
 - Missing platform capabilities become proposals, not automatic implementations.
 - AÏKO does not auto-send email, WhatsApp, Facebook, LinkedIn, or other external messages.
 
+## MVP deployment guide
+
+### Local private deployment
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Create `.env.local` with at least:
+
+   ```bash
+   DATABASE_URL=postgresql://USER@localhost:5432/aiko
+   AIKO_AUTH_MODE=optional
+   NEXTAUTH_URL=http://localhost:3001
+   AUTH_SECRET=replace-with-strong-random-secret
+   NEXTAUTH_SECRET=replace-with-same-or-another-strong-secret
+   ```
+
+3. Start the app:
+
+   ```bash
+   AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+   ```
+
+4. Open `/setup`, connect a real CEO brain, then open `/dashboard`.
+
+### Hosted / team deployment
+
+Use hosted mode when multiple users or externally accessible deployments are involved:
+
+```bash
+AIKO_AUTH_MODE=required
+NEXTAUTH_URL=https://your-aiko-domain.example
+AUTH_SECRET=production-random-secret
+NEXTAUTH_SECRET=production-random-secret
+DATABASE_URL=production-postgres-url
+```
+
+Use production-only database credentials, configure backups for PostgreSQL and generated-file storage, and keep provider credentials in the deployment secret manager. Do not reuse local secrets in production.
+
+### First-run setup
+
+Open `/setup`. AÏKO derives setup state from real provider profiles and CEO role assignment. Setup is complete only when a connected provider can be resolved for the CEO role.
+
+### Provider setup
+
+Open `/connect-ai` for provider profiles and role assignments.
+
+- Ollama local uses `OLLAMA_BASE_URL` and is a local fallback.
+- OpenAI API uses `OPENAI_API_KEY` if supported in the current provider catalog.
+- Anthropic API uses `ANTHROPIC_API_KEY` if supported in the current provider catalog.
+- OpenRouter uses `OPENROUTER_API_KEY` if supported.
+- ChatGPT/Codex direct requires `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI`.
+- Claude direct requires `CLAUDE_OAUTH_CLIENT_ID`, `CLAUDE_OAUTH_AUTH_URL`, and `CLAUDE_OAUTH_TOKEN_URL`.
+- Claude Code local can be detected through local CLI/auth or `CLAUDE_CODE_OAUTH_TOKEN`.
+
+The UI must show ChatGPT/Codex and Claude as not configured or not connected unless the corresponding connection actually works.
+
+### Playwright install
+
+Install Chromium before using Web Operators:
+
+```bash
+npx playwright install chromium
+```
+
+Use `/api/health` or `/dashboard` to confirm browser runtime status.
+
+### Web Operator headed/headless mode
+
+Default hosted behavior should be headless. For visible local validation:
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+Manual takeover remains required for login, CAPTCHA, QR, 2FA, and security checkpoints in either mode.
+
+### Health and release checks
+
+Run:
+
+```bash
+npm run setup:check
+npm test
+npm run build
+```
+
+Then start the app and check:
+
+- `/api/health`
+- `/dashboard`
+- `/setup`
+- `/ceo`
+- `/system`
+- `/operators`
+
+The full checklist is in `AIKO_MVP_RELEASE_CHECKLIST.md`.
+
+### Common troubleshooting
+
+**`next` missing**
+
+Run `npm install`. Confirm `node_modules` exists and `npm run build` can find Next.js.
+
+**`DATABASE_URL` missing**
+
+Set `DATABASE_URL` in `.env.local` or the deployment secret manager. Run `npm run setup:check` again.
+
+**Playwright browser missing**
+
+Run:
+
+```bash
+npx playwright install chromium
+```
+
+Then reload `/api/health` and `/operators`.
+
+**Ollama not reachable**
+
+Start Ollama locally and confirm `OLLAMA_BASE_URL` points to it, usually `http://localhost:11434`. `npm run setup:check` should report Ollama reachable.
+
+**ChatGPT OAuth not configured**
+
+Set all required `OPENAI_OAUTH_*` variables. Until then, ChatGPT/Codex must remain shown as not configured.
+
+**Claude not connected**
+
+Configure Anthropic API, Claude OAuth, or local Claude Code auth. Until one works, Claude must remain shown as not connected.
+
 ## CEO Chat vs Project Manager Chat
 
 AÏKO has two levels of AI conversation:

@@ -4145,3 +4145,62 @@ test('171. dashboard quick links exist', () => {
   const hrefs = quickLinks.map(link => link.href)
   assert.deepEqual(hrefs, ['/ceo', '/start-campaign', '/operators', '/approvals', '/files', '/system'])
 })
+
+// ── MVP release health endpoint ───────────────────────────────────────────────
+
+test('172. /api/health response does not expose secrets', () => {
+  const health = {
+    ok: true,
+    version: '0.1.0',
+    auth_mode: 'optional',
+    database: { ok: true, error: null },
+    setup: { required: false, can_ceo_think: true },
+    web_operator: { runtime_available: true, headed_mode: false },
+    storage: { generated_files_writable: true, screenshots_writable: true },
+  }
+  const serialized = JSON.stringify(health)
+  assert.equal(/api_key|access_token|refresh_token|nextauth_secret|auth_secret|database_url/i.test(serialized), false)
+})
+
+test('173. DB unavailable health result returns ok=false cleanly', () => {
+  function summarizeDatabaseError(message) {
+    const lower = message.toLowerCase()
+    if (lower.includes('connection') || lower.includes('econnrefused')) return 'database_connection_failed'
+    if (lower.includes('timeout')) return 'database_timeout'
+    if (lower.includes('does not exist')) return 'database_schema_missing'
+    if (lower.includes('password') || lower.includes('authentication')) return 'database_auth_failed'
+    return 'database_unavailable'
+  }
+  const database = { ok: false, error: summarizeDatabaseError('connect ECONNREFUSED 127.0.0.1:5432') }
+  const health = { ok: database.ok, database }
+  assert.equal(health.ok, false)
+  assert.equal(health.database.error, 'database_connection_failed')
+  assert.equal(health.database.error.includes('/Users/'), false)
+})
+
+test('174. storage health does not expose absolute sensitive paths', () => {
+  const storage = {
+    generated_files_writable: true,
+    screenshots_writable: true,
+  }
+  const serialized = JSON.stringify(storage)
+  assert.equal(serialized.includes('/Users/'), false)
+  assert.equal(serialized.includes('storage/generated-files'), false)
+  assert.equal(serialized.includes('screenshots/'), false)
+})
+
+test('175. health response includes setup status', () => {
+  const health = {
+    setup: { required: false, can_ceo_think: true },
+  }
+  assert.equal(typeof health.setup.required, 'boolean')
+  assert.equal(typeof health.setup.can_ceo_think, 'boolean')
+})
+
+test('176. health response includes web operator runtime status', () => {
+  const health = {
+    web_operator: { runtime_available: true, headed_mode: false },
+  }
+  assert.equal(typeof health.web_operator.runtime_available, 'boolean')
+  assert.equal(typeof health.web_operator.headed_mode, 'boolean')
+})

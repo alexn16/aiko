@@ -1,8 +1,29 @@
 #!/usr/bin/env node
 import { execFile } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
+
+async function loadDotEnvLocal() {
+  try {
+    const text = await readFile('.env.local', 'utf-8')
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line || line.startsWith('#')) continue
+      const eq = line.indexOf('=')
+      if (eq <= 0) continue
+      const key = line.slice(0, eq).trim()
+      let value = line.slice(eq + 1).trim()
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1)
+      }
+      if (!process.env[key]) process.env[key] = value
+    }
+  } catch {
+    // .env.local is optional in hosted deployments where env comes from the platform.
+  }
+}
 
 function yesNo(value) { return value ? 'yes' : 'no' }
 function present(name) { return !!process.env[name] }
@@ -38,6 +59,8 @@ async function ollamaReachable() {
     clearTimeout(timeout)
   }
 }
+
+await loadDotEnvLocal()
 
 const npmVersion = await commandVersion('npm', ['--version'])
 const claudeCliDetected = await commandExists('claude')

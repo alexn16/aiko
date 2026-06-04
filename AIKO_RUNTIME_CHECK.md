@@ -763,3 +763,55 @@ WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 |---|---|
 | CEO status phrase `status of AÏKO self-improvement` routed to project recall. | Self-improvement status intent now recognizes optional `AÏKO` before `self-improvement`. |
 | In-app browser clipboard write could stall when copying from the timeline. | Copy helper now times out the Clipboard API attempt and uses the existing textarea fallback. |
+
+---
+
+## MVP Release Readiness Validation — 2026-06-04
+
+### Release artifacts
+
+| Artifact | Result |
+|---|---|
+| `AIKO_MVP_RELEASE_CHECKLIST.md` | ✅ Created with env vars, local/hosted deployment checks, database, Web Operator, Playwright, storage, safety, smoke tests, blockers, post-deploy checks, and production safety scan. |
+| `/api/health` | ✅ Added safe health endpoint with no secrets, tokens, API keys, stack traces, absolute paths, or storage paths. |
+| `README.md` | ✅ Added MVP deployment guide and troubleshooting notes. |
+
+### Commands
+
+```bash
+npm test
+npm run build
+npm run setup:check
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Results
+
+| Check | Result |
+|---|---|
+| `npm test` | ✅ 223/223 passing. |
+| `npm run build` | ✅ Clean production build; `/api/health` included in route map. |
+| `npm run setup:check` | ✅ Script loads `.env.local`, reports `DATABASE_URL present: yes`, Ollama reachable, and suggests opening `/setup` with Ollama local. |
+| `/api/health` | ✅ HTTP 200 with `ok=true`, `version=0.1.0`, `auth_mode=optional`. |
+| Health database | ✅ `database.ok=true`, `error=null`. |
+| Health setup | ✅ `required=false`, `can_ceo_think=true`. |
+| Health Web Operator | ✅ `runtime_available=true`, `headed_mode=false`. |
+| Health storage | ✅ `generated_files_writable=true`, `screenshots_writable=true`. |
+| Health redaction | ✅ No API keys, access tokens, refresh tokens, secrets, database URLs, absolute `/Users/...` paths, or storage paths in payload. |
+| `/dashboard` | ✅ 200. |
+| `/setup` | ✅ 200. |
+| `/ceo` | ✅ 200. |
+| `/system` | ✅ 200. |
+| `/operators` | ✅ 200. |
+
+### Release checklist status
+
+| Area | Status |
+|---|---|
+| Required env vars | ✅ App runtime and `setup:check` both see working DB/auth config through `.env.local`. |
+| Optional providers | ✅ Honest local state preserved; ChatGPT/Claude are not faked when unconfigured. |
+| Database | ✅ Runtime health OK. |
+| Web Operator / Playwright | ✅ Runtime available. |
+| Storage | ✅ Generated files and screenshots writable. |
+| Safety | ✅ No safety model change; approval remains separate from execution; no WhatsApp/platform capability implemented. |
+| Deployment blockers | ✅ No runtime blocker found. |
