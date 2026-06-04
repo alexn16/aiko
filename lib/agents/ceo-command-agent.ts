@@ -516,6 +516,7 @@ const RECALL_PATTERNS: RegExp[] = [
   /who\s+is\s+assigned\s+to\s+/i,
   /next\s+step\s+(for|on)\s+/i,
   /what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i,
+  /what\s+is\s+missing\s+before\s+a[ïi]ko\s+can\s+execute\s+/i,
   /what\s+has\s+\w+\s+done\s+(for|on)\s+/i,
   /tell\s+me\s+about\s+/i,
   /what.*(happening|going\s+on)\s+(with|for|on)\s+/i,
@@ -590,6 +591,10 @@ function extractMentionedOperatorName(command: string): string | null {
   return m ? m[1] : null
 }
 
+function isMissingCapabilityRecall(command: string): boolean {
+  return /\b(what\s+is\s+missing|what.*missing|blocked|can\s+a[ïi]ko\s+execute|before\s+a[ïi]ko\s+can\s+execute)\b/i.test(command)
+}
+
 const RECALL_SYSTEM_PROMPT = `You are the CEO of AÏKO. Answer the user's question about a project.
 
 Rules:
@@ -641,6 +646,36 @@ async function runRecallQuery(command: string, projectName: string): Promise<CEO
 
   const summary  = getProjectExecutiveSummary(ctx)
   const nextStep = getProjectNextStep(ctx)
+
+  if (isMissingCapabilityRecall(command) && ctx.latest_execution_plan?.missing_capabilities.length) {
+    const plan = ctx.latest_execution_plan
+    const missing = plan.missing_capabilities
+      .map(m => {
+        const ids = [m.required_skill, m.required_playbook].filter(Boolean).join(' / ')
+        return ids ? `${m.name} (${ids})` : m.name
+      })
+      .join(', ')
+    const proposals = ctx.system_improvement_proposals.length > 0
+      ? ` The linked proposal is "${ctx.system_improvement_proposals[0].title}".`
+      : ''
+    const gates = plan.approval_gates.length > 0
+      ? ` Risky actions still require approval: ${plan.approval_gates.map(g => g.action).join(', ')}.`
+      : ''
+    const response = `Before AÏKO can execute ${plan.recommended_channel ?? 'this strategy'} for ${ctx.name}, it needs: ${missing}.${proposals} No Web Operator action should run until the capability is approved and implemented.${gates}`
+
+    await db.query(
+      `INSERT INTO ceo_commands (command, response, intent, actions, project_id)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [command, response, 'project_recall', '[]', project.id]
+    )
+
+    return {
+      response,
+      intent: 'project_recall',
+      actions: [],
+      project_id: project.id,
+    }
+  }
 
   // If user asked "what has X done", add a focused hint so AI can filter
   const mentionedOperator = extractMentionedOperatorName(command)

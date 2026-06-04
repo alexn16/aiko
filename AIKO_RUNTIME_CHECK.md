@@ -653,3 +653,44 @@ Result:
 | External execution | ✅ None; `delegation=null`, no Web Operator action executed |
 
 Note: during local dev, the background scheduler logged invalid legacy API-key errors unrelated to this feature. The proposal creation, prompt endpoint, `/system` UI, tests, and build were unaffected.
+
+---
+
+## WhatsApp Safe Self-Improvement Loop Validation — 2026-06-04
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Manual validation
+
+| Check | Result |
+|---|---|
+| CEO prompt: `For ALB Parking, the best strategy is to contact property owners through WhatsApp. Can AÏKO execute this?` | ✅ Created `Execution Plan: WhatsApp Web` with status `needs_capabilities`. |
+| Missing capability detection | ✅ Missing `whatsapp_web` skill and `whatsapp_outreach` playbook. |
+| System Improvement Proposal | ✅ Linked `Add WhatsApp Web Operator Skill and Playbook`; no new duplicate proposal was created. |
+| External execution | ✅ No Web Operator action created; no WhatsApp opened; no message sent. |
+| Project workspace → Execution Plan tab | ✅ Shows WhatsApp Web channel, missing capabilities, blocked external steps, approval gates, and `View Codex prompt` links. |
+| `/system` proposal UI | ✅ Shows one visible active WhatsApp proposal, safety rules, implementation prompt, and `Copy prompt for Codex`. |
+| Copy prompt | ✅ Button shows `Copied`. |
+| Prompt checklist | ✅ Includes `whatsapp_web`, `whatsapp_outreach`, `web.whatsapp.com`, QR/manual login takeover, draft-only messaging, `send_message` approval, `mass_messaging` forbidden, no contact scraping, no automatic sending, tests, and runtime validation. |
+| CEO recall: `What is missing before AÏKO can execute WhatsApp outreach for ALB Parking?` | ✅ Answers from the latest execution plan/proposal context and names `whatsapp_web` / `whatsapp_outreach`; no actions returned. |
+
+### Safety counters
+
+Before/after validation:
+
+```json
+{"web_operator_actions":28,"project_strategy_execution_plans":4,"visible_whatsapp_proposals":1}
+```
+
+`web_operator_actions` stayed unchanged. The validation only created/read internal planning records.
+
+### Issues found/fixed
+
+| Issue | Fix |
+|---|---|
+| Older duplicate WhatsApp proposals were visible in `/system`. | Active System Improvement Proposal listing now collapses duplicates by project, title, and primary missing capability while preserving proposal history. |
+| CEO recall answered WhatsApp capability questions from generic company memory and mentioned email gaps. | Project recall context now includes the latest strategy execution plan, missing capabilities, approval gates, and linked improvement proposals; missing-capability recall answers deterministically from that context. |

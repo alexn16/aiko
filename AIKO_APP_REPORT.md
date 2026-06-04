@@ -680,3 +680,11 @@ Honest provider boundaries:
 AÏKO now has Web Operator Skills for governed website workflows. Skills define allowed browser actions, approval-required actions, forbidden actions, login policy, output types, and status for sites/workflows such as Canva, Facebook, LinkedIn, Instagram, Gmail, public website reading, and general web research.
 
 These are not native platform APIs. Canva/Facebook/LinkedIn/Gmail work continues to happen through Web Operator browser actions with manual login/takeover as needed. AÏKO does not store passwords, bypass CAPTCHA/2FA, or bypass platform protections. Posting, sending, messaging, sharing, publishing, joining, and downloading final assets require approval. Unknown website requests create a System Improvement Proposal for a new Web Operator skill instead of blind automation.
+
+## Safe Self-Improvement Loop
+
+AÏKO now validates strategy-to-capability gaps without modifying itself or executing external actions. For the ALB Parking WhatsApp outreach scenario, the CEO creates a Strategy Execution Plan, detects missing `whatsapp_web` / `whatsapp_outreach` capabilities, links a System Improvement Proposal with a Codex-ready implementation prompt, and leaves Web Operator execution blocked until the user approves and implements the capability.
+
+System Improvement Proposal listing is idempotent for active missing-capability proposals: `/system` shows one visible active proposal per project/title/missing-capability set while preserving proposal history. CEO recall also includes the latest execution plan and linked proposal context, so questions like “What is missing before AÏKO can execute WhatsApp outreach for ALB Parking?” answer from the plan instead of generic company capability memory.
+
+Safety remains internal-planning-only: no WhatsApp opens, no Web Operator action is created, no message is sent, and no code is changed from inside the app. Risky future actions such as `send_message`, attachments, group creation, or broadcasts remain approval-gated.

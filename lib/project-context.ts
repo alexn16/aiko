@@ -72,6 +72,32 @@ export interface ProjectContext {
     decided_by_role: string | null
     created_at: string
   }>
+  latest_execution_plan: {
+    id: string
+    title: string
+    status: string
+    recommended_channel: string | null
+    missing_capabilities: Array<{
+      name: string
+      capability_key: string | null
+      required_skill: string | null
+      required_playbook: string | null
+      reason: string | null
+    }>
+    approval_gates: Array<{
+      action: string
+      reason: string | null
+      channel: string | null
+      skill_id: string | null
+    }>
+    system_improvement_ids: string[]
+  } | null
+  system_improvement_proposals: Array<{
+    id: string
+    title: string
+    status: string
+    missing_capabilities: string[]
+  }>
 }
 
 export interface ProjectSummaryRow {
@@ -227,10 +253,39 @@ export async function getProjectContext(projectId: string): Promise<ProjectConte
     recentDecisions = await listProjectDecisions(projectId, { limit: 6 })
   } catch { /* non-fatal — table may not exist yet */ }
 
+  const latestPlanRes = await db.query(
+    `SELECT id, title, status, recommended_channel, missing_capabilities,
+            approval_gates, system_improvement_ids
+     FROM project_strategy_execution_plans
+     WHERE project_id=$1
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [projectId]
+  )
+  const latestPlan = latestPlanRes.rows[0] ?? null
+
+  const proposalsRes = await db.query(
+    `SELECT id, title, status, missing_capabilities
+     FROM system_improvement_proposals
+     WHERE related_project_id=$1
+       AND status NOT IN ('rejected', 'implemented', 'archived')
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    [projectId]
+  )
+
   const safeArray = (v: unknown): string[] => {
     if (Array.isArray(v)) return v.map(String)
     if (typeof v === 'string') {
       try { const p = JSON.parse(v); return Array.isArray(p) ? p.map(String) : [] }
+      catch { return [] }
+    }
+    return []
+  }
+  const safeObjectArray = <T>(v: unknown): T[] => {
+    if (Array.isArray(v)) return v as T[]
+    if (typeof v === 'string') {
+      try { const p = JSON.parse(v); return Array.isArray(p) ? p as T[] : [] }
       catch { return [] }
     }
     return []
@@ -286,6 +341,32 @@ export async function getProjectContext(projectId: string): Promise<ProjectConte
       decided_by_role: d.decided_by_role,
       created_at:      d.created_at,
     })),
+    latest_execution_plan: latestPlan ? {
+      id: String(latestPlan.id),
+      title: String(latestPlan.title),
+      status: String(latestPlan.status),
+      recommended_channel: latestPlan.recommended_channel ? String(latestPlan.recommended_channel) : null,
+      missing_capabilities: safeObjectArray<Record<string, unknown>>(latestPlan.missing_capabilities).map(m => ({
+        name: String(m.name ?? m.capability_name ?? m.capability_key ?? 'Missing capability'),
+        capability_key: m.capability_key ? String(m.capability_key) : null,
+        required_skill: m.required_skill ? String(m.required_skill) : null,
+        required_playbook: m.required_playbook ? String(m.required_playbook) : null,
+        reason: m.reason ? String(m.reason) : null,
+      })),
+      approval_gates: safeObjectArray<Record<string, unknown>>(latestPlan.approval_gates).map(g => ({
+        action: String(g.action ?? 'approval_required'),
+        reason: g.reason ? String(g.reason) : null,
+        channel: g.channel ? String(g.channel) : null,
+        skill_id: g.skill_id ? String(g.skill_id) : null,
+      })),
+      system_improvement_ids: safeArray(latestPlan.system_improvement_ids),
+    } : null,
+    system_improvement_proposals: proposalsRes.rows.map(r => ({
+      id: String(r.id),
+      title: String(r.title),
+      status: String(r.status),
+      missing_capabilities: safeArray(r.missing_capabilities),
+    })),
   }
 }
 
@@ -315,6 +396,26 @@ export function getProjectExecutiveSummary(ctx: ProjectContext): string {
   if (ctx.memory_notes)          lines.push(`Memory notes: ${ctx.memory_notes}`)
   if (ctx.memory_blockers.length > 0) lines.push(`Blockers: ${ctx.memory_blockers.join('; ')}`)
   if (ctx.memory_next_steps.length > 0) lines.push(`Memory next steps: ${ctx.memory_next_steps.join('; ')}`)
+  if (ctx.latest_execution_plan) {
+    const plan = ctx.latest_execution_plan
+    lines.push(`Latest execution plan: ${plan.title} (${plan.status})${plan.recommended_channel ? ` — channel: ${plan.recommended_channel}` : ''}`)
+    if (plan.missing_capabilities.length > 0) {
+      lines.push(`Execution plan missing capabilities:`)
+      for (const m of plan.missing_capabilities.slice(0, 4)) {
+        const ids = [m.required_skill, m.required_playbook].filter(Boolean).join(' / ')
+        lines.push(`  - ${m.name}${ids ? ` (${ids})` : ''}${m.reason ? `: ${m.reason.slice(0, 100)}` : ''}`)
+      }
+    }
+    if (plan.approval_gates.length > 0) {
+      lines.push(`Execution approval gates: ${plan.approval_gates.slice(0, 5).map(g => g.action).join(', ')}`)
+    }
+  }
+  if (ctx.system_improvement_proposals.length > 0) {
+    lines.push(`Open system improvement proposals:`)
+    for (const p of ctx.system_improvement_proposals.slice(0, 3)) {
+      lines.push(`  - [${p.status}] ${p.title}${p.missing_capabilities.length > 0 ? ` (${p.missing_capabilities.join(', ')})` : ''}`)
+    }
+  }
   // Decisions first — answers "why" questions; placed before actions so they survive token limits
   if (ctx.recent_decisions.length > 0) {
     lines.push(`Key decisions (${ctx.recent_decisions.length}):`)

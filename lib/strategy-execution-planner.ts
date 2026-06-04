@@ -2,8 +2,13 @@ import { db } from '@/lib/db/client'
 import { createAgentTask, type AgentTask } from '@/lib/agents/tasks'
 import { createCustomAgent, listCustomAgents, type CustomAgent } from '@/lib/custom-agents'
 import { getProjectStrategyBrief, type ProjectStrategyBrief } from '@/lib/project-strategy-brief'
-import { createSystemImprovementProposal, type SystemImprovementProposal } from '@/lib/system-improvements'
 import {
+  createSystemImprovementProposal,
+  findReusableSystemImprovementProposal,
+  type SystemImprovementProposal,
+} from '@/lib/system-improvements'
+import {
+  attachImplementationPromptToProposal,
   generateCapabilityImplementationPrompt,
   type CapabilityImplementationSpec,
   type PlaybookImplementationSpec,
@@ -944,6 +949,17 @@ export async function createMissingCapabilityProposals(
       runtime_validation_plan: missing.runtime_validation_plan ?? [],
     }
     const generatedPrompt = generateCapabilityImplementationPrompt(implementationSpec)
+    const existing = await findReusableSystemImprovementProposal({
+      related_project_id: projectId,
+      missing_capability: missing.capability_key,
+      title,
+    })
+    if (existing) {
+      const refreshed = await attachImplementationPromptToProposal(existing.id, generatedPrompt)
+      proposals.push(refreshed ?? existing)
+      continue
+    }
+
     const proposal = await createSystemImprovementProposal({
       title,
       summary: `${missing.channel} needs a governed Web Operator skill/playbook before this strategy can be executed.`,

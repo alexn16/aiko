@@ -123,7 +123,68 @@ export async function listSystemImprovementProposals(
      LIMIT $${idx}`,
     [...values, limit]
   )
-  return result.rows.map(rowToProposal)
+  return dedupeActiveSystemImprovementProposals(result.rows.map(rowToProposal))
+}
+
+export async function findReusableSystemImprovementProposal(params: {
+  related_project_id?: string | null
+  missing_capability: string
+  title?: string
+}): Promise<SystemImprovementProposal | null> {
+  const conditions = [
+    `sip.status NOT IN ('rejected', 'implemented', 'archived')`,
+    `sip.missing_capabilities @> $1::jsonb`,
+  ]
+  const values: unknown[] = [JSON.stringify([params.missing_capability])]
+  let idx = 2
+
+  if (params.related_project_id) {
+    conditions.push(`sip.related_project_id = $${idx++}`)
+    values.push(params.related_project_id)
+  }
+  if (params.title) {
+    conditions.push(`lower(sip.title) = lower($${idx++})`)
+    values.push(params.title)
+  }
+
+  const result = await db.query(
+    `SELECT sip.*, p.name AS project_name
+     FROM system_improvement_proposals sip
+     LEFT JOIN projects p ON p.id = sip.related_project_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY sip.created_at DESC
+     LIMIT 1`,
+    values
+  )
+  return result.rows[0] ? rowToProposal(result.rows[0]) : null
+}
+
+export function dedupeActiveSystemImprovementProposals(
+  proposals: SystemImprovementProposal[]
+): SystemImprovementProposal[] {
+  const seen = new Set<string>()
+  const deduped: SystemImprovementProposal[] = []
+
+  for (const proposal of proposals) {
+    const active = !['rejected', 'implemented', 'archived'].includes(proposal.status)
+    if (!active) {
+      deduped.push(proposal)
+      continue
+    }
+
+    const primaryMissingCapability = proposal.missing_capabilities[0] ?? ''
+    const key = [
+      proposal.related_project_id ?? 'global',
+      proposal.title.trim().toLowerCase(),
+      primaryMissingCapability,
+    ].join('::')
+
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push(proposal)
+  }
+
+  return deduped
 }
 
 export async function approveSystemImprovementProposal(id: string): Promise<void> {

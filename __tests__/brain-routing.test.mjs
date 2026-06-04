@@ -1436,6 +1436,7 @@ const RECALL_PATTERNS = [
   /who\s+is\s+assigned\s+to\s+/i,
   /next\s+step\s+(for|on)\s+/i,
   /what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i,
+  /what\s+is\s+missing\s+before\s+a[ïi]ko\s+can\s+execute\s+/i,
   /what\s+has\s+\w+\s+done\s+(for|on)\s+/i,
   /tell\s+me\s+about\s+/i,
   /what.*(happening|going\s+on)\s+(with|for|on)\s+/i,
@@ -1452,6 +1453,7 @@ function extractRecallProjectName(cmd) {
     .replace(/^next\s+step\s+(for|on)\s+/i, '')
     .replace(/^tell\s+me\s+about\s+/i, '')
     .replace(/^what.*(strategy|campaign|brief|plan)\s+(for|on)\s+/i, '')
+    .replace(/^what\s+is\s+missing\s+before\s+a[ïi]ko\s+can\s+execute\s+.*\s+for\s+/i, '')
     .replace(/^what\s+has\s+\w+\s+done\s+(for|on)\s+/i, '')
     .replace(/^what.*(happening|going\s+on)\s+(with|for|on)\s+/i, '')
     .trim().replace(/[?.!]+$/, '').trim()
@@ -1488,6 +1490,7 @@ test('recall intent patterns match expected commands', () => {
   assert.ok(isRecallIntent('Next step for ALB Parking'), 'next step for')
   assert.ok(isRecallIntent('Tell me about Foreman'), 'tell me about')
   assert.ok(isRecallIntent('What has Kevin done for ALB Parking?'), 'what has X done for')
+  assert.ok(isRecallIntent('What is missing before AÏKO can execute WhatsApp outreach for ALB Parking?'), 'missing capability recall')
   assert.ok(!isRecallIntent('Create a project for ALB Parking'), 'create does not trigger recall')
   assert.ok(!isRecallIntent('Run the research for ALB'), 'run does not trigger recall')
 })
@@ -1501,6 +1504,34 @@ test('project name extracted from recall commands', () => {
   assert.equal(extractRecallProjectName('Who is assigned to ALB Parking?'), 'ALB Parking')
   assert.equal(extractRecallProjectName('Next step for ALB Parking'), 'ALB Parking')
   assert.equal(extractRecallProjectName('Tell me about Foreman'), 'Foreman')
+  assert.equal(extractRecallProjectName('What is missing before AÏKO can execute WhatsApp outreach for ALB Parking?'), 'ALB Parking')
+})
+
+test('missing capability recall answers from execution plan context', () => {
+  const ctx = {
+    name: 'ALB Parking',
+    latest_execution_plan: {
+      recommended_channel: 'WhatsApp Web',
+      missing_capabilities: [
+        { name: 'Add WhatsApp Web Operator Skill', required_skill: 'whatsapp_web', required_playbook: null },
+        { name: 'Add WhatsApp Web Operator Playbook', required_skill: 'whatsapp_web', required_playbook: 'whatsapp_outreach' },
+      ],
+      approval_gates: [{ action: 'send_message' }],
+    },
+    system_improvement_proposals: [{ title: 'Add WhatsApp Web Operator Skill and Playbook' }],
+  }
+  const missing = ctx.latest_execution_plan.missing_capabilities
+    .map(m => {
+      const ids = [m.required_skill, m.required_playbook].filter(Boolean).join(' / ')
+      return ids ? `${m.name} (${ids})` : m.name
+    })
+    .join(', ')
+  const response = `Before AÏKO can execute ${ctx.latest_execution_plan.recommended_channel} for ${ctx.name}, it needs: ${missing}. The linked proposal is "${ctx.system_improvement_proposals[0].title}". No Web Operator action should run until the capability is approved and implemented.`
+
+  assert.ok(response.includes('whatsapp_web'))
+  assert.ok(response.includes('whatsapp_outreach'))
+  assert.ok(response.includes('Add WhatsApp Web Operator Skill and Playbook'))
+  assert.ok(!response.includes('Email Sending'))
 })
 
 // ── 61. Context includes brief and launch progress ────────────────────────────
@@ -3781,4 +3812,69 @@ test('147. proposal stores implementation_prompt and metadata', () => {
   assert.ok(proposal.implementation_prompt.includes('Codex'))
   assert.equal(proposal.proposal_metadata.skill_spec.skill_id, 'whatsapp_web')
   assert.ok(proposal.proposal_metadata.runtime_validation_plan.length > 0)
+})
+
+test('148. WhatsApp missing capability proposal is idempotent per project and title', () => {
+  const existing = [
+    {
+      id: 'proposal-1',
+      related_project_id: 'alb',
+      title: 'Add WhatsApp Web Operator Skill and Playbook',
+      missing_capabilities: ['web_operator_skill:whatsapp_web'],
+      status: 'draft',
+    },
+  ]
+  function findReusable(proposals, projectId, title, missingCapability) {
+    return proposals.find(p =>
+      p.related_project_id === projectId &&
+      p.title.toLowerCase() === title.toLowerCase() &&
+      !['rejected', 'implemented', 'archived'].includes(p.status) &&
+      p.missing_capabilities.includes(missingCapability)
+    ) ?? null
+  }
+  const reusable = findReusable(
+    existing,
+    'alb',
+    'Add WhatsApp Web Operator Skill and Playbook',
+    'web_operator_skill:whatsapp_web'
+  )
+  assert.equal(reusable?.id, 'proposal-1')
+})
+
+test('149. active duplicate WhatsApp proposals collapse in visible list', () => {
+  const proposals = [
+    {
+      id: 'newest',
+      related_project_id: 'alb',
+      title: 'Add WhatsApp Web Operator Skill and Playbook',
+      missing_capabilities: ['web_operator_skill:whatsapp_web'],
+      status: 'draft',
+    },
+    {
+      id: 'older',
+      related_project_id: 'alb',
+      title: 'Add WhatsApp Web Operator Skill and Playbook',
+      missing_capabilities: ['web_operator_skill:whatsapp_web'],
+      status: 'draft',
+    },
+    {
+      id: 'rejected-history',
+      related_project_id: 'alb',
+      title: 'Add WhatsApp Web Operator Skill and Playbook',
+      missing_capabilities: ['web_operator_skill:whatsapp_web'],
+      status: 'rejected',
+    },
+  ]
+  function dedupeVisible(proposals) {
+    const seen = new Set()
+    return proposals.filter(p => {
+      if (['rejected', 'implemented', 'archived'].includes(p.status)) return true
+      const key = `${p.related_project_id ?? 'global'}::${p.title.toLowerCase()}::${p.missing_capabilities[0] ?? ''}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }
+  const visible = dedupeVisible(proposals)
+  assert.deepEqual(visible.map(p => p.id), ['newest', 'rejected-history'])
 })

@@ -478,7 +478,7 @@ export async function POST(request: NextRequest) {
           ? `AÏKO can prepare this campaign internally. I created the ${strategyExecution.plan.title} plan, and it is ready for task creation.`
           : `AÏKO cannot execute this strategy yet. I created the ${strategyExecution.plan.title} plan and flagged the missing capabilities: ${missing.join(', ')}.`
         const proposalCopy = strategyExecution.proposals_created > 0
-          ? ` I also created ${strategyExecution.proposals_created} System Improvement Proposal${strategyExecution.proposals_created === 1 ? '' : 's'} for approval before adding capabilities.`
+          ? ` I also linked ${strategyExecution.proposals_created} System Improvement Proposal${strategyExecution.proposals_created === 1 ? '' : 's'} for approval before adding capabilities.`
           : ''
         const taskCopy = strategyExecution.tasks_created > 0
           ? ` I created ${strategyExecution.tasks_created} internal task${strategyExecution.tasks_created === 1 ? '' : 's'} from the plan. No external action was executed.`
