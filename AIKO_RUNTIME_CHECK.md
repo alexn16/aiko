@@ -732,3 +732,34 @@ WhatsApp was used only as the missing-capability example. No WhatsApp skill or p
 ### Safety result
 
 The self-improvement loop tracks approval and implementation handoff, but it does not modify AÏKO code, run Codex/Claude Code, run Web Operator actions, or mark a capability available unless the referenced skill/playbook actually exists.
+
+---
+
+## Self-Improvement Timeline Validation — 2026-06-04
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+| Check | Result |
+|---|---|
+| `GET /api/system/improvement-timeline` | ✅ Returned lifecycle summary, derived timeline events, and health counters. |
+| Prompt body exposure | ✅ Timeline payload does not include `implementation_prompt` text. |
+| Existing WhatsApp proposal | ✅ Appears as `implemented_pending_validation` for project `ALB Parking`. |
+| Implementation metadata | ✅ Timeline shows handoff commit `fake123` and PR `https://example.com/fake-pr`. |
+| Validation health | ✅ `blocked_by_validation=1` because `whatsapp_web` / `whatsapp_outreach` are not installed. |
+| `/system` dashboard | ✅ Shows `Self-Improvement Timeline`, summary counters, `Improvement health`, project/platform/capability, status badge, Open proposal, and Copy prompt controls. |
+| Copy prompt from timeline | ✅ Button reaches `Copied`; clipboard write now falls back if the browser clipboard API stalls. |
+| CEO status query | ✅ `What is the status of AÏKO self-improvement?` returns `intent=system_improvement_status`, `actions=[]`, `delegation=null`. |
+| External execution | ✅ `web_operator_actions` stayed `28`; no WhatsApp opened, no Web Operator action created, no message sent, no capability enabled. |
+
+### Issues found/fixed
+
+| Issue | Fix |
+|---|---|
+| CEO status phrase `status of AÏKO self-improvement` routed to project recall. | Self-improvement status intent now recognizes optional `AÏKO` before `self-improvement`. |
+| In-app browser clipboard write could stall when copying from the timeline. | Copy helper now times out the Clipboard API attempt and uses the existing textarea fallback. |

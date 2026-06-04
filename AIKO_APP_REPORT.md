@@ -696,3 +696,13 @@ System Improvement Proposals now have a controlled lifecycle: `proposed`, `appro
 `/system` groups proposals by lifecycle state and shows an Implementation Handoff panel with the Codex-ready prompt, copy control, branch/commit/PR fields, and a validation checklist. The Project Execution Plan tab surfaces proposal lifecycle status next to each missing capability, and CEO Chat can answer or update lifecycle state for explicit commands such as approving implementation or asking for missing capability status.
 
 Validation is guarded. For Web Operator skill/playbook proposals, AÏKO refuses to mark a capability `validated_available` unless the referenced `web_operator_skills` and `web_operator_playbooks` rows exist and are active. This prevents the app from claiming WhatsApp or any other platform capability is available before external implementation has actually been installed and validated.
+
+### Self-Improvement Timeline — 2026-06-04
+
+`GET /api/system/improvement-timeline` now exposes a read-only history of System Improvement Proposal lifecycle events. It returns summary counters, timeline events derived from existing proposal timestamps/metadata, project names, capability/platform labels, implementation commit/PR links, validation summaries, and health counters for validation-blocked proposals, waiting implementation work, collapsed duplicates, and capabilities validated this week.
+
+`/system` now includes a Self-Improvement Timeline section above proposal cards. It shows lifecycle counters, an Improvement Health card, recent events, proposal status badges, project/capability context, handoff commit/PR metadata, and controls to open the proposal or copy the Codex prompt. Timeline API responses intentionally omit implementation prompt bodies; prompt text is still fetched only through the existing proposal prompt endpoint or proposal card metadata.
+
+CEO Chat can answer read-only self-improvement status questions such as “What improvements has AÏKO proposed?” and “What is the status of AÏKO self-improvement?” from the timeline state. These responses return `intent=system_improvement_status`, no actions, no delegation, and explicitly state that no code was executed and no capability was enabled.
+
+Safety remains unchanged: the timeline is reporting-only. It does not run Codex, modify code, open websites, create Web Operator actions, approve proposals, validate capabilities, or bypass the existing skill/playbook validation guard.

@@ -9,6 +9,7 @@ import type { DelegationResult } from '@/lib/web-operator/delegation'
 import { extractFirstUrl, getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
 import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
 import { createSystemImprovementProposal, updateSystemImprovementLifecycle } from '@/lib/system-improvements'
+import { getSystemImprovementTimeline } from '@/lib/system-improvement-timeline'
 import { findProjectByNameOrAlias } from '@/lib/project-context'
 import {
   createExecutionTasksFromPlan,
@@ -80,6 +81,33 @@ function hintFromStrategyCommand(command: string): string {
 
 function isSelfImprovementLifecycleIntent(command: string): boolean {
   return /\b(can\s+a[ïi]ko\s+improve\s+itself|approve\s+the\s+.+capability|mark\s+.+capability\s+as\s+implemented|mark\s+.+implementation\s+started|validation\s+is\s+complete|what\s+is\s+the\s+status\s+of\s+the\s+missing\s+capability|status\s+of\s+.+capability)\b/i.test(command)
+}
+
+function isSelfImprovementTimelineIntent(command: string): boolean {
+  return /\b(what improvements has a[ïi]ko proposed|status of (?:a[ïi]ko )?self-improvement|self-improvement status|which capabilities are missing|what was implemented recently|improvements has a[ïi]ko proposed|missing capabilities)\b/i.test(command)
+}
+
+async function handleSelfImprovementTimelineCommand(command: string): Promise<NextResponse | null> {
+  if (!isSelfImprovementTimelineIntent(command)) return null
+
+  const data = await getSystemImprovementTimeline()
+  const latest = data.timeline.slice(0, 3)
+  const latestText = latest.length > 0
+    ? ` Recent events: ${latest.map(e => `${e.event_label} for "${e.title}"${e.project_name ? ` (${e.project_name})` : ''}`).join('; ')}.`
+    : ' No improvement events have been recorded yet.'
+  const health = data.health
+    ? ` Health: ${data.health.blocked_by_validation} blocked by validation, ${data.health.waiting_for_implementation} waiting for implementation, ${data.health.capabilities_validated_this_week} validated this week.`
+    : ''
+  const response = `AÏKO has ${data.summary.proposed} proposed, ${data.summary.approved} approved, ${data.summary.in_progress} in progress, ${data.summary.pending_validation} pending validation, ${data.summary.validated} validated, and ${data.summary.rejected} rejected improvement proposal${data.timeline.length === 1 ? '' : 's'}.${latestText}${health} This is read-only status; no code was executed and no capability was enabled.`
+
+  return NextResponse.json({
+    response,
+    intent: 'system_improvement_status',
+    actions: [],
+    project_id: null,
+    improvement_timeline: data,
+    delegation: null,
+  })
 }
 
 function selfImprovementHint(command: string): string {
@@ -198,6 +226,9 @@ export async function POST(request: NextRequest) {
     if (!command?.trim()) {
       return NextResponse.json({ error: 'No command provided' }, { status: 400 })
     }
+
+    const timelineResponse = await handleSelfImprovementTimelineCommand(command.trim())
+    if (timelineResponse) return timelineResponse
 
     const lifecycleResponse = await handleSelfImprovementLifecycleCommand(command.trim())
     if (lifecycleResponse) return lifecycleResponse

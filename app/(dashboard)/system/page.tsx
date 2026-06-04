@@ -89,6 +89,42 @@ interface CapabilityCheckResult {
   gap_summary: string
 }
 
+interface ImprovementTimelineItem {
+  id: string
+  proposal_id: string
+  title: string
+  status: string
+  project_id: string | null
+  project_name: string | null
+  platform: string | null
+  capability: string | null
+  event_type: string
+  event_label: string
+  created_at: string
+  actor: string
+  implementation_commit: string | null
+  implementation_pr_url: string | null
+  validation_summary: string | null
+}
+
+interface ImprovementTimelineData {
+  summary: {
+    proposed: number
+    approved: number
+    in_progress: number
+    pending_validation: number
+    validated: number
+    rejected: number
+  }
+  timeline: ImprovementTimelineItem[]
+  health?: {
+    blocked_by_validation: number
+    waiting_for_implementation: number
+    duplicate_collapsed: number
+    capabilities_validated_this_week: number
+  }
+}
+
 // ── Status chip styles ─────────────────────────────────────────────────────────
 
 const STATUS_CHIP: Record<string, React.CSSProperties> = {
@@ -147,16 +183,20 @@ export default function SystemPage() {
   const [promptTextById, setPromptTextById] = useState<Record<string, string>>({})
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
   const [proposalMessageById, setProposalMessageById] = useState<Record<string, string>>({})
+  const [timelineData, setTimelineData] = useState<ImprovementTimelineData | null>(null)
 
   const loadData = useCallback(async () => {
-    const [capRes, propRes] = await Promise.all([
+    const [capRes, propRes, timelineRes] = await Promise.all([
       fetch('/api/system/capabilities'),
       fetch('/api/system/improvements'),
+      fetch('/api/system/improvement-timeline'),
     ])
     const capData  = await capRes.json()
     const propData = await propRes.json()
+    const timeline = await timelineRes.json().catch(() => null)
     setCapabilities(capData.capabilities ?? [])
     setProposals(propData.proposals ?? [])
+    setTimelineData(timeline?.summary && Array.isArray(timeline?.timeline) ? timeline : null)
   }, [])
 
   useEffect(() => {
@@ -189,9 +229,7 @@ export default function SystemPage() {
   async function copyPromptForCodex(p: SystemImprovementProposal) {
     const text = promptTextById[p.id] || p.proposal_metadata?.implementation_prompt || p.implementation_prompt
     if (!text) return
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
+    const fallbackCopy = () => {
       const textarea = document.createElement('textarea')
       textarea.value = text
       textarea.style.position = 'fixed'
@@ -202,6 +240,15 @@ export default function SystemPage() {
       textarea.select()
       document.execCommand('copy')
       document.body.removeChild(textarea)
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable')
+      await Promise.race([
+        navigator.clipboard.writeText(text),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Clipboard write timed out')), 750)),
+      ])
+    } catch {
+      fallbackCopy()
     }
     setCopiedPromptId(p.id)
     setTimeout(() => setCopiedPromptId(current => current === p.id ? null : current), 1800)
@@ -496,6 +543,142 @@ export default function SystemPage() {
       </section>
 
       {/* ── Section 3: Improvement Proposals ──────────────────────────────── */}
+      <section style={{ marginBottom: 40 }}>
+        <SectionHeader label="Self-Improvement Timeline" />
+
+        {!timelineData ? (
+          <div style={{ fontSize: 13, color: '#94a3b8', padding: '20px 0' }}>
+            No self-improvement timeline loaded yet.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 8 }}>
+              {[
+                ['Proposed', timelineData.summary.proposed],
+                ['Approved', timelineData.summary.approved],
+                ['In progress', timelineData.summary.in_progress],
+                ['Pending validation', timelineData.summary.pending_validation],
+                ['Validated', timelineData.summary.validated],
+                ['Rejected', timelineData.summary.rejected],
+              ].map(([label, value]) => (
+                <div key={String(label)} style={{
+                  background: '#ffffff',
+                  border: '1px solid #f1f5f9',
+                  borderRadius: 8,
+                  padding: '10px 8px',
+                  minHeight: 58,
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', fontFamily: 'DM Mono, monospace' }}>
+                    {value}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    {label}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{
+              background: '#ffffff',
+              border: '1px solid #f1f5f9',
+              borderRadius: 10,
+              padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#334155', marginBottom: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Improvement health
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, fontSize: 12, color: '#475569' }}>
+                <div><b>{timelineData.health?.blocked_by_validation ?? 0}</b><br />blocked by validation</div>
+                <div><b>{timelineData.health?.waiting_for_implementation ?? 0}</b><br />waiting for implementation</div>
+                <div><b>{timelineData.health?.duplicate_collapsed ?? 0}</b><br />duplicates collapsed</div>
+                <div><b>{timelineData.health?.capabilities_validated_this_week ?? 0}</b><br />validated this week</div>
+              </div>
+            </div>
+
+            <div style={{
+              background: '#ffffff',
+              border: '1px solid #f1f5f9',
+              borderRadius: 10,
+              overflow: 'hidden',
+            }}>
+              {timelineData.timeline.length === 0 ? (
+                <div style={{ padding: 18, fontSize: 12, color: '#94a3b8' }}>No improvement events yet.</div>
+              ) : (
+                timelineData.timeline.slice(0, 20).map((event, index) => {
+                  const proposal = proposals.find(p => p.id === event.proposal_id)
+                  return (
+                    <div
+                      key={event.id}
+                      style={{
+                        padding: '13px 16px',
+                        borderBottom: index < Math.min(timelineData.timeline.length, 20) - 1 ? '1px solid #f8fafc' : 'none',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{event.event_label}</span>
+                            <Chip label={event.status.replace(/_/g, ' ')} style={PROPOSAL_STATUS_CHIP[event.status] ?? { background: '#f1f5f9', color: '#64748b' }} />
+                          </div>
+                          <div style={{ fontSize: 12, color: '#475569', marginTop: 4, lineHeight: 1.5 }}>
+                            {event.title}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.5 }}>
+                            {event.project_name ? `Project: ${event.project_name}` : 'Project: none'}
+                            {event.platform ? ` · Platform: ${event.platform}` : ''}
+                            {event.capability ? ` · Capability: ${event.capability}` : ''}
+                            {event.actor ? ` · Actor: ${event.actor}` : ''}
+                          </div>
+                          {(event.implementation_commit || event.implementation_pr_url || event.validation_summary) && (
+                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 6, lineHeight: 1.55 }}>
+                              {event.implementation_commit && <span><b>Commit:</b> {event.implementation_commit} </span>}
+                              {event.implementation_pr_url && <span><b>PR:</b> {event.implementation_pr_url} </span>}
+                              {event.validation_summary && <span><b>Validation:</b> {event.validation_summary}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                          <Link
+                            href={`/system?proposal=${event.proposal_id}`}
+                            onClick={() => {
+                              setExpandedPrompts(prev => new Set(prev).add(event.proposal_id))
+                              loadImplementationPrompt(event.proposal_id)
+                            }}
+                            style={{ color: '#6366f1', fontSize: 11, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                          >
+                            Open proposal
+                          </Link>
+                          {proposal && (
+                            <button
+                              onClick={() => copyPromptForCodex(proposal)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#6366f1',
+                                fontSize: 11,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                padding: 0,
+                              }}
+                            >
+                              {copiedPromptId === proposal.id ? 'Copied' : 'Copy prompt'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#cbd5e1', marginTop: 6 }}>
+                        {new Date(event.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ── Section 4: Improvement Proposals ──────────────────────────────── */}
       <section id="proposals-section">
         <SectionHeader label="Improvement Proposals" />
 

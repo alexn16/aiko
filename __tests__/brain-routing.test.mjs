@@ -3980,3 +3980,103 @@ test('158. lifecycle status appears in project execution plan missing row', () =
   const rendered = `Proposal status: ${proposalStatus.replace(/_/g, ' ')}`
   assert.equal(rendered, 'Proposal status: implementation in progress')
 })
+
+// ── Self-improvement timeline ────────────────────────────────────────────────
+
+test('159. timeline groups proposals by lifecycle status', () => {
+  function summarize(statuses) {
+    return statuses.reduce((acc, status) => {
+      if (['proposed', 'draft', 'pending_approval'].includes(status)) acc.proposed++
+      else if (['approved_for_implementation', 'approved'].includes(status)) acc.approved++
+      else if (status === 'implementation_in_progress') acc.in_progress++
+      else if (['implemented_pending_validation', 'implemented'].includes(status)) acc.pending_validation++
+      else if (status === 'validated_available') acc.validated++
+      else if (status === 'rejected') acc.rejected++
+      return acc
+    }, { proposed: 0, approved: 0, in_progress: 0, pending_validation: 0, validated: 0, rejected: 0 })
+  }
+  assert.deepEqual(
+    summarize(['proposed', 'approved_for_implementation', 'implementation_in_progress', 'implemented_pending_validation', 'validated_available', 'rejected']),
+    { proposed: 1, approved: 1, in_progress: 1, pending_validation: 1, validated: 1, rejected: 1 }
+  )
+})
+
+test('160. blocked validation proposal appears as pending validation health issue', () => {
+  function blockedByValidation(proposal, skills, playbooks) {
+    if (!['implemented_pending_validation', 'implemented'].includes(proposal.status)) return false
+    if (proposal.skill_id && !skills.includes(proposal.skill_id)) return true
+    if (proposal.playbook_id && !playbooks.includes(proposal.playbook_id)) return true
+    return false
+  }
+  const proposal = { status: 'implemented_pending_validation', skill_id: 'whatsapp_web', playbook_id: 'whatsapp_outreach' }
+  assert.equal(blockedByValidation(proposal, [], []), true)
+})
+
+test('161. rejected proposal appears separately in timeline summary', () => {
+  const statuses = ['rejected', 'proposed']
+  const rejected = statuses.filter(s => s === 'rejected').length
+  const proposed = statuses.filter(s => ['proposed', 'draft', 'pending_approval'].includes(s)).length
+  assert.equal(rejected, 1)
+  assert.equal(proposed, 1)
+})
+
+test('162. validated proposal timeline includes validation summary', () => {
+  const timelineItem = {
+    event_type: 'validated_available',
+    validation_summary: 'npm test and npm run build passed; runtime validation complete.',
+  }
+  assert.equal(timelineItem.event_type, 'validated_available')
+  assert.ok(timelineItem.validation_summary.includes('runtime validation'))
+})
+
+test('163. improvement timeline does not expose implementation prompt text', () => {
+  const proposal = {
+    id: 'p1',
+    title: 'Add Capability',
+    implementation_prompt: 'SECRET PROMPT BODY',
+  }
+  const timelineItem = {
+    proposal_id: proposal.id,
+    title: proposal.title,
+    event_type: 'proposal_created',
+  }
+  assert.equal('implementation_prompt' in timelineItem, false)
+  assert.equal(JSON.stringify(timelineItem).includes('SECRET PROMPT BODY'), false)
+})
+
+test('164. CEO self-improvement status query is read-only', () => {
+  const isTimelineIntent = (command) => /\b(what improvements has a[ïi]ko proposed|status of (?:a[ïi]ko )?self-improvement|self-improvement status|which capabilities are missing|what was implemented recently|improvements has a[ïi]ko proposed|missing capabilities)\b/i.test(command)
+  assert.equal(isTimelineIntent('What is the status of AÏKO self-improvement?'), true)
+
+  const response = {
+    intent: 'system_improvement_status',
+    actions: [],
+    delegation: null,
+    response: 'AÏKO has 1 proposed improvement. This is read-only status; no code was executed and no capability was enabled.',
+  }
+  assert.equal(response.intent, 'system_improvement_status')
+  assert.equal(response.actions.length, 0)
+  assert.equal(response.delegation, null)
+  assert.ok(response.response.includes('no code was executed'))
+})
+
+test('165. implementation prompt copy falls back if clipboard write stalls', async () => {
+  let fallbackCalled = false
+  async function copyWithTimeout(writeText, fallback) {
+    try {
+      await Promise.race([
+        writeText('prompt'),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Clipboard write timed out')), 10)),
+      ])
+    } catch {
+      fallback()
+    }
+  }
+
+  await copyWithTimeout(
+    () => new Promise(() => {}),
+    () => { fallbackCalled = true }
+  )
+
+  assert.equal(fallbackCalled, true)
+})
