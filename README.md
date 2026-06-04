@@ -108,6 +108,11 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 
 ## MVP operating guide
 
+Related MVP docs:
+- `AIKO_MVP_DEMO_SCRIPT.md` — 10-minute demo flow for showing the MVP safely.
+- `AIKO_OWNER_OPERATING_MANUAL.md` — owner runbook for local operation, supervision, approvals, files, and self-improvement.
+- `AIKO_MVP_RELEASE_CHECKLIST.md` — release readiness and deployment safety checklist.
+
 ### Start the app locally
 
 ```bash
