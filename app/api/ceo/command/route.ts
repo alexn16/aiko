@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
+import { db } from '@/lib/db/client'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail, delegateToWebOperator, delegateOpenUrl } from '@/lib/web-operator/delegation'
 import type { DelegationResult } from '@/lib/web-operator/delegation'
 import { extractFirstUrl, getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
 import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
-import { createSystemImprovementProposal } from '@/lib/system-improvements'
+import { createSystemImprovementProposal, updateSystemImprovementLifecycle } from '@/lib/system-improvements'
 import { findProjectByNameOrAlias } from '@/lib/project-context'
 import {
   createExecutionTasksFromPlan,
@@ -77,6 +78,117 @@ function hintFromStrategyCommand(command: string): string {
   return command.slice(0, 80)
 }
 
+function isSelfImprovementLifecycleIntent(command: string): boolean {
+  return /\b(can\s+a[ïi]ko\s+improve\s+itself|approve\s+the\s+.+capability|mark\s+.+capability\s+as\s+implemented|mark\s+.+implementation\s+started|validation\s+is\s+complete|what\s+is\s+the\s+status\s+of\s+the\s+missing\s+capability|status\s+of\s+.+capability)\b/i.test(command)
+}
+
+function selfImprovementHint(command: string): string {
+  const lower = command.toLowerCase()
+  for (const hint of ['whatsapp', 'reddit', 'facebook', 'linkedin', 'instagram', 'canva', 'gmail', 'email']) {
+    if (lower.includes(hint)) return hint
+  }
+  return ''
+}
+
+async function findSelfImprovementProposalForCommand(command: string): Promise<Record<string, unknown> | null> {
+  const projectName = extractProjectNameFromCommand(command)
+  const project = projectName ? await findProjectByNameOrAlias(projectName) : null
+  const hint = selfImprovementHint(command)
+  const values: unknown[] = []
+  const conditions = [`sip.status NOT IN ('archived')`]
+  let idx = 1
+
+  if (project?.id) {
+    conditions.push(`sip.related_project_id = $${idx++}`)
+    values.push(project.id)
+  }
+  if (hint) {
+    conditions.push(`(
+      lower(sip.title) LIKE lower($${idx})
+      OR lower(sip.summary) LIKE lower($${idx})
+      OR lower(sip.reason) LIKE lower($${idx})
+      OR lower(sip.proposal_metadata::text) LIKE lower($${idx})
+      OR lower(sip.missing_capabilities::text) LIKE lower($${idx})
+    )`)
+    values.push(`%${hint}%`)
+    idx++
+  }
+
+  const res = await db.query(
+    `SELECT sip.*, p.name AS project_name
+     FROM system_improvement_proposals sip
+     LEFT JOIN projects p ON p.id = sip.related_project_id
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY sip.created_at DESC
+     LIMIT 1`,
+    values
+  )
+  return res.rows[0] ?? null
+}
+
+async function handleSelfImprovementLifecycleCommand(command: string): Promise<NextResponse | null> {
+  if (!isSelfImprovementLifecycleIntent(command)) return null
+
+  const proposal = await findSelfImprovementProposalForCommand(command)
+  if (!proposal) {
+    return NextResponse.json({
+      response: 'I could not find a matching System Improvement Proposal. Create a strategy execution plan first so AÏKO can identify the missing capability.',
+      intent: 'system_improvement_lifecycle',
+      actions: [],
+      project_id: null,
+      delegation: null,
+    })
+  }
+
+  const id = String(proposal.id)
+  const title = String(proposal.title)
+  const status = String(proposal.status)
+  const projectId = proposal.related_project_id ? String(proposal.related_project_id) : null
+
+  const lower = command.toLowerCase()
+  let response = `The proposal "${title}" is currently ${status.replace(/_/g, ' ')}.`
+  let action: string | null = null
+
+  if (/\bapprove\b/i.test(command)) {
+    const updated = await updateSystemImprovementLifecycle(id, { action: 'approve' })
+    response = `Approved "${updated.title}" for implementation. AÏKO did not run Codex or modify code; copy the implementation prompt and implement it externally.`
+    action = 'approve'
+  } else if (/\b(start|started|in progress)\b/i.test(command) && /\bimplementation\b/i.test(command)) {
+    const updated = await updateSystemImprovementLifecycle(id, { action: 'start_implementation' })
+    response = `Marked "${updated.title}" as implementation in progress. This only updates lifecycle tracking; no code ran inside AÏKO.`
+    action = 'start_implementation'
+  } else if (/\bimplemented\b/i.test(command) && !/\bvalidat/i.test(command)) {
+    const updated = await updateSystemImprovementLifecycle(id, { action: 'mark_implemented' })
+    response = `Marked "${updated.title}" as implemented pending validation. Build, tests, and runtime validation still need to be confirmed before it can be marked available.`
+    action = 'mark_implemented'
+  } else if (/\bvalidat/i.test(command)) {
+    if (!/\b(complete|passed|done|validated)\b/i.test(command)) {
+      response = `I will not mark "${title}" available yet. Explicitly confirm validation is complete and include the build/test/runtime result.`
+    } else {
+      try {
+        const updated = await updateSystemImprovementLifecycle(id, {
+          action: 'validate_available',
+          validation_summary: command,
+          validation_build_status: lower.includes('build') || lower.includes('passed') ? 'passed' : undefined,
+          validation_test_status: lower.includes('test') || lower.includes('passed') ? 'passed' : undefined,
+        })
+        response = `Marked "${updated.title}" as validated available based on your validation summary. AÏKO did not run code automatically.`
+        action = 'validate_available'
+      } catch (err) {
+        response = err instanceof Error ? err.message : `Could not mark "${title}" available.`
+      }
+    }
+  }
+
+  return NextResponse.json({
+    response,
+    intent: 'system_improvement_lifecycle',
+    actions: action ? [{ type: `system_improvement_${action}`, data: { proposal_id: id } }] : [],
+    project_id: projectId,
+    delegation: null,
+  })
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -86,6 +198,9 @@ export async function POST(request: NextRequest) {
     if (!command?.trim()) {
       return NextResponse.json({ error: 'No command provided' }, { status: 400 })
     }
+
+    const lifecycleResponse = await handleSelfImprovementLifecycleCommand(command.trim())
+    if (lifecycleResponse) return lifecycleResponse
 
     // Check that at least one provider is reachable before calling the agent.
     // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').

@@ -4,6 +4,7 @@ import {
   checkCapabilitiesForStrategy,
   type SystemCapability,
   type CapabilityCheckResult,
+  markCapabilityStatus,
 } from '@/lib/system-capabilities'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -27,7 +28,7 @@ export interface SystemImprovementProposal {
   missing_capabilities: string[]
   proposed_changes: ProposedChange[]
   risk_level: 'low' | 'medium' | 'high'
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'implemented' | 'archived'
+  status: 'draft' | 'pending_approval' | 'approved' | 'proposed' | 'approved_for_implementation' | 'implementation_in_progress' | 'implemented_pending_validation' | 'validated_available' | 'rejected' | 'implemented' | 'archived'
   implementation_prompt: string
   proposal_metadata: Record<string, unknown>
   created_at: string
@@ -63,6 +64,18 @@ export interface GenerateImplementationPromptResult {
   proposed_changes: ProposedChange[]
   risk_level: 'low' | 'medium' | 'high'
   summary: string
+}
+
+export interface LifecycleUpdateParams {
+  action: 'approve' | 'reject' | 'start_implementation' | 'mark_implemented' | 'validate_available'
+  notes?: string
+  implementation_branch?: string
+  implementation_commit?: string
+  implementation_pr_url?: string
+  validation_summary?: string
+  validation_build_status?: string
+  validation_test_status?: string
+  approved_by_user_id?: string | null
 }
 
 // ── CRUD ───────────────────────────────────────────────────────────────────────
@@ -126,13 +139,27 @@ export async function listSystemImprovementProposals(
   return dedupeActiveSystemImprovementProposals(result.rows.map(rowToProposal))
 }
 
+export async function getSystemImprovementProposalById(
+  id: string
+): Promise<SystemImprovementProposal | null> {
+  const result = await db.query(
+    `SELECT sip.*, p.name AS project_name
+     FROM system_improvement_proposals sip
+     LEFT JOIN projects p ON p.id = sip.related_project_id
+     WHERE sip.id=$1
+     LIMIT 1`,
+    [id]
+  )
+  return result.rows[0] ? rowToProposal(result.rows[0]) : null
+}
+
 export async function findReusableSystemImprovementProposal(params: {
   related_project_id?: string | null
   missing_capability: string
   title?: string
 }): Promise<SystemImprovementProposal | null> {
   const conditions = [
-    `sip.status NOT IN ('rejected', 'implemented', 'archived')`,
+    `sip.status NOT IN ('rejected', 'implemented', 'archived', 'validated_available')`,
     `sip.missing_capabilities @> $1::jsonb`,
   ]
   const values: unknown[] = [JSON.stringify([params.missing_capability])]
@@ -166,7 +193,7 @@ export function dedupeActiveSystemImprovementProposals(
   const deduped: SystemImprovementProposal[] = []
 
   for (const proposal of proposals) {
-    const active = !['rejected', 'implemented', 'archived'].includes(proposal.status)
+    const active = !['rejected', 'implemented', 'archived', 'validated_available'].includes(proposal.status)
     if (!active) {
       deduped.push(proposal)
       continue
@@ -190,7 +217,15 @@ export function dedupeActiveSystemImprovementProposals(
 export async function approveSystemImprovementProposal(id: string): Promise<void> {
   await db.query(
     `UPDATE system_improvement_proposals
-     SET status='approved', approved_at=NOW(), updated_at=NOW()
+     SET status='approved_for_implementation',
+         approved_at=NOW(),
+         proposal_metadata = jsonb_set(
+           COALESCE(proposal_metadata, '{}'::jsonb),
+           '{lifecycle}',
+           COALESCE(proposal_metadata->'lifecycle', '{}'::jsonb) || jsonb_build_object('approved_at', NOW()),
+           true
+         ),
+         updated_at=NOW()
      WHERE id=$1`,
     [id]
   )
@@ -204,6 +239,158 @@ export async function rejectSystemImprovementProposal(id: string, reason?: strin
      WHERE id=$1`,
     reason ? [id, reason] : [id]
   )
+}
+
+export async function updateSystemImprovementLifecycle(
+  id: string,
+  params: LifecycleUpdateParams
+): Promise<SystemImprovementProposal> {
+  const proposal = await getSystemImprovementProposalById(id)
+  if (!proposal) throw new Error('System Improvement Proposal not found')
+
+  if (params.action === 'approve') {
+    await updateProposalLifecycleMetadata(id, 'approved_for_implementation', {
+      approved_at: new Date().toISOString(),
+      approved_by_user_id: params.approved_by_user_id ?? null,
+      notes: params.notes ?? null,
+    }, true)
+  } else if (params.action === 'reject') {
+    await updateProposalLifecycleMetadata(id, 'rejected', {
+      rejected_at: new Date().toISOString(),
+      notes: params.notes ?? null,
+    })
+  } else if (params.action === 'start_implementation') {
+    await updateProposalLifecycleMetadata(id, 'implementation_in_progress', {
+      implementation_started_at: new Date().toISOString(),
+      notes: params.notes ?? null,
+    })
+  } else if (params.action === 'mark_implemented') {
+    await updateProposalLifecycleMetadata(id, 'implemented_pending_validation', {
+      implemented_at: new Date().toISOString(),
+      implementation_branch: params.implementation_branch ?? null,
+      implementation_commit: params.implementation_commit ?? null,
+      implementation_pr_url: params.implementation_pr_url ?? null,
+      notes: params.notes ?? null,
+      checklist: {
+        code_implemented_externally: true,
+        tests_passed: params.validation_test_status === 'passed',
+        build_passed: params.validation_build_status === 'passed',
+        runtime_validated: false,
+        docs_updated: false,
+      },
+    })
+  } else if (params.action === 'validate_available') {
+    if (!params.validation_summary?.trim()) {
+      throw new Error('Validation summary is required before marking a capability available.')
+    }
+
+    const guard = await validateCapabilityPresence(proposal)
+    if (!guard.ok) throw new Error(guard.message)
+
+    await markRelatedCapabilityAvailable(proposal)
+    await updateProposalLifecycleMetadata(id, 'validated_available', {
+      validated_at: new Date().toISOString(),
+      validation_summary: params.validation_summary.trim(),
+      validation_build_status: params.validation_build_status ?? 'passed',
+      validation_test_status: params.validation_test_status ?? 'passed',
+      implementation_branch: params.implementation_branch ?? getLifecycleValue(proposal, 'implementation_branch'),
+      implementation_commit: params.implementation_commit ?? getLifecycleValue(proposal, 'implementation_commit'),
+      implementation_pr_url: params.implementation_pr_url ?? getLifecycleValue(proposal, 'implementation_pr_url'),
+      checklist: {
+        code_implemented_externally: true,
+        tests_passed: true,
+        build_passed: true,
+        runtime_validated: true,
+        docs_updated: true,
+      },
+    })
+  }
+
+  const updated = await getSystemImprovementProposalById(id)
+  if (!updated) throw new Error('System Improvement Proposal not found after update')
+  return updated
+}
+
+async function updateProposalLifecycleMetadata(
+  id: string,
+  status: SystemImprovementProposal['status'],
+  patch: Record<string, unknown>,
+  setApprovedAt = false
+): Promise<void> {
+  await db.query(
+    `UPDATE system_improvement_proposals
+     SET status=$1,
+         approved_at = CASE WHEN $4::boolean THEN NOW() ELSE approved_at END,
+         proposal_metadata = jsonb_set(
+           COALESCE(proposal_metadata, '{}'::jsonb),
+           '{lifecycle}',
+           COALESCE(proposal_metadata->'lifecycle', '{}'::jsonb) || $2::jsonb,
+           true
+         ),
+         updated_at=NOW()
+     WHERE id=$3`,
+    [status, JSON.stringify(patch), id, setApprovedAt]
+  )
+}
+
+async function validateCapabilityPresence(
+  proposal: SystemImprovementProposal
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const metadata = proposal.proposal_metadata ?? {}
+  const skillSpec = normalizeObject(metadata.skill_spec)
+  const playbookSpec = normalizeObject(metadata.playbook_spec)
+  const skillId = typeof skillSpec.skill_id === 'string' ? skillSpec.skill_id : null
+  const playbookId = typeof playbookSpec.playbook_id === 'string' ? playbookSpec.playbook_id : null
+
+  const isWebOperatorProposal = Boolean(skillId || playbookId || proposal.missing_capabilities.some(c => c.startsWith('web_operator_')))
+  if (!isWebOperatorProposal) return { ok: true }
+
+  if (skillId) {
+    const skill = await db.query(
+      `SELECT id FROM web_operator_skills WHERE skill_id=$1 AND status='active' LIMIT 1`,
+      [skillId]
+    )
+    if (!skill.rows[0]) {
+      return { ok: false, message: `Cannot mark available because the skill/playbook is not present in the database. Missing skill: ${skillId}.` }
+    }
+  }
+
+  if (playbookId) {
+    const playbook = await db.query(
+      `SELECT id FROM web_operator_playbooks WHERE playbook_id=$1 AND status='active' LIMIT 1`,
+      [playbookId]
+    )
+    if (!playbook.rows[0]) {
+      return { ok: false, message: `Cannot mark available because the skill/playbook is not present in the database. Missing playbook: ${playbookId}.` }
+    }
+  }
+
+  return { ok: true }
+}
+
+async function markRelatedCapabilityAvailable(proposal: SystemImprovementProposal): Promise<void> {
+  const metadata = proposal.proposal_metadata ?? {}
+  const relatedCapabilityId = typeof metadata.related_capability_id === 'string'
+    ? metadata.related_capability_id
+    : null
+  const candidateKeys = [
+    relatedCapabilityId,
+    ...proposal.missing_capabilities,
+    ...proposal.proposed_changes.map(c => c.capability_key),
+  ].filter(Boolean) as string[]
+
+  for (const key of candidateKeys) {
+    const exists = await db.query(`SELECT key FROM system_capabilities WHERE key=$1 LIMIT 1`, [key])
+    if (exists.rows[0]) {
+      await markCapabilityStatus(key, 'available')
+    }
+  }
+}
+
+function getLifecycleValue(proposal: SystemImprovementProposal, key: string): string | null {
+  const lifecycle = normalizeObject(proposal.proposal_metadata?.lifecycle)
+  const value = lifecycle[key]
+  return typeof value === 'string' ? value : null
 }
 
 // ── AI generation ──────────────────────────────────────────────────────────────

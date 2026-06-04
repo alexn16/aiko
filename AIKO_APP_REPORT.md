@@ -688,3 +688,11 @@ AÏKO now validates strategy-to-capability gaps without modifying itself or exec
 System Improvement Proposal listing is idempotent for active missing-capability proposals: `/system` shows one visible active proposal per project/title/missing-capability set while preserving proposal history. CEO recall also includes the latest execution plan and linked proposal context, so questions like “What is missing before AÏKO can execute WhatsApp outreach for ALB Parking?” answer from the plan instead of generic company capability memory.
 
 Safety remains internal-planning-only: no WhatsApp opens, no Web Operator action is created, no message is sent, and no code is changed from inside the app. Risky future actions such as `send_message`, attachments, group creation, or broadcasts remain approval-gated.
+
+### Controlled Improvement Lifecycle — 2026-06-04
+
+System Improvement Proposals now have a controlled lifecycle: `proposed`, `approved_for_implementation`, `implementation_in_progress`, `implemented_pending_validation`, `validated_available`, `rejected`, and `archived`. The lifecycle is tracked in proposal metadata, including approval time, implementation branch/commit/PR URL, handoff notes, build/test status, and validation summary.
+
+`/system` groups proposals by lifecycle state and shows an Implementation Handoff panel with the Codex-ready prompt, copy control, branch/commit/PR fields, and a validation checklist. The Project Execution Plan tab surfaces proposal lifecycle status next to each missing capability, and CEO Chat can answer or update lifecycle state for explicit commands such as approving implementation or asking for missing capability status.
+
+Validation is guarded. For Web Operator skill/playbook proposals, AÏKO refuses to mark a capability `validated_available` unless the referenced `web_operator_skills` and `web_operator_playbooks` rows exist and are active. This prevents the app from claiming WhatsApp or any other platform capability is available before external implementation has actually been installed and validated.

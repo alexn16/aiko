@@ -694,3 +694,41 @@ Before/after validation:
 |---|---|
 | Older duplicate WhatsApp proposals were visible in `/system`. | Active System Improvement Proposal listing now collapses duplicates by project, title, and primary missing capability while preserving proposal history. |
 | CEO recall answered WhatsApp capability questions from generic company memory and mentioned email gaps. | Project recall context now includes the latest strategy execution plan, missing capabilities, approval gates, and linked improvement proposals; missing-capability recall answers deterministically from that context. |
+
+---
+
+## Controlled Self-Improvement Lifecycle Validation — 2026-06-04
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime test object
+
+Existing proposal:
+
+```text
+Add WhatsApp Web Operator Skill and Playbook
+```
+
+WhatsApp was used only as the missing-capability example. No WhatsApp skill or playbook was implemented.
+
+### Validation
+
+| Step | Result |
+|---|---|
+| Open `/system?proposal=e930a2bf-dc8f-424b-ae88-8e2552632993` | ✅ Proposal grouped under `Proposed`; prompt and lifecycle controls visible. |
+| Approve implementation | ✅ Status changed to `approved_for_implementation`; no Codex run, no code modification. |
+| Copy prompt | ✅ Prompt remained copyable; status did not depend on copying. |
+| Mark implementation started | ✅ Status changed to `implementation_in_progress`; lifecycle metadata recorded. |
+| Mark implemented / ready for validation | ✅ Status changed to `implemented_pending_validation`; fake branch/commit/PR metadata recorded for handoff tracking. |
+| Try to validate available | ✅ Blocked with `Cannot mark available because the skill/playbook is not present in the database. Missing skill: whatsapp_web.` |
+| Confirm availability | ✅ `web_operator_skills.skill_id='whatsapp_web'` count is `0`; `web_operator_playbooks.playbook_id='whatsapp_outreach'` count is `0`; proposal remains `implemented_pending_validation`. |
+| External execution | ✅ `web_operator_actions` stayed `28`; no WhatsApp opened and no message sent. |
+| UI after validation attempt | ✅ Proposal shows under `Pending validation` with Implementation Handoff panel and `Mark validated available` guarded by backend validation. |
+
+### Safety result
+
+The self-improvement loop tracks approval and implementation handoff, but it does not modify AÏKO code, run Codex/Claude Code, run Web Operator actions, or mark a capability available unless the referenced skill/playbook actually exists.

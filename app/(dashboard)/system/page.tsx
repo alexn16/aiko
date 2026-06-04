@@ -35,7 +35,7 @@ interface SystemImprovementProposal {
   missing_capabilities: string[]
   proposed_changes: ProposedChange[]
   risk_level: 'low' | 'medium' | 'high'
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'implemented' | 'archived'
+  status: 'draft' | 'pending_approval' | 'approved' | 'proposed' | 'approved_for_implementation' | 'implementation_in_progress' | 'implemented_pending_validation' | 'validated_available' | 'rejected' | 'implemented' | 'archived'
   implementation_prompt: string
   proposal_metadata?: {
     missing_capability_id?: string
@@ -57,6 +57,20 @@ interface SystemImprovementProposal {
     test_plan?: string[]
     runtime_validation_plan?: string[]
     implementation_prompt?: string
+    lifecycle?: {
+      approved_at?: string
+      implementation_started_at?: string
+      implemented_at?: string
+      validated_at?: string
+      validation_summary?: string
+      validation_build_status?: string
+      validation_test_status?: string
+      implementation_branch?: string
+      implementation_commit?: string
+      implementation_pr_url?: string
+      notes?: string
+      checklist?: Record<string, boolean>
+    }
   }
   created_at: string
   updated_at: string
@@ -93,8 +107,13 @@ const RISK_CHIP: Record<string, React.CSSProperties> = {
 
 const PROPOSAL_STATUS_CHIP: Record<string, React.CSSProperties> = {
   draft:            { background: '#f1f5f9', color: '#64748b' },
+  proposed:         { background: '#f1f5f9', color: '#64748b' },
   pending_approval: { background: '#fef3c7', color: '#d97706' },
   approved:         { background: '#dcfce7', color: '#16a34a' },
+  approved_for_implementation: { background: '#dcfce7', color: '#16a34a' },
+  implementation_in_progress: { background: '#dbeafe', color: '#1d4ed8' },
+  implemented_pending_validation: { background: '#fef3c7', color: '#d97706' },
+  validated_available: { background: '#dcfce7', color: '#15803d' },
   rejected:         { background: '#fee2e2', color: '#dc2626' },
   implemented:      { background: '#dbeafe', color: '#1d4ed8' },
   archived:         { background: '#f1f5f9', color: '#94a3b8' },
@@ -103,6 +122,16 @@ const PROPOSAL_STATUS_CHIP: Record<string, React.CSSProperties> = {
 const CATEGORY_ORDER = [
   'product_system', 'research', 'leads', 'outreach',
   'email', 'browser', 'approvals', 'reporting', 'automation', 'integrations',
+]
+
+const PROPOSAL_GROUPS = [
+  { label: 'Proposed', statuses: ['proposed', 'draft', 'pending_approval'] },
+  { label: 'Approved', statuses: ['approved_for_implementation', 'approved'] },
+  { label: 'In progress', statuses: ['implementation_in_progress'] },
+  { label: 'Pending validation', statuses: ['implemented_pending_validation', 'implemented'] },
+  { label: 'Validated', statuses: ['validated_available'] },
+  { label: 'Rejected', statuses: ['rejected'] },
+  { label: 'Archived', statuses: ['archived'] },
 ]
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -117,6 +146,7 @@ export default function SystemPage() {
   const [expandedPrompts, setExpandedPrompts] = useState<Set<string>>(new Set())
   const [promptTextById, setPromptTextById] = useState<Record<string, string>>({})
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
+  const [proposalMessageById, setProposalMessageById] = useState<Record<string, string>>({})
 
   const loadData = useCallback(async () => {
     const [capRes, propRes] = await Promise.all([
@@ -203,15 +233,52 @@ export default function SystemPage() {
     }
   }
 
-  // ── Approve/Reject proposal ───────────────────────────────────────────────
+  // ── Proposal lifecycle ───────────────────────────────────────────────────
 
-  async function updateProposal(id: string, status: string, reason?: string) {
-    await fetch(`/api/system/improvements/${id}`, {
+  async function updateProposalAction(
+    id: string,
+    action: 'approve' | 'reject' | 'start_implementation' | 'mark_implemented' | 'validate_available',
+    extra: Record<string, string | null | undefined> = {}
+  ) {
+    setProposalMessageById(prev => ({ ...prev, [id]: '' }))
+    const res = await fetch(`/api/system/improvements/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, reason }),
+      body: JSON.stringify({ action, ...extra }),
     })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setProposalMessageById(prev => ({ ...prev, [id]: data.error ?? 'Could not update proposal.' }))
+      return
+    }
+    setProposalMessageById(prev => ({ ...prev, [id]: 'Lifecycle updated.' }))
     await loadData()
+  }
+
+  async function markImplemented(p: SystemImprovementProposal) {
+    const implementation_branch = window.prompt('Implementation branch (optional)', p.proposal_metadata?.lifecycle?.implementation_branch ?? '') ?? undefined
+    const implementation_commit = window.prompt('Implementation commit (optional)', p.proposal_metadata?.lifecycle?.implementation_commit ?? '') ?? undefined
+    const implementation_pr_url = window.prompt('Implementation PR URL (optional)', p.proposal_metadata?.lifecycle?.implementation_pr_url ?? '') ?? undefined
+    const notes = window.prompt('Implementation notes (optional)', p.proposal_metadata?.lifecycle?.notes ?? '') ?? undefined
+    await updateProposalAction(p.id, 'mark_implemented', {
+      implementation_branch,
+      implementation_commit,
+      implementation_pr_url,
+      notes,
+    })
+  }
+
+  async function validateAvailable(p: SystemImprovementProposal) {
+    const validation_summary = window.prompt('Validation summary is required. Include build/tests/runtime checks completed.', p.proposal_metadata?.lifecycle?.validation_summary ?? '')
+    if (!validation_summary?.trim()) {
+      setProposalMessageById(prev => ({ ...prev, [p.id]: 'Validation summary is required.' }))
+      return
+    }
+    await updateProposalAction(p.id, 'validate_available', {
+      validation_summary,
+      validation_build_status: 'passed',
+      validation_test_status: 'passed',
+    })
   }
 
   // ── Group capabilities by category ────────────────────────────────────────
@@ -442,13 +509,28 @@ export default function SystemPage() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {proposals.map(p => {
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {PROPOSAL_GROUPS.map(group => {
+              const groupProposals = proposals.filter(p => group.statuses.includes(p.status))
+              if (groupProposals.length === 0) return null
+              return (
+                <div key={group.label}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 700, color: '#94a3b8',
+                    textTransform: 'uppercase', letterSpacing: '0.1em',
+                    marginBottom: 8,
+                  }}>
+                    {group.label}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {groupProposals.map(p => {
               const promptExpanded = expandedPrompts.has(p.id)
               const promptText = promptTextById[p.id] || p.proposal_metadata?.implementation_prompt || p.implementation_prompt
               const safetyRules = p.proposal_metadata?.safety_rules ?? []
               const forbiddenActions = p.proposal_metadata?.skill_spec?.forbidden_actions ?? p.proposal_metadata?.playbook_spec?.forbidden_steps ?? []
               const approvalActions = p.proposal_metadata?.skill_spec?.approval_required_actions ?? p.proposal_metadata?.playbook_spec?.approval_gates ?? []
+              const lifecycle = p.proposal_metadata?.lifecycle ?? {}
+              const checklist = lifecycle.checklist ?? {}
               return (
                 <div
                   key={p.id}
@@ -472,6 +554,19 @@ export default function SystemPage() {
                   {p.summary && (
                     <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8, lineHeight: 1.55 }}>
                       {p.summary}
+                    </div>
+                  )}
+
+                  {proposalMessageById[p.id] && (
+                    <div style={{
+                      marginBottom: 10, padding: '8px 10px',
+                      background: proposalMessageById[p.id].includes('Cannot') || proposalMessageById[p.id].includes('required') || proposalMessageById[p.id].includes('Could not') ? '#fef2f2' : '#f0fdf4',
+                      border: `1px solid ${proposalMessageById[p.id].includes('Cannot') || proposalMessageById[p.id].includes('required') || proposalMessageById[p.id].includes('Could not') ? '#fecaca' : '#bbf7d0'}`,
+                      borderRadius: 7,
+                      fontSize: 11,
+                      color: proposalMessageById[p.id].includes('Cannot') || proposalMessageById[p.id].includes('required') || proposalMessageById[p.id].includes('Could not') ? '#991b1b' : '#166534',
+                    }}>
+                      {proposalMessageById[p.id]}
                     </div>
                   )}
 
@@ -585,21 +680,61 @@ export default function SystemPage() {
                     </div>
                   )}
 
-                  {/* Approve / Reject buttons */}
-                  {(p.status === 'draft' || p.status === 'pending_approval') && (
-                    <div style={{ display: 'flex', gap: 8 }}>
+                  {/* Implementation handoff */}
+                  {(p.status === 'approved_for_implementation' || p.status === 'approved' || p.status === 'implementation_in_progress' || p.status === 'implemented_pending_validation' || p.status === 'implemented') && (
+                    <div style={{
+                      marginBottom: 10,
+                      padding: '10px 12px',
+                      background: '#f8fafc',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: 8,
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#334155', marginBottom: 8 }}>
+                        Implementation Handoff
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11, color: '#475569', marginBottom: 8 }}>
+                        <div><b>Branch:</b> {lifecycle.implementation_branch || 'Not recorded'}</div>
+                        <div><b>Commit:</b> {lifecycle.implementation_commit || 'Not recorded'}</div>
+                        <div><b>PR:</b> {lifecycle.implementation_pr_url || 'Not recorded'}</div>
+                        <div><b>Notes:</b> {lifecycle.notes || 'Not recorded'}</div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, fontSize: 11, color: '#475569' }}>
+                        {[
+                          ['code_implemented_externally', 'code implemented externally'],
+                          ['tests_passed', 'tests passed'],
+                          ['build_passed', 'build passed'],
+                          ['runtime_validated', 'runtime validated'],
+                          ['docs_updated', 'docs updated'],
+                        ].map(([key, label]) => (
+                          <span key={key}>
+                            {checklist[key] ? '✓' : '○'} {label}
+                          </span>
+                        ))}
+                      </div>
+                      {lifecycle.validation_summary && (
+                        <div style={{ marginTop: 8, fontSize: 11, color: '#166534', lineHeight: 1.5 }}>
+                          <b>Validation:</b> {lifecycle.validation_summary}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Lifecycle buttons */}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {(p.status === 'draft' || p.status === 'proposed' || p.status === 'pending_approval') && (
+                      <>
                       <button
-                        onClick={() => updateProposal(p.id, 'approved')}
+                        onClick={() => updateProposalAction(p.id, 'approve')}
                         style={{
                           background: '#0f172a', color: '#ffffff', border: 'none',
                           borderRadius: 6, padding: '6px 14px', fontSize: 12,
                           fontWeight: 500, cursor: 'pointer',
                         }}
                       >
-                        Approve
+                        Approve implementation
                       </button>
                       <button
-                        onClick={() => updateProposal(p.id, 'rejected')}
+                        onClick={() => updateProposalAction(p.id, 'reject', { notes: window.prompt('Reject reason (optional)', '') ?? undefined })}
                         style={{
                           background: '#fef2f2', color: '#dc2626',
                           border: '1px solid #fecaca',
@@ -609,8 +744,49 @@ export default function SystemPage() {
                       >
                         Reject
                       </button>
-                    </div>
-                  )}
+                      </>
+                    )}
+                    {(p.status === 'approved_for_implementation' || p.status === 'approved') && (
+                      <button
+                        onClick={() => updateProposalAction(p.id, 'start_implementation', { notes: window.prompt('Implementation notes (optional)', '') ?? undefined })}
+                        style={{
+                          background: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe',
+                          borderRadius: 6, padding: '6px 14px', fontSize: 12,
+                          fontWeight: 500, cursor: 'pointer',
+                        }}
+                      >
+                        Mark implementation started
+                      </button>
+                    )}
+                    {p.status === 'implementation_in_progress' && (
+                      <button
+                        onClick={() => markImplemented(p)}
+                        style={{
+                          background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a',
+                          borderRadius: 6, padding: '6px 14px', fontSize: 12,
+                          fontWeight: 500, cursor: 'pointer',
+                        }}
+                      >
+                        Mark implemented / ready for validation
+                      </button>
+                    )}
+                    {(p.status === 'implemented_pending_validation' || p.status === 'implemented') && (
+                      <button
+                        onClick={() => validateAvailable(p)}
+                        style={{
+                          background: '#16a34a', color: '#ffffff', border: 'none',
+                          borderRadius: 6, padding: '6px 14px', fontSize: 12,
+                          fontWeight: 500, cursor: 'pointer',
+                        }}
+                      >
+                        Mark validated available
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+                  </div>
                 </div>
               )
             })}

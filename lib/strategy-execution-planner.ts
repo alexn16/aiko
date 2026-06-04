@@ -976,7 +976,7 @@ export async function createMissingCapabilityProposals(
         estimated_complexity: 'moderate',
       }],
       risk_level: 'medium',
-      status: 'draft',
+      status: 'proposed',
       implementation_prompt: generatedPrompt.implementation_prompt,
       proposal_metadata: generatedPrompt as unknown as Record<string, unknown>,
     })

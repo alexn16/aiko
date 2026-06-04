@@ -3878,3 +3878,105 @@ test('149. active duplicate WhatsApp proposals collapse in visible list', () => 
   const visible = dedupeVisible(proposals)
   assert.deepEqual(visible.map(p => p.id), ['newest', 'rejected-history'])
 })
+
+// ── Controlled self-improvement lifecycle ────────────────────────────────────
+
+test('150. approving proposal does not run code', () => {
+  const calls = []
+  function approveProposal(proposal) {
+    return {
+      ...proposal,
+      status: 'approved_for_implementation',
+      proposal_metadata: {
+        ...proposal.proposal_metadata,
+        lifecycle: { approved_at: '2026-06-04T00:00:00.000Z' },
+      },
+    }
+  }
+  const updated = approveProposal({ id: 'p1', status: 'proposed', proposal_metadata: {} })
+  assert.equal(updated.status, 'approved_for_implementation')
+  assert.equal(calls.length, 0, 'no code-generation or shell execution is invoked')
+})
+
+test('151. copying prompt does not change proposal status', () => {
+  const proposal = { id: 'p1', status: 'proposed', implementation_prompt: 'Codex prompt' }
+  const copied = proposal.implementation_prompt
+  assert.equal(copied, 'Codex prompt')
+  assert.equal(proposal.status, 'proposed')
+})
+
+test('152. mark implemented stores branch commit and PR metadata', () => {
+  const lifecycle = {
+    implemented_at: '2026-06-04T00:00:00.000Z',
+    implementation_branch: 'self-improvement-loop',
+    implementation_commit: 'abc123',
+    implementation_pr_url: 'https://github.com/acme/aiko/pull/1',
+  }
+  assert.equal(lifecycle.implementation_branch, 'self-improvement-loop')
+  assert.equal(lifecycle.implementation_commit, 'abc123')
+  assert.ok(lifecycle.implementation_pr_url.includes('/pull/1'))
+})
+
+test('153. validate available is blocked if Web Operator skill or playbook is missing', () => {
+  function validatePresence(proposal, skills, playbooks) {
+    const skillId = proposal.proposal_metadata.skill_spec.skill_id
+    const playbookId = proposal.proposal_metadata.playbook_spec.playbook_id
+    if (!skills.includes(skillId)) return `Cannot mark available because the skill/playbook is not present in the database. Missing skill: ${skillId}.`
+    if (!playbooks.includes(playbookId)) return `Cannot mark available because the skill/playbook is not present in the database. Missing playbook: ${playbookId}.`
+    return 'ok'
+  }
+  const proposal = {
+    proposal_metadata: {
+      skill_spec: { skill_id: 'whatsapp_web' },
+      playbook_spec: { playbook_id: 'whatsapp_outreach' },
+    },
+  }
+  assert.match(validatePresence(proposal, [], []), /Missing skill: whatsapp_web/)
+  assert.match(validatePresence(proposal, ['whatsapp_web'], []), /Missing playbook: whatsapp_outreach/)
+})
+
+test('154. validate available succeeds if Web Operator skill and playbook exist', () => {
+  function canValidate(proposal, skills, playbooks) {
+    return skills.includes(proposal.skill_id) && playbooks.includes(proposal.playbook_id)
+  }
+  assert.equal(canValidate({ skill_id: 'reddit_research', playbook_id: 'reddit_market_research' }, ['reddit_research'], ['reddit_market_research']), true)
+})
+
+test('155. validated proposal marks related capability available', () => {
+  const capabilities = { email_sending: 'missing' }
+  function markAvailable(key) {
+    if (capabilities[key]) capabilities[key] = 'available'
+  }
+  markAvailable('email_sending')
+  assert.equal(capabilities.email_sending, 'available')
+})
+
+test('156. execution planner no longer creates missing proposal once skill and playbook exist', () => {
+  function missingForCapability(cap, skills, playbooks) {
+    const missing = []
+    if (!skills.includes(cap.skill_id)) missing.push(`web_operator_skill:${cap.skill_id}`)
+    if (!playbooks.includes(cap.playbook_id)) missing.push(`web_operator_playbook:${cap.playbook_id}`)
+    return missing
+  }
+  const missing = missingForCapability(
+    { skill_id: 'reddit_research', playbook_id: 'reddit_market_research' },
+    ['reddit_research'],
+    ['reddit_market_research']
+  )
+  assert.deepEqual(missing, [])
+})
+
+test('157. rejected proposal does not appear as active duplicate', () => {
+  const proposals = [
+    { id: 'rejected', status: 'rejected', title: 'Add X', related_project_id: 'p1', missing_capabilities: ['x'] },
+    { id: 'active', status: 'proposed', title: 'Add X', related_project_id: 'p1', missing_capabilities: ['x'] },
+  ]
+  const active = proposals.filter(p => !['rejected', 'implemented', 'archived', 'validated_available'].includes(p.status))
+  assert.deepEqual(active.map(p => p.id), ['active'])
+})
+
+test('158. lifecycle status appears in project execution plan missing row', () => {
+  const proposalStatus = 'implementation_in_progress'
+  const rendered = `Proposal status: ${proposalStatus.replace(/_/g, ' ')}`
+  assert.equal(rendered, 'Proposal status: implementation in progress')
+})

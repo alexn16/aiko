@@ -311,6 +311,12 @@ interface StrategyExecutionPlanData {
   created_at: string
 }
 
+interface StrategyProposalStatusData {
+  id: string
+  title: string
+  status: string
+}
+
 function StatusPill({ children, tone }: { children: React.ReactNode; tone: 'green' | 'amber' | 'slate' | 'red' }) {
   const colors = {
     green: { bg: '#dcfce7', color: '#166534' },
@@ -333,15 +339,29 @@ function StatusPill({ children, tone }: { children: React.ReactNode; tone: 'gree
 
 function ProjectStrategyExecutionPanel({ projectId }: { projectId: string }) {
   const [plans, setPlans] = useState<StrategyExecutionPlanData[]>([])
+  const [proposalStatuses, setProposalStatuses] = useState<Record<string, StrategyProposalStatusData>>({})
   const [loading, setLoading] = useState(true)
   const [working, setWorking] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   async function loadPlans() {
     setLoading(true)
-    fetch(`/api/projects/${projectId}/strategy-execution-plans`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setPlans(Array.isArray(d?.plans) ? d.plans : []))
+    Promise.all([
+      fetch(`/api/projects/${projectId}/strategy-execution-plans`).then(r => r.ok ? r.json() : null),
+      fetch('/api/system/improvements').then(r => r.ok ? r.json() : null),
+    ])
+      .then(([planData, proposalData]) => {
+        setPlans(Array.isArray(planData?.plans) ? planData.plans : [])
+        const map: Record<string, StrategyProposalStatusData> = {}
+        for (const proposal of Array.isArray(proposalData?.proposals) ? proposalData.proposals : []) {
+          map[String(proposal.id)] = {
+            id: String(proposal.id),
+            title: String(proposal.title ?? ''),
+            status: String(proposal.status ?? 'proposed'),
+          }
+        }
+        setProposalStatuses(map)
+      })
       .catch(() => setMessage('Could not load execution plans.'))
       .finally(() => setLoading(false))
   }
@@ -515,13 +535,26 @@ function ProjectStrategyExecutionPanel({ projectId }: { projectId: string }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {latest.missing_capabilities.map((missing, index) => {
                   const proposalId = latest.system_improvement_ids[index] ?? latest.system_improvement_ids[0]
+                  const proposalStatus = proposalId ? proposalStatuses[proposalId]?.status : null
                   return (
                   <div key={missing.capability_key} style={{ fontSize: 12, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '8px 10px' }}>
-                    <div style={{ fontWeight: 700 }}>{missing.name}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                      <div style={{ fontWeight: 700 }}>{missing.name}</div>
+                      {proposalStatus && (
+                        <StatusPill tone={proposalStatus === 'validated_available' ? 'green' : proposalStatus === 'rejected' ? 'red' : proposalStatus === 'implementation_in_progress' ? 'slate' : 'amber'}>
+                          {proposalStatus.replace(/_/g, ' ')}
+                        </StatusPill>
+                      )}
+                    </div>
                     <div style={{ marginTop: 3, lineHeight: 1.5 }}>{missing.reason}</div>
                     <div style={{ marginTop: 4, color: '#64748b' }}>
                       Forbidden: {missing.forbidden_actions.slice(0, 4).join(', ')}
                     </div>
+                    {proposalStatus && (
+                      <div style={{ marginTop: 4, color: '#475569' }}>
+                        Proposal status: {proposalStatus.replace(/_/g, ' ')}
+                      </div>
+                    )}
                     {proposalId && (
                       <Link
                         href={`/system?proposal=${proposalId}`}
