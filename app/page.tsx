@@ -8,5 +8,5 @@ export const dynamic = 'force-dynamic'
 export default async function Home() {
   const session = await getServerSession(authOptions)
   const state = await getSetupState(session?.user?.id ?? null)
-  redirect(state.setup_required ? '/setup' : '/ceo')
+  redirect(state.setup_required ? '/setup' : '/home')
 }

@@ -17,6 +17,7 @@ import {
   generateStrategyExecutionPlanFromText,
   type StrategyExecutionPlan,
 } from '@/lib/strategy-execution-planner'
+import { runMarketingResearchAutopilot } from '@/lib/web-operator/marketing-research-runner'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
 
@@ -24,6 +25,10 @@ function detectWebResearchIntent(command: string, parsed: Record<string, unknown
   const lower = command.toLowerCase()
   const keywords = ['search', 'find', 'research', 'look up', 'browse', 'check online', 'internet', 'web']
   return keywords.some(k => lower.includes(k))
+}
+
+function isProjectAutopilotMarketingIntent(command: string): boolean {
+  return /\b(start marketing|promote (?:this project|a[ïi]ko|[^.?!]+)|find customers|find leads|start promotion|research where to promote|open websites and start marketing|get this project moving|what should we do now for marketing)\b/i.test(command)
 }
 
 function extractSearchQuery(command: string, _parsed: Record<string, unknown>): string {
@@ -66,9 +71,89 @@ function isCreateStrategyTasksIntent(command: string): boolean {
 }
 
 function extractProjectNameFromCommand(command: string): string | null {
-  const match = command.match(/\bfor\s+([^,.]+?)(?:,|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
+  const match = command.match(/\bfor\s+([^,.!?]+?)(?:[,.!?]|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
   if (!match) return null
   return match[1].trim().replace(/\s+/g, ' ')
+}
+
+function extractAutopilotProjectName(command: string): string | null {
+  if (/\bpromote\s+a[ïi]ko\b/i.test(command)) return 'AÏKO'
+  const forName = extractProjectNameFromCommand(command)
+  if (forName) return forName
+  const promoteMatch = command.match(/\bpromote\s+([^,.!?]+?)(?:$|[,.!?])/i)
+  if (promoteMatch && !/^(this project)$/i.test(promoteMatch[1].trim())) {
+    return promoteMatch[1].trim().replace(/\s+/g, ' ')
+  }
+  return null
+}
+
+async function getLatestActiveProject() {
+  const res = await db.query(
+    `SELECT id, name, goal, target_market, value_prop
+     FROM projects
+     WHERE active=true
+     ORDER BY created_at DESC
+     LIMIT 1`
+  )
+  return res.rows[0] ?? null
+}
+
+async function handleProjectAutopilotMarketingCommand(command: string): Promise<NextResponse | null> {
+  if (!isProjectAutopilotMarketingIntent(command)) return null
+
+  const projectNameHint = extractAutopilotProjectName(command)
+  const project = projectNameHint && projectNameHint !== 'AÏKO'
+    ? await findProjectByNameOrAlias(projectNameHint)
+    : projectNameHint === 'AÏKO'
+      ? (await findProjectByNameOrAlias('AÏKO') ?? null)
+      : null
+  const fallbackProject = project ? null : await getLatestActiveProject()
+  const resolved = project ?? (projectNameHint === 'AÏKO' ? null : fallbackProject)
+  const projectName = projectNameHint === 'AÏKO' ? 'AÏKO' : String(resolved?.name ?? projectNameHint ?? 'this project')
+  const goal = String(resolved?.goal ?? resolved?.value_prop ?? command)
+  const targetAudience = resolved?.target_market ? String(resolved.target_market) : null
+
+  const autopilot = await runMarketingResearchAutopilot({
+    projectId: resolved?.id ?? null,
+    projectName,
+    goal,
+    targetAudience,
+    operatorName: 'Kevin',
+  })
+
+  const planCopy = autopilot.plan.join(' ')
+  const opportunityCopy = autopilot.opportunities.length > 0
+    ? ` Found: ${autopilot.opportunities.slice(0, 3).map(o => o.title).join('; ')}.`
+    : ''
+  const response = `I’ll start by researching where ${projectName} can find customers. ${planCopy} Kevin will open the browser and report back. If login or CAPTCHA appears, he’ll pause for you. ${autopilot.summary}${opportunityCopy} Next: ${autopilot.recommended_next_action}`
+
+  const actions = [{
+    type: 'project_autopilot_marketing',
+    data: {
+      status: autopilot.status,
+      plan: autopilot.plan,
+      websites_checked: autopilot.websites_checked,
+      opportunities: autopilot.opportunities,
+      recommended_next_action: autopilot.recommended_next_action,
+      live_status: autopilot.status === 'needs_your_help' ? 'Needs your help' : autopilot.opportunities.length > 0 ? 'Found opportunity' : 'Done',
+    },
+  }]
+
+  await persistCeoShortcutCommand(command, response, 'project_autopilot_marketing', actions, resolved?.id ?? null)
+
+  return NextResponse.json({
+    response,
+    intent: 'project_autopilot_marketing',
+    actions,
+    project_id: resolved?.id ?? null,
+    autopilot,
+    delegation: autopilot.delegation ? {
+      status: autopilot.delegation.status,
+      message: autopilot.delegation.message,
+      actionId: autopilot.delegation.actionId,
+      operatorId: autopilot.delegation.operatorId,
+    } : null,
+  })
 }
 
 function hintFromStrategyCommand(command: string): string {
@@ -252,6 +337,9 @@ export async function POST(request: NextRequest) {
 
     const lifecycleResponse = await handleSelfImprovementLifecycleCommand(command.trim())
     if (lifecycleResponse) return lifecycleResponse
+
+    const autopilotResponse = await handleProjectAutopilotMarketingCommand(command.trim())
+    if (autopilotResponse) return autopilotResponse
 
     // Check that at least one provider is reachable before calling the agent.
     // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').

@@ -706,3 +706,15 @@ Validation is guarded. For Web Operator skill/playbook proposals, AÏKO refuses 
 CEO Chat can answer read-only self-improvement status questions such as “What improvements has AÏKO proposed?” and “What is the status of AÏKO self-improvement?” from the timeline state. These responses return `intent=system_improvement_status`, no actions, no delegation, and explicitly state that no code was executed and no capability was enabled.
 
 Safety remains unchanged: the timeline is reporting-only. It does not run Codex, modify code, open websites, create Web Operator actions, approve proposals, validate capabilities, or bypass the existing skill/playbook validation guard.
+
+### Project Autopilot Web Research — 2026-06-05
+
+AÏKO now has a minimalist Project Autopilot marketing path for commands such as `Start marketing for ALB Parking`, `Promote AÏKO`, `Find customers`, and `Research where we should promote this`. The new `project_autopilot_marketing` shortcut bypasses heavyweight strategy planning and starts safe Web Operator browser research directly.
+
+`lib/web-operator/marketing-research-runner.ts` creates a short visible plan, generates practical queries, delegates searches and safe public page opens to the existing Web Operator, extracts only real visible result titles/URLs/snippets, and returns a compact marketing research summary. It does not create fake leads and does not post, send, publish, message, join, download, or share.
+
+`/home` is now the simple control center after setup. It has a command box, active project selector, quick action buttons, Live Work card, Attention card, and advanced details hidden by default. `/dashboard` remains the advanced owner overview.
+
+Main-flow copy is simplified: manual takeover says `Kevin needs your help. Complete this in the browser, then click Resume.` Approval says `Kevin needs approval before doing this.` Read-only mode and browser-runtime errors now use owner-facing copy.
+
+Runtime headed validation confirmed `/home` renders after a fresh dev restart, `Start marketing for ALB Parking.` resolves to the ALB Parking project instead of the latest active project, `Promote AÏKO.` uses AÏKO-specific public targets, and login/security walls pause with the simplified Resume guidance. No fake leads or external posting/sending actions were created.

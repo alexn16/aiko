@@ -191,7 +191,7 @@ function buildCompletionMessage(actionType: string, output: Record<string, unkno
   if (actionType === 'search') {
     const count = Array.isArray(output.results) ? output.results.length : 0
     if (count === 0) {
-      return `${opStr}completed search, but no structured leads were extracted. Try a more specific query or use Web Operator to open target websites directly.`
+      return 'Research finished, but no useful results were extracted. Try a more specific target or let Kevin open websites directly.'
     }
     return `${opStr}completed search — ${count} result${count !== 1 ? 's' : ''} found. Lead extraction is running in the background.`
   }
@@ -244,7 +244,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
     await sendInternalBlockMessage(req, modeCheck.reason)
     // Produce a user-readable message instead of a raw internal reason string
     const modeBlockMsg = modeCheck.mode === 'read_only'
-      ? 'Research is blocked because AÏKO is in Read Only mode. Go to Operating Mode and switch to Auto / Approval Required to allow browser research.'
+      ? 'AÏKO is in Read Only mode. Switch to Approval mode to let Kevin use the browser.'
       : modeCheck.reason
     return { status: 'blocked', message: modeBlockMsg, error: modeCheck.reason }
   }
@@ -422,7 +422,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       playbookId: playbookPlan?.playbook_id,
       playbookName: playbookPlan?.playbook_name,
       playbookPlan: playbookPlan ?? undefined,
-      message: `${req.requestedByRole} requested a browser action that needs your approval before proceeding.`,
+      message: 'Kevin needs approval before doing this.',
     }
   }
 
@@ -446,7 +446,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
         playbookId: playbookPlan?.playbook_id,
         playbookName: playbookPlan?.playbook_name,
         playbookPlan: playbookPlan ?? undefined,
-        message: `${directPrefix} Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`,
+        message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
         error: result.error,
       }
     }

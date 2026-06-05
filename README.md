@@ -8,17 +8,17 @@
 
 ![AÏKO dashboard mockup](public/brand/aiko-dashboard-mockup.png)
 
-Quick start: run AÏKO locally, then open [`/setup`](http://localhost:3001/setup) to connect a real CEO brain. This is a local/private MVP by default.
+Quick start: run AÏKO locally, then open [`/setup`](http://localhost:3001/setup) to connect a real CEO brain. After setup, AÏKO opens [`/home`](http://localhost:3001/home), the simple project command center. This is a local/private MVP by default.
 
 Safety: AÏKO never bypasses login/CAPTCHA/security checks and never sends, posts, publishes, or messages without approval.
 
 AÏKO is a self-hosted, agent-based operating system for marketing execution. It coordinates specialized AI agents for lead research, enrichment, copy generation, outreach monitoring, qualification, reporting, and strategy — with a mandatory human approval gate before external sends.
 
-## Default interface: CEO Chat
+## Default interface: Home
 
-**CEO Chat is the primary AÏKO interface.** When you open the app, you land directly in the CEO Chat at `/ceo`.
+**Home is the primary AÏKO interface.** When setup is complete, `/` opens `/home`: a simple command box, active project selector, quick marketing buttons, live work card, and attention card. The advanced dashboard remains available at `/dashboard`.
 
-AÏKO behaves like a ChatGPT-style CEO for an AI marketing company. You speak naturally to the CEO, and it coordinates projects, assigns Project Managers, builds project memory, and orchestrates agents — all through conversation.
+CEO Chat remains available at `/ceo`. AÏKO behaves like a ChatGPT-style CEO for an AI marketing company. You speak naturally to the CEO, and it coordinates projects, assigns Project Managers, builds project memory, and orchestrates agents — all through conversation.
 
 **The app requires a real connected AI provider before CEO Chat works.**
 On first launch, AÏKO shows the setup screen where you connect your AI brain (ChatGPT/Codex local auth, OpenAI API, Anthropic API, Ollama, or a custom endpoint). The CEO Chat is disabled until a provider is connected and tested.
@@ -97,7 +97,8 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 
 ## Product surfaces
 
-- `/ceo` — **CEO Chat** (default home). Speak to the CEO, create projects, coordinate the company.
+- `/home` — **Simple project command center**. Start marketing, find customers, watch Kevin's live work, and keep technical details hidden unless opened.
+- `/ceo` — CEO Chat. Speak to the CEO, create projects, coordinate the company.
 - `/connect-ai` — Connect and manage AI providers, assign roles.
 - `/dashboard` — MVP owner overview: brain/setup status, operating mode, projects, Web Operators, approvals, improvements, warnings, recent files/reports/decisions, and manual smoke-test checklist.
 - `/office` — Live Office (run agents, monitor activity, browser stream)

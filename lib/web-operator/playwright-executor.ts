@@ -240,7 +240,7 @@ async function executeOpenGmail(opts: { profileKey?: string }): Promise<ExecuteR
       type: 'login_required',
       requires_manual_takeover: true,
       waiting_reason: 'login_required',
-      user_message: 'Gmail login required. Please log in manually in the operator browser window, then click "Login / CAPTCHA completed".',
+      user_message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
       is_sensitive: true,
     })
   }
@@ -324,7 +324,7 @@ async function executeCreateGmailDraft(opts: { profileKey?: string; to?: string;
       type: 'login_required',
       requires_manual_takeover: true,
       waiting_reason: 'login_required',
-      user_message: 'Gmail login required. Please log in manually in the operator browser window, then click "Login / CAPTCHA completed".',
+      user_message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
       is_sensitive: true,
     })
   }

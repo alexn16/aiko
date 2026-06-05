@@ -127,7 +127,7 @@ export async function detectPageState(page: Page): Promise<PageState> {
       url, title,
       requires_manual_takeover: true,
       waiting_reason: 'two_factor_required',
-      user_message: 'Two-factor authentication is required. Please complete it in the browser, then click "Login / CAPTCHA completed".',
+      user_message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
       is_sensitive: true,
     }
   }
@@ -139,7 +139,7 @@ export async function detectPageState(page: Page): Promise<PageState> {
       url, title,
       requires_manual_takeover: true,
       waiting_reason: 'security_checkpoint',
-      user_message: 'A security checkpoint appeared. Please complete it in the browser, then click "Login / CAPTCHA completed".',
+      user_message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
       is_sensitive: false,
     }
   }
@@ -151,7 +151,7 @@ export async function detectPageState(page: Page): Promise<PageState> {
       url, title,
       requires_manual_takeover: true,
       waiting_reason: 'captcha_detected',
-      user_message: 'A CAPTCHA appeared. Please solve it in the browser, then click "Login / CAPTCHA completed". The operator will not attempt to bypass it automatically.',
+      user_message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
       is_sensitive: false,
     }
   }
@@ -167,7 +167,7 @@ export async function detectPageState(page: Page): Promise<PageState> {
       url, title,
       requires_manual_takeover: true,
       waiting_reason: 'login_required',
-      user_message: 'Login is required. Please sign in in the browser, then click "Login / CAPTCHA completed".',
+      user_message: 'Kevin needs your help. Complete this in the browser, then click Resume.',
       is_sensitive: true,
     }
   }

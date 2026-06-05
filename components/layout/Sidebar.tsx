@@ -12,7 +12,7 @@ const CEO_ITEMS = [
 ]
 
 const NAV_ITEMS = [
-  { href: '/',           label: 'Home' },
+  { href: '/home',       label: 'Home' },
   { href: '/dashboard',  label: 'Dashboard' },
   { href: '/office',     label: 'Live Office' },
   { href: '/team',       label: 'Team' },
@@ -59,7 +59,7 @@ export function Sidebar() {
   const path = usePathname()
 
   function isActive(href: string) {
-    if (href === '/') return path === '/'
+    if (href === '/home') return path === '/home' || path === '/'
     return path.startsWith(href)
   }
 
@@ -116,7 +116,7 @@ export function Sidebar() {
         color: '#e2e8f0',
         letterSpacing: '0.06em',
       }}>
-        v1.0 · self-hosted
+        v0.1.0 · local MVP
       </div>
     </nav>
   )

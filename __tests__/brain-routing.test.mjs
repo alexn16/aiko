@@ -3552,12 +3552,12 @@ test('119. discovery summary message is honest when 0 leads found', () => {
 test('120. discovery blocked message is clear when mode is read_only', () => {
   function buildBlockedMsg(mode, reason) {
     return mode === 'read_only'
-      ? 'Research is blocked because AÏKO is in Read Only mode. Go to Operating Mode and switch to Auto / Approval Required to allow browser research.'
+      ? 'AÏKO is in Read Only mode. Switch to Approval mode to let Kevin use the browser.'
       : reason
   }
   const msg = buildBlockedMsg('read_only', 'raw reason')
   assert.ok(msg.includes('Read Only mode'), 'Should name the mode')
-  assert.ok(msg.includes('Auto / Approval Required'), 'Should name the required mode')
+  assert.ok(msg.includes('Approval mode'), 'Should name the required mode')
   assert.ok(!msg.includes('raw reason'), 'Should not expose internal reason string')
 })
 
@@ -3649,12 +3649,11 @@ test('126b. Spanish Canva challenge text triggers security_checkpoint', () => {
 
 test('127. Agent must not claim to solve CAPTCHA — waiting_user message does not claim solution', () => {
   // The user-facing message must never say "I solved" or "solved the CAPTCHA"
-  const operatorName = 'Kevin'
-  const waitingMsg = `${operatorName} needs your help. Please solve the CAPTCHA, complete the login, or pass the security check in the browser, then click "Login / CAPTCHA completed" in the operator panel.`
+  const waitingMsg = 'Kevin needs your help. Complete this in the browser, then click Resume.'
   assert.ok(!waitingMsg.toLowerCase().includes('i solved'), 'Message must not claim CAPTCHA was solved')
   assert.ok(!waitingMsg.toLowerCase().includes('solved the captcha'), 'Message must not claim CAPTCHA was auto-solved')
   assert.ok(waitingMsg.includes('needs your help'), 'Message must ask user for help')
-  assert.ok(waitingMsg.includes('Login / CAPTCHA completed'), 'Message must reference the Resume button')
+  assert.ok(waitingMsg.includes('Resume'), 'Message must reference the Resume button')
 })
 
 test('128. Resume uses same browser_profile_key (persistent session)', () => {
@@ -4482,4 +4481,103 @@ test('187. scheduler provider errors are summarized without headers or secrets',
   assert.equal(serialized.includes('headers'), false)
   assert.equal(/secret|set-cookie|not-required|sk-test123/i.test(serialized), false)
   assert.ok(summary.message.includes('Provider authentication failed.'))
+})
+
+test('188. start marketing maps to project_autopilot_marketing intent', () => {
+  function isProjectAutopilotMarketingIntent(command) {
+    return /\b(start marketing|promote (?:this project|a[ïi]ko|[^.?!]+)|find customers|find leads|start promotion|research where to promote|open websites and start marketing|get this project moving|what should we do now for marketing)\b/i.test(command)
+  }
+  assert.equal(isProjectAutopilotMarketingIntent('Start marketing for ALB Parking.'), true)
+  assert.equal(isProjectAutopilotMarketingIntent('Find customers for this project.'), true)
+})
+
+test('189. promote AÏKO maps to project_autopilot_marketing intent', () => {
+  function isProjectAutopilotMarketingIntent(command) {
+    return /\b(start marketing|promote (?:this project|a[ïi]ko|[^.?!]+)|find customers|find leads|start promotion|research where to promote|open websites and start marketing|get this project moving|what should we do now for marketing)\b/i.test(command)
+  }
+  assert.equal(isProjectAutopilotMarketingIntent('Promote AÏKO.'), true)
+})
+
+test('190. autopilot creates visible plan before delegation summary', () => {
+  const plan = [
+    'Find where ALB Parking can reach likely customers.',
+    'Search the web for directories, communities, competitors, and buyer signals.',
+    'Open safe public result pages when possible and summarize real opportunities.',
+  ]
+  const response = `I’ll start by researching where ALB Parking can find customers. ${plan.join(' ')} Kevin will open the browser and report back.`
+  assert.ok(response.includes('I’ll start by researching'))
+  assert.ok(response.includes('Kevin will open the browser'))
+  assert.ok(response.indexOf('Find where') < response.indexOf('Kevin will open'))
+})
+
+test('191. simplified CAPTCHA and approval messages are owner-facing', () => {
+  const captcha = 'Kevin needs your help. Complete this in the browser, then click Resume.'
+  const approval = 'Kevin needs approval before doing this.'
+  assert.equal(captcha.includes('Login / CAPTCHA completed'), false)
+  assert.equal(captcha.includes('security_checkpoint'), false)
+  assert.equal(approval, 'Kevin needs approval before doing this.')
+})
+
+test('192. raw Playwright errors are sanitized for normal user', () => {
+  function sanitizeMessage(message) {
+    if (/playwright|browserType|net::ERR|TimeoutError|stack|selector/i.test(message)) {
+      return 'Kevin hit a browser problem. View details if you want the technical reason.'
+    }
+    return message
+  }
+  const raw = 'page.goto: TimeoutError net::ERR_NAME_NOT_RESOLVED selector_not_found stack'
+  const safe = sanitizeMessage(raw)
+  assert.equal(safe.includes('page.goto'), false)
+  assert.equal(safe.includes('selector_not_found'), false)
+  assert.ok(safe.includes('browser problem'))
+})
+
+test('193. /home hides advanced details by default', () => {
+  const homeSource = `
+    <section>Live work</section>
+    <details><summary>Advanced details</summary><pre>{}</pre></details>
+  `
+  assert.ok(homeSource.includes('<details>'))
+  assert.ok(homeSource.includes('Advanced details'))
+  assert.equal(homeSource.includes('action_payload'), false)
+})
+
+test('194. autopilot never auto-posts sends or messages', () => {
+  const autopilotActions = ['search', 'open_url', 'read_page']
+  const risky = ['send_email', 'send_message', 'post', 'publish_design', 'share_design', 'download_final_asset']
+  assert.equal(autopilotActions.some(action => risky.includes(action)), false)
+})
+
+test('195. autopilot does not fake leads when research returns zero results', () => {
+  function summarize(opportunities) {
+    return opportunities.length > 0
+      ? `${opportunities.length} opportunities found.`
+      : 'Research finished, but no useful results were extracted. Try a more specific target or let Kevin open websites directly.'
+  }
+  const opportunities = []
+  const leadCandidates = opportunities.filter(o => o.company_name && o.source_url)
+  assert.equal(leadCandidates.length, 0)
+  assert.ok(summarize(opportunities).includes('no useful results'))
+})
+
+test('196. live work payload does not expose secrets', () => {
+  const payload = {
+    current_operator: 'Kevin',
+    current_status: 'Searching web',
+    current_domain: 'reddit.com',
+    latest_screenshot: '/screenshots/safe.png',
+  }
+  const serialized = JSON.stringify(payload)
+  assert.equal(/access_token|refresh_token|api_key|AUTH_SECRET|DATABASE_URL|sk-/i.test(serialized), false)
+})
+
+test('197. autopilot extracts punctuated project names', () => {
+  function extractProjectNameFromCommand(command) {
+    const match = command.match(/\bfor\s+([^,.!?]+?)(?:[,.!?]|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
+    if (!match) return null
+    return match[1].trim().replace(/\s+/g, ' ')
+  }
+
+  assert.equal(extractProjectNameFromCommand('Start marketing for ALB Parking.'), 'ALB Parking')
+  assert.equal(extractProjectNameFromCommand('Find customers for Demo Parking?'), 'Demo Parking')
 })

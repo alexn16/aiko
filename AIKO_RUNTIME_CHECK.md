@@ -982,3 +982,35 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 | Dashboard still warned `ChatGPT/Codex not connected` even when CEO was assigned to ChatGPT / Codex Local. | Updated `/api/dashboard/summary` to count both `openai-codex-local` and `chatgpt_oauth` as ChatGPT/Codex connected. |
 | Self-improvement status shortcut returned from API but was not persisted into CEO Chat history, so it could disappear after reload. | Added persistence for self-improvement status/lifecycle shortcut responses into `ceo_commands`. |
 | Background scheduler logged raw provider error objects when legacy scheduled agents hit an invalid API-key fallback. | Added sanitized scheduler error summaries that keep status/code/type/message but drop headers, cookies, stacks, and token-like strings. |
+
+---
+
+## Project Autopilot Web Research — 2026-06-05
+
+### Implementation Check
+
+| Check | Result | Notes |
+|---|---|---|
+| Autopilot intent | ✅ Pass after fix | Added `project_autopilot_marketing` for start-marketing/promote/find-customers/find-leads/research-where-to-promote commands. Runtime found that `Start marketing for ALB Parking.` fell back to the latest project because final punctuation was not treated as a project-name terminator; fixed and covered by a smoke test. |
+| Simple home | ✅ Pass | `/home` is the post-setup root and shows command box, project selector, quick actions, Live Work, Attention, and hidden advanced details. |
+| Browser safety | ✅ Pass | Autopilot uses existing Web Operator delegation and Playwright execution. It does not bypass login/CAPTCHA/security and does not post/send/message/publish. |
+| Copy simplification | ✅ Pass | Main takeover, approval, read-only, browser-missing, and no-results messages now use short owner-facing wording. |
+| Tests/build | ✅ Pass | Smoke tests cover autopilot intent, visible plan, simple messages, hidden advanced details, no auto-send/post/message, no fake leads, and secret-free live-work payload. |
+
+### Runtime validation
+
+Command:
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Health | `/api/health` | ✅ Pass | `ok=true`, database reachable, setup complete, Web Operator runtime available, headed mode enabled, storage writable. |
+| Home page | `/home` | ✅ Pass after restart | Initial dev process had started before `/home` existed and served stale chunk references; a fresh dev restart rendered the new route correctly. The page shows project selector, quick actions, Live Work, Attention, and hidden Advanced details. |
+| ALB autopilot | `/api/ceo/command` | ✅ Pass after fix | `Start marketing for ALB Parking.` now resolves to project `ALB Parking` (`4b283048-da9f-452a-913b-0e152267d085`), creates browser research actions, opens Reddit and LinkedIn targets, and returns compact owner-facing copy. |
+| Login/security pause | Web Operator | ✅ Pass | LinkedIn login pauses with `Kevin needs your help. Complete this in the browser, then click Resume.` No bypass attempt. |
+| AÏKO autopilot | `/api/ceo/command` | ✅ Pass | `Promote AÏKO.` uses AÏKO-specific public targets including Product Hunt and Hacker News Algolia. No project is incorrectly attached. |
+| Result honesty | API/UI | ✅ Pass | When no useful visible opportunities are extracted, AÏKO reports no useful results and recommends a more specific audience/channel. No fake leads. |
+| External side effects | Web Operator actions | ✅ Pass | Actions were limited to search/open URL/read visible public pages. No post/send/message/publish/share/download action was created. |

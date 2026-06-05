@@ -161,12 +161,11 @@ function truncate(str: string | null | undefined, n = 50): string {
 }
 
 function waitingReasonLabel(reason: string | null): string {
-  if (!reason) return 'The operator has stopped and needs you to take over.'
-  if (reason.includes('captcha')) return 'A CAPTCHA appeared. Please solve it in the browser, then click "Login / CAPTCHA completed". The operator will not attempt to bypass it automatically.'
-  if (reason.includes('login')) return 'Login is required. Please sign in in the browser, then click "Login / CAPTCHA completed".'
-  if (reason.includes('security_checkpoint') || reason.includes('checkpoint')) return 'A security checkpoint appeared. Please complete it in the browser, then click "Login / CAPTCHA completed".'
-  if (reason.includes('two_factor') || reason.includes('2fa')) return 'Two-factor authentication is required. Please complete it in the browser, then click "Login / CAPTCHA completed".'
-  return `The operator is paused: ${reason.replace(/_/g, ' ')}. Please resolve this in the browser and click "Login / CAPTCHA completed".`
+  if (!reason) return 'Kevin needs your help. Complete this in the browser, then click Resume.'
+  if (/captcha|login|security_checkpoint|checkpoint|two_factor|2fa|manual_takeover/i.test(reason)) {
+    return 'Kevin needs your help. Complete this in the browser, then click Resume.'
+  }
+  return `Kevin needs your help. Complete this in the browser, then click Resume.`
 }
 
 function getPendingPlaybook(payload: Record<string, unknown> | null): PlaybookPlanView | null {
@@ -439,8 +438,8 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
           )}
           <div style={{ fontSize: 12, color: '#92400e', marginBottom: 14, lineHeight: 1.6 }}>
             {!browserHeadless
-              ? 'Open the browser window and complete the action manually. Then click "Login / CAPTCHA completed" below.'
-              : 'The browser is running in headless mode. Restart with WEB_OPERATOR_HEADLESS=false to see and interact with the browser window. Then click "Login / CAPTCHA completed".'}
+              ? 'Complete the action in the browser window, then click Resume.'
+              : 'The browser is running in headless mode. Restart with WEB_OPERATOR_HEADLESS=false to see and interact with it, then click Resume.'}
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
@@ -454,7 +453,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
                 fontWeight: 700,
               }}
             >
-              {actionLoading === 'mark_login_completed' ? 'Checking…' : '✓ Login / CAPTCHA completed'}
+              {actionLoading === 'mark_login_completed' ? 'Checking…' : 'Resume'}
             </button>
             <button
               onClick={() => doAction('mark_user_controlling')}
