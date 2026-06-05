@@ -1,4 +1,4 @@
-# AÏKO — AI Marketing Operating System
+# AÏKO v0.1.0 — Local MVP
 
 <p>
   <img src="public/brand/aiko-logo.svg" alt="AÏKO — AI Marketing Operating System" width="420" />

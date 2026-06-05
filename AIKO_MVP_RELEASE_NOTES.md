@@ -1,15 +1,15 @@
-# AÏKO MVP Release Notes
+# AÏKO v0.1.0 MVP Release Notes
 
 ## What AÏKO Is
 
 AÏKO is an AI Marketing Operating System: a virtual marketing company with a CEO, agents, Web Operators, approvals, reports, files, and controlled self-improvement.
 
-The MVP is designed for local/private evaluation first. It can be prepared for hosted/team use, but it is not production SaaS until the hosted-mode checklist, auth policy, storage policy, and deployment safety checks are completed.
+AÏKO v0.1.0 is the local/private MVP release. It can be prepared for hosted/team use, but it is not production SaaS until the hosted-mode checklist, auth policy, storage policy, and deployment safety checks are completed.
 
 ## What Works Now
 
 - CEO Chat as the primary interface for project creation, project recall, strategy discussion, executive reporting, and delegation.
-- First-run setup and AI provider routing for Ollama local, OpenAI-compatible providers, Anthropic-compatible providers, ChatGPT/Codex OAuth when configured, and Claude connection paths when configured.
+- First-run setup and AI provider routing for ChatGPT / Codex Local, Ollama local, OpenAI-compatible providers, Anthropic-compatible providers, ChatGPT/Codex OAuth when configured, and Claude connection paths when configured.
 - Project workspaces with strategy briefs, campaign flow, project memory, reports, decisions, generated files, and task planning.
 - Web Operators using Playwright browser sessions, visible headed mode, manual takeover, current URL/title/screenshot state, and action logging.
 - Web Operator Skills, Playbooks, and playbook step tracking for safe workflow planning and owner visibility.
@@ -25,14 +25,17 @@ The MVP is designed for local/private evaluation first. It can be prepared for h
 - Production build succeeds.
 - `/api/health` returns safe health data without secrets.
 - `/dashboard`, `/setup`, `/ceo`, `/system`, `/operators`, and `/brand` have been runtime-checked during MVP readiness work.
+- ChatGPT / Codex Local has been verified as the assigned CEO brain with a real Codex test call and CEO Chat runtime checks.
 - Headed Web Operator mode has been validated with `WEB_OPERATOR_HEADLESS=false`.
 - Manual takeover, login/CAPTCHA/security pauses, and approval gates have been validated in representative flows.
 - Missing capability planning has been validated with WhatsApp used only as an example missing capability.
 
 ## Provider Truth
 
-- ChatGPT/Codex is connected only when OAuth is configured and a real connected OAuth profile exists.
-- Claude is connected only when Claude OAuth, Anthropic API, or Claude Code auth is actually available.
+- ChatGPT / Codex Local is connected only when local Codex CLI/app auth is detected, safely imported, and a real test call passes.
+- ChatGPT / Codex OAuth App is connected only when `OPENAI_OAUTH_*` env vars are configured and a real connected OAuth profile exists.
+- OpenAI API Key is available as a separate OpenAI Platform API-key profile; it is not ChatGPT subscription auth.
+- Claude is connected only when Claude OAuth, Anthropic API, or Claude Code auth is actually available and tested.
 - Ollama is a local fallback and must be reachable at `OLLAMA_BASE_URL`.
 - Unsupported or unconfigured providers are shown honestly as unavailable, not simulated.
 
@@ -73,7 +76,7 @@ WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 ## Recommended First Project Flow
 
 1. Open `/dashboard` and confirm setup status, brain status, warnings, and quick links.
-2. Open `/setup` and connect Ollama, OpenAI, Anthropic, ChatGPT/Codex OAuth, or Claude if configured.
+2. Open `/setup` and connect ChatGPT / Codex Local, Ollama, OpenAI API, Anthropic API, ChatGPT/Codex OAuth App, or Claude if configured.
 3. Open `/ceo` and ask: `Create a marketing project for Demo Parking.`
 4. Open `/start-campaign` and review the campaign launch flow.
 5. Ask Kevin to open a known safe site or create a draft, then supervise the Web Operator in `/operators/[id]`.
