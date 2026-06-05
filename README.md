@@ -119,14 +119,19 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 ## MVP operating guide
 
 Related MVP docs:
+- `AIKO_MVP_RELEASE_NOTES.md` — MVP release summary, verified behavior, provider truth, safety model, limitations, and first project flow.
 - `AIKO_MVP_DEMO_SCRIPT.md` — 10-minute demo flow for showing the MVP safely.
+- `AIKO_DEMO_COMMANDS.md` — copy-paste CEO prompts for a clean MVP demo.
 - `AIKO_OWNER_OPERATING_MANUAL.md` — owner runbook for local operation, supervision, approvals, files, and self-improvement.
 - `AIKO_MVP_RELEASE_CHECKLIST.md` — release readiness and deployment safety checklist.
+- `AIKO_DEPLOYMENT_CHECKLIST.md` — hosted/team deployment checklist.
+- `AIKO_APP_MAP.md` — app map and route reference.
 
 ### Start the app locally
 
 ```bash
 npm install
+npm run doctor
 npm run dev
 ```
 

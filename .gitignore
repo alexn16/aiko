@@ -28,6 +28,11 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# local runtime storage
+/storage/
+/screenshots/
+/public/screenshots/
+
 # vercel
 .vercel
 
@@ -37,3 +42,6 @@ next-env.d.ts
 
 # web operator browser profiles (isolated cookies/sessions per operator)
 /.operator-profiles/
+
+# local assistant/tooling state
+/.claude/

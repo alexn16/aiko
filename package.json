@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "node --test __tests__/brain-routing.test.mjs",
-    "setup:check": "node scripts/aiko-setup-check.mjs"
+    "setup:check": "node scripts/aiko-setup-check.mjs",
+    "doctor": "node scripts/aiko-doctor.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
