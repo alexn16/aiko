@@ -1505,6 +1505,14 @@ const RECALL_PATTERNS = [
 ]
 function isRecallIntent(cmd) { return RECALL_PATTERNS.some(p => p.test(cmd)) }
 
+function shouldBypassRecallFastPath(cmd) {
+  return (
+    /\bhttps?:\/\//i.test(cmd) ||
+    /^[A-Z][a-z]+,?\s+(open|search|research|browse|check|summarize|read|go to)\b/i.test(cmd) ||
+    /\b(open|search|research|browse|check online|go to)\s+https?:\/\//i.test(cmd)
+  )
+}
+
 function extractRecallProjectName(cmd) {
   return cmd
     .replace(/^what\s+are\s+we\s+doing\s+(for|on|with)\s+/i, '')
@@ -1555,6 +1563,17 @@ test('recall intent patterns match expected commands', () => {
   assert.ok(isRecallIntent('What is missing before AÏKO can execute WhatsApp outreach for ALB Parking?'), 'missing capability recall')
   assert.ok(!isRecallIntent('Create a project for ALB Parking'), 'create does not trigger recall')
   assert.ok(!isRecallIntent('Run the research for ALB'), 'run does not trigger recall')
+})
+
+test('direct URL and named-operator browser commands bypass project recall fast path', () => {
+  const directOperatorCommand = 'Kevin, open https://www.coruna.gal and summarize any parking context relevant to ALB Parking.'
+  const genericDirectCommand = 'Open https://example.com and summarize the page.'
+  const ordinaryRecallCommand = 'Summarize ALB Parking'
+
+  assert.ok(isRecallIntent(directOperatorCommand), 'contains summarize and would otherwise match recall')
+  assert.ok(shouldBypassRecallFastPath(directOperatorCommand), 'named operator direct URL bypasses recall')
+  assert.ok(shouldBypassRecallFastPath(genericDirectCommand), 'direct URL browser command bypasses recall')
+  assert.ok(!shouldBypassRecallFastPath(ordinaryRecallCommand), 'ordinary project recall still uses recall fast path')
 })
 
 // ── 60. Recall project name extracted correctly ───────────────────────────────
@@ -3681,6 +3700,32 @@ test('130. URL instructions route to website_reader instead of unknown-site prop
   const command = 'Kevin, open https://example.com and summarize the page.'
   assert.equal(extractFirstUrl(command), 'https://example.com')
   assert.equal(inferUnknownWebsiteFromInstruction(command), null)
+})
+
+test('130b. Web Operator network failures use owner-facing copy', () => {
+  function buildDelegationFailureMessage(rawError) {
+    const clean = rawError.replace(/\u001b\[[0-9;]*m/g, '')
+    if (clean.includes("Executable doesn't exist") || clean.includes('browserType.launch')) {
+      return 'Browser runtime is missing. Run: npx playwright install chromium'
+    }
+    if (clean.includes('net::ERR_NAME_NOT_RESOLVED')) {
+      return 'The Web Operator could not resolve that website address. Check the URL or network connection, then try again.'
+    }
+    if (clean.includes('net::ERR') || clean.toLowerCase().includes('network')) {
+      return 'The Web Operator hit a network error while opening the website. Check the URL or connection, then try again.'
+    }
+    if (clean.toLowerCase().includes('timeout')) {
+      return 'The Web Operator timed out while loading the website. Try again or use a more specific URL.'
+    }
+    return 'The Web Operator action failed. Check the operator page for details and try again.'
+  }
+
+  const raw = 'page.goto: net::ERR_NAME_NOT_RESOLVED at https://example.com/\\n\\u001b[2m  - navigating to "https://example.com/"\\u001b[22m'
+  const message = buildDelegationFailureMessage(raw)
+
+  assert.equal(message, 'The Web Operator could not resolve that website address. Check the URL or network connection, then try again.')
+  assert.ok(!message.includes('page.goto'), 'does not expose Playwright internals')
+  assert.ok(!message.includes('\\u001b'), 'does not expose ANSI escapes')
 })
 
 test('131. named unknown website still creates an unknown-site candidate', () => {

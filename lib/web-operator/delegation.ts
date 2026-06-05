@@ -200,6 +200,27 @@ function buildCompletionMessage(actionType: string, output: Record<string, unkno
   return `${opStr}completed the action successfully.`
 }
 
+function stripAnsi(text: string): string {
+  return text.replace(/\u001b\[[0-9;]*m/g, '')
+}
+
+export function buildDelegationFailureMessage(rawError: string): string {
+  const clean = stripAnsi(rawError)
+  if (clean.includes("Executable doesn't exist") || clean.includes('browserType.launch')) {
+    return 'Browser runtime is missing. Run: npx playwright install chromium'
+  }
+  if (clean.includes('net::ERR_NAME_NOT_RESOLVED')) {
+    return 'The Web Operator could not resolve that website address. Check the URL or network connection, then try again.'
+  }
+  if (clean.includes('net::ERR') || clean.toLowerCase().includes('network')) {
+    return 'The Web Operator hit a network error while opening the website. Check the URL or connection, then try again.'
+  }
+  if (clean.toLowerCase().includes('timeout')) {
+    return 'The Web Operator timed out while loading the website. Try again or use a more specific URL.'
+  }
+  return 'The Web Operator action failed. Check the operator page for details and try again.'
+}
+
 // ── Core delegation function ───────────────────────────────────────────────────
 
 export async function delegateToWebOperator(req: DelegationRequest): Promise<DelegationResult> {
@@ -430,12 +451,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       }
     }
 
-    // Produce a clean user-facing message for known error patterns
     const rawError = result.error ?? 'Web Operator action failed.'
-    let userMessage = rawError
-    if (rawError.includes("Executable doesn't exist") || rawError.includes('browserType.launch')) {
-      userMessage = 'Browser runtime is missing. Run: npx playwright install chromium'
-    }
     return {
       status: 'failed',
       actionId: result.action?.id,
@@ -448,7 +464,7 @@ export async function delegateToWebOperator(req: DelegationRequest): Promise<Del
       playbookId: playbookPlan?.playbook_id,
       playbookName: playbookPlan?.playbook_name,
       playbookPlan: playbookPlan ?? undefined,
-      message: userMessage,
+      message: buildDelegationFailureMessage(rawError),
     }
   }
 

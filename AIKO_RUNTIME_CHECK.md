@@ -857,3 +857,68 @@ WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 - No Canva publishing, sharing, downloading, posting, messaging, or external send was attempted.
 - ChatGPT/Codex and Claude remained honestly unconnected in local state.
 - Local Ollama responses were slow enough to be visible during the demo.
+
+---
+
+## First Real Marketing Session — 2026-06-05
+
+### Project
+
+`ALB Parking`
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Session steps
+
+| Step | Page/API used | Result | What happened |
+|---|---|---|---|
+| 1. Open dashboard | `/dashboard` | ✅ Pass | Dashboard showed Ollama local as CEO brain, setup complete, Auto / Approval Required mode, 3 active projects, 2 Web Operators, 14 waiting-user workflows, 1 pending approval, 4 active improvement proposals, and honest ChatGPT/Claude warnings. |
+| 2. Open CEO | `/ceo` | ✅ Pass with tooling note | CEO history and ALB Parking context loaded. Browser text entry in the Codex in-app browser failed because its virtual clipboard was unavailable, so CEO prompts were sent through `/api/ceo/command`, the same backend route used by the UI. |
+| 3. Ask for 7-day plan | `/api/ceo/command` | ⚠️ Weak output | `Plan the next 7 days of marketing work for ALB Parking.` returned broad themes only: research, content creation, and outreach. It did not produce a day-by-day plan or concrete tasks. |
+| 4. Review plan/workspace | `/projects/[id]` | ✅ Pass, blocker visible | Project workspace clearly showed the first-campaign brief, 0/9 launch checklist, 0 leads, and no PM assigned. |
+| 5. Ask operator first step | `/api/ceo/command` | ⚠️ Confusing output | CEO said Sven should review existing content and research, but did not create a Web Operator delegation. This blurred PM/agent/operator roles. |
+| 6. Run safe Web Operator action | `/api/ceo/command`, `/operators/[id]` | ✅ Safe behavior, issue fixed | `Kevin, open https://www.coruna.gal...` created a direct `open_url` action with `website_reader` and General Site Research playbook. It paused in `waiting_user` with login/security takeover copy and did not bypass anything. A routing bug made CEO also say no project matched the full command; fixed by bypassing project-recall fast path for direct URL/operator browser commands. |
+| 6b. Validate direct URL routing | `/api/ceo/command` | ✅ Fixed | `Kevin, open https://example.com and summarize the page.` no longer produced a bogus project-recall error. It failed due DNS/network resolution in the operator browser, and raw Playwright error copy was sanitized to owner-facing text. |
+| 7. Generate report | `/api/ceo/command` | ✅ Pass | Executive report generated for ALB Parking and identified draft-stage status, 0/9 launch progress, no PM, and next launch step `Define target audience`. |
+| 8. Generate bundle | `/api/projects/[id]/artifact-bundle` | ✅ Pass | Generated 5 files: executive report, leads CSV, strategy brief, decision log, and project bundle manifest. |
+| 8b. Verify files | `/files` | ✅ Pass | Files page showed the new ALB Parking bundle files and honest `0 leads exported` CSV. |
+| 9. Ask blockers | `/api/ceo/command` | ⚠️ Partial | CEO named missing Email Sending and Reply Tracking capabilities, but did not mention no PM assigned, 0/9 checklist, empty leads, or Kevin waiting for user takeover. |
+
+### Useful parts
+
+- Dashboard gives a strong owner overview before work starts.
+- Project workspace makes real blockers visible: no PM, no leads, 0/9 checklist.
+- Web Operator paused safely on login/security and showed playbook steps, current URL/title, waiting reason, forbidden steps, and manual controls.
+- Report and bundle generation worked and produced inspectable files.
+- Files page made the generated artifacts easy to verify and download.
+
+### Confusing parts
+
+- The CEO's 7-day plan was too high-level for a real 60-minute session.
+- The CEO said Mara would be assigned as PM in one response, but ALB Parking still showed no assigned PM in the workspace.
+- `What should the operator do first?` returned Sven, which reads like a PM/agent recommendation rather than a Web Operator action.
+- The blocker answer over-focused on missing capabilities and missed visible operational blockers.
+- Operator page still has some duplicated controls (`Resume workflow`) and mixed status labels (`ready` summary while execution is `waiting_user`).
+
+### Missing capabilities / blockers
+
+- Email sending and reply tracking remain missing capabilities.
+- ALB Parking has no PM assigned.
+- ALB Parking has 0 leads and no completed launch checklist steps.
+- Kevin has multiple waiting-user actions from login/security checks.
+- Local Ollama is usable but slow and sometimes produces weaker planning output than a hosted reasoning model.
+
+### Fixes made
+
+| Issue | Fix |
+|---|---|
+| Direct URL/operator command containing `summarize` routed through project recall, causing a bogus `I don't have a project matching...` response while delegation still happened. | Added a recall fast-path bypass for explicit URLs and named Web Operator browser commands. |
+| Failed Web Operator navigation exposed raw Playwright/ANSI error text to the owner. | Added sanitized owner-facing failure copy for DNS, network, timeout, and missing-browser-runtime errors. |
+
+### Next highest-value improvement
+
+Improve CEO operational planning quality: when asked for a 7-day plan, the CEO should produce concrete daily tasks tied to the project launch checklist, assigned owner roles, current blockers, and whether each step is internal-only, Web Operator-safe, approval-gated, or blocked by missing capability.

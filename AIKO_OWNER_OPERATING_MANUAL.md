@@ -90,6 +90,14 @@ Use the guided campaign flow to:
 
 Campaign planning is internal. External posts, messages, sends, downloads, shares, and similar risky actions require approval.
 
+For a focused owner work session, ask the CEO for concrete planning:
+
+```text
+Plan the next 7 days of marketing work for [project]. Include daily tasks, owners, blockers, and which tasks require Web Operator or approval.
+```
+
+Then verify the result in the project workspace. Check whether a Project Manager is assigned, whether the launch checklist has progressed, whether leads exist, and whether any Web Operator action is waiting for manual takeover.
+
 ## Supervising Web Operators
 
 Open `/operators` for the fleet view or `/operators/[id]` for an active operator.

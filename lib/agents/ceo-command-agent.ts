@@ -561,6 +561,14 @@ function isRecallIntent(command: string): boolean {
   return RECALL_PATTERNS.some(p => p.test(command))
 }
 
+function shouldBypassRecallFastPath(command: string): boolean {
+  return (
+    /\bhttps?:\/\//i.test(command) ||
+    /^[A-Z][a-z]+,?\s+(open|search|research|browse|check|summarize|read|go to)\b/i.test(command) ||
+    /\b(open|search|research|browse|check online|go to)\s+https?:\/\//i.test(command)
+  )
+}
+
 /**
  * Extract the project name hint from a recall command.
  *
@@ -840,7 +848,7 @@ export async function runCeoCommandAgent(
   }
 
   // ── Fast-path: project recall questions bypass the full CEO agent ────────────
-  if (isRecallIntent(command)) {
+  if (isRecallIntent(command) && !shouldBypassRecallFastPath(command)) {
     const projectName = extractRecallProjectName(command)
     if (projectName.length >= 2) {
       try {
