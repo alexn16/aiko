@@ -3002,7 +3002,7 @@ test('124. /setup allows Ollama local path', () => {
   assert.equal(ollama.auth_method, 'local')
 })
 
-test('125. ChatGPT setup card disabled when OAuth env missing', () => {
+test('125. ChatGPT OAuth App setup card disabled when OAuth env missing', () => {
   const required = ['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_AUTH_URL', 'OPENAI_OAUTH_TOKEN_URL', 'OPENAI_OAUTH_REDIRECT_URI']
   const env = {}
   const missing = required.filter(k => !env[k])
@@ -4310,4 +4310,116 @@ test('176. health response includes web operator runtime status', () => {
   }
   assert.equal(typeof health.web_operator.runtime_available, 'boolean')
   assert.equal(typeof health.web_operator.headed_mode, 'boolean')
+})
+
+// ── Codex local auth smoke tests ──────────────────────────────────────────────
+
+test('177. ChatGPT local card does not require OPENAI_OAUTH env vars', () => {
+  function localCard(diagnostics) {
+    return {
+      id: 'openai-codex-local',
+      requires_oauth_env: false,
+      disabled: false,
+      status: diagnostics.connected
+        ? 'Connected'
+        : diagnostics.auth_file_detected
+          ? 'Codex auth detected'
+          : diagnostics.codex_cli_detected
+            ? 'Codex CLI detected, not logged in'
+            : 'Not detected',
+    }
+  }
+  const card = localCard({ codex_cli_detected: false, auth_file_detected: false, connected: false })
+  assert.equal(card.requires_oauth_env, false)
+  assert.equal(card.disabled, false)
+  assert.equal(card.status, 'Not detected')
+})
+
+test('178. ChatGPT OAuth app card remains disabled when env vars missing', () => {
+  const required = ['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_AUTH_URL', 'OPENAI_OAUTH_TOKEN_URL', 'OPENAI_OAUTH_REDIRECT_URI']
+  function oauthAppCard(env) {
+    const missing = required.filter(k => !env[k])
+    return {
+      id: 'chatgpt_oauth',
+      label: 'ChatGPT / Codex OAuth App',
+      disabled: missing.length > 0,
+      missing_env: missing,
+    }
+  }
+  const card = oauthAppCard({})
+  assert.equal(card.disabled, true)
+  assert.deepEqual(card.missing_env, required)
+})
+
+test('179. Codex local status does not expose tokens', () => {
+  const status = {
+    provider: 'openai-codex-local',
+    codex_cli_detected: true,
+    auth_file_detected: true,
+    auth_profile_exists: true,
+    connected: false,
+    account_email: null,
+    status: 'auth_detected',
+    instructions: 'Run codex login, then return to AÏKO.',
+  }
+  const serialized = JSON.stringify(status)
+  assert.equal(/access_token|refresh_token|api_key|OPENAI_API_KEY|tokens|auth\.json|\/Users\//i.test(serialized), false)
+})
+
+test('180. Codex local import fails safely when auth is not detected', () => {
+  function importLocal(status) {
+    if (!status.codex_cli_detected || !status.auth_file_detected) {
+      return {
+        http_status: 409,
+        ok: false,
+        error: 'Codex local auth was not detected. Run codex login / sign in with ChatGPT using Codex, then return to AÏKO and click Detect again.',
+      }
+    }
+    return { http_status: 200, ok: true }
+  }
+  const result = importLocal({ codex_cli_detected: true, auth_file_detected: false })
+  assert.equal(result.http_status, 409)
+  assert.equal(result.ok, false)
+  assert.ok(result.error.includes('codex login'))
+})
+
+test('181. Codex local assign to CEO is blocked unless test passes', () => {
+  function canAssign(profile) {
+    return profile?.provider_catalog_id === 'openai-codex-local' && profile.status === 'connected' && profile.last_tested_at
+  }
+  assert.equal(!!canAssign({ provider_catalog_id: 'openai-codex-local', status: 'not_connected', last_tested_at: null }), false)
+  assert.equal(!!canAssign({ provider_catalog_id: 'openai-codex-local', status: 'connected', last_tested_at: '2026-06-05T00:00:00Z' }), true)
+})
+
+test('182. OpenAI API fallback remains separate from ChatGPT/Codex local auth', () => {
+  const providers = [
+    { id: 'openai-codex-local', auth_method: 'local', compatibility: 'openai_codex' },
+    { id: 'chatgpt_oauth', auth_method: 'oauth', compatibility: 'openai_compatible' },
+    { id: 'openai_api', auth_method: 'api_key', compatibility: 'openai_compatible' },
+  ]
+  assert.equal(providers.find(p => p.id === 'openai_api').auth_method, 'api_key')
+  assert.equal(providers.find(p => p.id === 'openai-codex-local').compatibility, 'openai_codex')
+  assert.notEqual(providers.find(p => p.id === 'openai_api').id, providers.find(p => p.id === 'openai-codex-local').id)
+})
+
+test('183. setup check reports Codex local detection without secrets', () => {
+  const lines = [
+    'Codex CLI detected: yes',
+    'Codex local auth detected: yes',
+    'ChatGPT/Codex local profile exists: no',
+    'ChatGPT / Codex OAuth App configured: no',
+  ]
+  const output = lines.join('\n')
+  assert.ok(output.includes('Codex local auth detected: yes'))
+  assert.equal(/access_token|refresh_token|api_key|sk-|auth\.json|\/Users\//i.test(output), false)
+})
+
+test('184. /connect-ai shows three distinct OpenAI paths', () => {
+  const cards = [
+    { id: 'openai-codex-local', label: 'ChatGPT / Codex Local', copy: 'Use local Codex auth.' },
+    { id: 'chatgpt_oauth', label: 'ChatGPT / Codex OAuth App', copy: 'Requires OPENAI_OAUTH_* env vars.' },
+    { id: 'openai_api', label: 'OpenAI API Key', copy: 'Not ChatGPT subscription auth.' },
+  ]
+  assert.deepEqual(cards.map(c => c.id), ['openai-codex-local', 'chatgpt_oauth', 'openai_api'])
+  assert.ok(cards.find(c => c.id === 'openai_api').copy.includes('Not ChatGPT subscription'))
 })

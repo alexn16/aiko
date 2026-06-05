@@ -42,7 +42,8 @@ AÏKO can use:
 - Ollama local fallback when reachable.
 - OpenAI-compatible API providers when configured.
 - Anthropic-compatible providers when configured.
-- ChatGPT/Codex direct only when OAuth is configured and connected.
+- ChatGPT/Codex Local when local Codex CLI/app auth is detected, imported, tested, and connected.
+- ChatGPT/Codex OAuth App only when OAuth env vars are configured and the OAuth flow succeeds.
 - Claude only when Claude OAuth, Anthropic API, or Claude Code local auth is available.
 
 AÏKO should show providers as not configured or not connected unless the connection actually works.
@@ -251,9 +252,15 @@ OLLAMA_BASE_URL=http://localhost:11434
 
 Run `npm run setup:check`.
 
-### ChatGPT OAuth Not Configured
+### ChatGPT / Codex Not Connected
 
-Set the required `OPENAI_OAUTH_*` variables. Until OAuth works, ChatGPT/Codex should remain shown as not configured or disconnected.
+Use one of three separate paths:
+
+- ChatGPT / Codex Local: sign in with Codex locally, then import/test in `/setup` or `/connect-ai`.
+- ChatGPT / Codex OAuth App: set the required `OPENAI_OAUTH_*` variables and complete the OAuth flow.
+- OpenAI API key: use OpenAI Platform API billing; this is not ChatGPT subscription auth.
+
+Until one path tests successfully, ChatGPT/Codex should remain shown as not connected.
 
 ### Claude Not Connected
 

@@ -29,6 +29,20 @@ type Diagnostics = {
   can_ceo_think: boolean
   resolved_ceo_profile: AuthProfile | null
   chatgpt_oauth: { configured: boolean; missing_env: string[]; client_secret_set: boolean }
+  chatgpt_codex_local: {
+    provider: 'openai-codex-local'
+    codex_cli_detected: boolean
+    auth_file_detected: boolean
+    auth_profile_exists: boolean
+    connected: boolean
+    needs_login: boolean
+    account_email: string | null
+    status: string
+    can_import: boolean
+    can_test: boolean
+    instructions: string
+    last_error: string | null
+  }
   claude_code: { cli_detected: boolean; token_env_detected: boolean; local_auth_detected: boolean; available: boolean; detail: string }
   claude_oauth: { configured: boolean; missing_env: string[]; client_secret_set: boolean }
   api_fallbacks: Record<string, boolean>
@@ -38,6 +52,7 @@ type Diagnostics = {
 type RoleInfo = Record<string, string | null>
 
 const MANAGED_CATALOG_IDS = [
+  'openai-codex-local',
   'chatgpt_oauth',
   'openai_api',
   'anthropic_api',
@@ -150,6 +165,36 @@ export default function ConnectAIPage() {
     }
   }
 
+  async function codexLocalAction(action: 'detect' | 'import' | 'test' | 'assign') {
+    setBusy(`codex:${action}`)
+    setMessage(null)
+    try {
+      if (action === 'detect') {
+        await load()
+        setMessage('Codex local auth status refreshed.')
+        return
+      }
+      const route =
+        action === 'import' ? '/api/auth-profiles/openai-codex/local/import' :
+        action === 'test' ? '/api/auth-profiles/openai-codex/local/test' :
+        '/api/auth-profiles/openai-codex/local/assign-ceo'
+      const res = await fetch(route, { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Codex local action failed.')
+      setMessage(
+        action === 'import' ? 'Codex local auth imported. Run Test before assigning it to CEO.' :
+        action === 'test' ? 'Codex local auth test passed.' :
+        'ChatGPT / Codex Local assigned to CEO.',
+      )
+      await load()
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Codex local action failed.')
+      await load()
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function deleteProfile(profile: AuthProfile) {
     if (!confirm(`Delete ${profileName(profile)}?`)) return
     setBusy(`delete:${profile.id}`)
@@ -190,7 +235,7 @@ export default function ConnectAIPage() {
 
       {oauthSuccess && <Notice ok text={`${oauthSuccess === 'chatgpt' ? 'ChatGPT / Codex' : 'Claude'} OAuth connected and saved as an auth profile.`} />}
       {oauthError && <Notice text={`OAuth failed: ${decodeURIComponent(oauthError)}`} />}
-      {message && <Notice ok={message.includes('passed') || message.includes('assigned') || message.includes('deleted')} text={message} />}
+      {message && <Notice ok={['passed', 'assigned', 'deleted', 'imported', 'refreshed'].some(token => message.includes(token))} text={message} />}
 
       <CurrentBrain profile={ceoProfile} diagnostics={diagnostics} onTest={testProfile} />
 
@@ -225,6 +270,8 @@ export default function ConnectAIPage() {
               entry={entry}
               diagnostics={diagnostics}
               onConfigure={() => setConfiguring(entry)}
+              busy={busy}
+              onCodexLocalAction={codexLocalAction}
             />
           ))}
         </div>
@@ -326,22 +373,63 @@ function smallButton(bg: string, color: string): React.CSSProperties {
   return { background: bg, color, border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }
 }
 
-function AddCard({ entry, diagnostics, onConfigure }: { entry: ProviderCatalogEntry; diagnostics: Diagnostics | null; onConfigure: () => void }) {
+function AddCard({ entry, diagnostics, onConfigure, busy, onCodexLocalAction }: {
+  entry: ProviderCatalogEntry
+  diagnostics: Diagnostics | null
+  onConfigure: () => void
+  busy: string | null
+  onCodexLocalAction: (action: 'detect' | 'import' | 'test' | 'assign') => void
+}) {
+  const isCodexLocal = entry.id === 'openai-codex-local'
   const isChatGPT = entry.id === 'chatgpt_oauth'
   const isClaudeCode = entry.id === 'claude-code-local'
-  const configured = isChatGPT ? !!diagnostics?.chatgpt_oauth.configured : isClaudeCode ? !!diagnostics?.claude_code.available : true
+  const codex = diagnostics?.chatgpt_codex_local
+  const configured = isCodexLocal ? !!codex?.connected : isChatGPT ? !!diagnostics?.chatgpt_oauth.configured : isClaudeCode ? !!diagnostics?.claude_code.available : true
   const missing = isChatGPT ? diagnostics?.chatgpt_oauth.missing_env ?? [] : []
-  const requires = isChatGPT ? 'OPENAI_OAUTH_CLIENT_ID, OPENAI_OAUTH_AUTH_URL, OPENAI_OAUTH_TOKEN_URL, OPENAI_OAUTH_REDIRECT_URI' :
+  const requires = isCodexLocal ? 'Codex CLI/app login on this machine; no OPENAI_OAUTH_* env vars required' :
+    isChatGPT ? 'OPENAI_OAUTH_CLIENT_ID, OPENAI_OAUTH_AUTH_URL, OPENAI_OAUTH_TOKEN_URL, OPENAI_OAUTH_REDIRECT_URI' :
     isClaudeCode ? 'claude CLI or CLAUDE_CODE_OAUTH_TOKEN on the AÏKO server' :
     entry.requires_api_key ? 'API key and a model name' :
     entry.requires_base_url ? 'Base URL and model name' : 'Model name'
-  const fallback = isChatGPT ? 'Use OpenAI API key instead.' : isClaudeCode ? 'Use Anthropic API key instead.' : 'Can be assigned to CEO after a successful test.'
+  const fallback = isCodexLocal ? 'If unavailable, use OpenAI API key or Ollama.' :
+    isChatGPT ? 'Advanced OAuth-app path; use Codex Local or OpenAI API key if env vars are missing.' :
+    isClaudeCode ? 'Use Anthropic API key instead.' : 'Can be assigned to CEO after a successful test.'
+  const codexLabel = codex?.connected ? 'Connected' :
+    codex?.auth_file_detected ? 'Codex auth detected' :
+    codex?.codex_cli_detected ? 'CLI detected, not logged in' :
+    'Not detected'
+
+  if (isCodexLocal) {
+    return (
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 15, padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{entry.icon} {entry.display_name}</div>
+          <span style={statusStyle(codex?.connected ? 'connected' : codex?.auth_file_detected ? 'needs_reauth' : 'not_configured')}>{codexLabel}</span>
+        </div>
+        <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, minHeight: 58 }}>
+          Use your ChatGPT account through local Codex auth, similar to OpenClaw. First sign in with Codex locally, then import and test here.
+        </p>
+        <InfoLine label="Uses" value="local · openai_codex" />
+        <InfoLine label="Requires" value={requires} />
+        <InfoLine label="Status" value={`CLI: ${codex?.codex_cli_detected ? 'yes' : 'no'} · Auth file: ${codex?.auth_file_detected ? 'yes' : 'no'} · Profile: ${codex?.auth_profile_exists ? 'yes' : 'no'}`} />
+        {codex?.account_email && <InfoLine label="Account" value={codex.account_email} />}
+        {codex?.last_error && <div style={{ marginTop: 10, fontSize: 11, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 8 }}>{codex.last_error}</div>}
+        {!codex?.auth_file_detected && <div style={{ marginTop: 10, fontSize: 11, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 8 }}>{codex?.instructions ?? 'Install/sign in to Codex first, then click Detect again.'}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+          <button onClick={() => onCodexLocalAction('detect')} disabled={busy === 'codex:detect'} style={smallButton('#fff', '#0f172a')}>Detect Codex auth</button>
+          <button onClick={() => onCodexLocalAction('import')} disabled={!codex?.can_import || busy === 'codex:import'} style={smallButton(codex?.can_import ? '#0f172a' : '#e2e8f0', codex?.can_import ? '#fff' : '#94a3b8')}>Import local auth</button>
+          <button onClick={() => onCodexLocalAction('test')} disabled={!codex?.can_test || busy === 'codex:test'} style={smallButton(codex?.can_test ? '#0f172a' : '#e2e8f0', codex?.can_test ? '#fff' : '#94a3b8')}>Test</button>
+          <button onClick={() => onCodexLocalAction('assign')} disabled={!codex?.connected || busy === 'codex:assign'} style={smallButton(codex?.connected ? '#0f172a' : '#e2e8f0', codex?.connected ? '#fff' : '#94a3b8')}>Assign to CEO</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 15, padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
         <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{entry.icon} {entry.display_name}</div>
-        <span style={statusStyle(configured ? 'connected' : 'not_configured')}>{configured ? (isClaudeCode ? 'detected' : 'configured') : 'not configured'}</span>
+        <span style={statusStyle(configured ? 'connected' : 'not_configured')}>{configured ? (isClaudeCode ? 'detected' : isChatGPT ? 'configured' : 'configured') : 'not configured'}</span>
       </div>
       <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, minHeight: 58 }}>{entry.short_description}</p>
       <InfoLine label="Uses" value={`${entry.auth_type} · ${entry.compatibility}`} />
@@ -353,7 +441,7 @@ function AddCard({ entry, diagnostics, onConfigure }: { entry: ProviderCatalogEn
         disabled={(isChatGPT || isClaudeCode) && !configured}
         style={{ marginTop: 12, width: '100%', padding: '9px 12px', borderRadius: 9, border: 'none', background: ((isChatGPT || isClaudeCode) && !configured) ? '#e2e8f0' : '#0f172a', color: ((isChatGPT || isClaudeCode) && !configured) ? '#94a3b8' : '#fff', fontWeight: 800, cursor: ((isChatGPT || isClaudeCode) && !configured) ? 'default' : 'pointer' }}
       >
-        {isChatGPT ? 'Connect ChatGPT' : isClaudeCode ? 'Create local profile' : 'Add profile'}
+        {isChatGPT ? 'Connect OAuth App' : isClaudeCode ? 'Create local profile' : 'Add profile'}
       </button>
     </div>
   )
@@ -368,7 +456,8 @@ function DiagnosticsPanel({ diagnostics, profiles }: { diagnostics: Diagnostics 
     <section style={{ marginTop: 32, marginBottom: 40 }}>
       <div style={LABEL}>Section 4 · Diagnostics</div>
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 15, padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
-        <Diag label="ChatGPT OAuth configured" value={diagnostics?.chatgpt_oauth.configured} detail={diagnostics?.chatgpt_oauth.missing_env.join(', ') || 'No missing required vars'} />
+        <Diag label="ChatGPT / Codex OAuth App configured" value={diagnostics?.chatgpt_oauth.configured} detail={diagnostics?.chatgpt_oauth.missing_env.join(', ') || 'No missing required vars'} />
+        <Diag label="ChatGPT / Codex Local detected" value={diagnostics?.chatgpt_codex_local.auth_file_detected} detail={`CLI: ${diagnostics?.chatgpt_codex_local.codex_cli_detected ? 'yes' : 'no'} · profile: ${diagnostics?.chatgpt_codex_local.auth_profile_exists ? 'yes' : 'no'} · connected: ${diagnostics?.chatgpt_codex_local.connected ? 'yes' : 'no'}`} />
         <Diag label="Claude Code CLI detected" value={diagnostics?.claude_code.available} detail={diagnostics?.claude_code.detail ?? 'Checking local server'} />
         <Diag label="Claude OAuth configured" value={diagnostics?.claude_oauth.configured} detail={diagnostics?.claude_oauth.missing_env.join(', ') || 'No missing required vars'} />
         <Diag label="API fallbacks connected" value={diagnostics?.any_api_fallback_connected} detail={Object.entries(diagnostics?.api_fallbacks ?? {}).map(([k, v]) => `${k}: ${v ? 'yes' : 'no'}`).join(' · ')} />

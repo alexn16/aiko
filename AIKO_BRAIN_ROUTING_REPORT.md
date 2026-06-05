@@ -12,7 +12,8 @@ Google login is optional account identity, not a prerequisite for connecting Cha
 | Identity layer | What it does | What it does NOT do |
 |---|---|---|
 | **Google login** | Identifies the AÏKO user in multi-user mode | Connects ChatGPT or Claude |
-| **ChatGPT / Codex OAuth** | Connects ChatGPT subscription brain directly | Require Google login |
+| **ChatGPT / Codex Local** | Reuses local Codex CLI/app auth after a real test call | Require Google login or `OPENAI_OAUTH_*` |
+| **ChatGPT / Codex OAuth App** | Connects ChatGPT/Codex through an app-owned OAuth client | Require Google login |
 | **Claude account OAuth** | Connects Claude subscription brain directly | Require Google login |
 | **OpenAI API key** | Separate API brain (billing via OpenAI account) | Same as ChatGPT OAuth |
 | **Anthropic API key** | Separate API brain (billing via Anthropic account) | Same as Claude account OAuth |
@@ -35,7 +36,7 @@ Google login is optional account identity, not a prerequisite for connecting Cha
 
 ### Flow in optional mode (no login)
 1. User visits `/connect-ai` → no redirect, page loads
-2. User connects ChatGPT via OAuth or API key
+2. User connects ChatGPT through Codex local auth, OAuth App, or API key
 3. Provider row stored with `user_id = null` (global / single-user)
 4. CEO Chat resolves provider from global fallback
 5. Google login available as optional step at any time
@@ -51,10 +52,11 @@ Google login is optional account identity, not a prerequisite for connecting Cha
 
 | Provider | Catalog ID | Auth type | Env vars needed | Requires Google login? |
 |---|---|---|---|---|
-| ChatGPT | `chatgpt_oauth` | `oauth` | `OPENAI_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` | No (optional mode) |
+| ChatGPT / Codex Local | `openai-codex-local` | `local` / `cli` | Codex CLI/app signed in locally | No |
+| ChatGPT / Codex OAuth App | `chatgpt_oauth` | `oauth` | `OPENAI_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` | No (optional mode) |
 | Claude | `claude_oauth` | `oauth` | `CLAUDE_OAUTH_CLIENT_ID` + `AUTH_URL` + `TOKEN_URL` | No (optional mode) |
 
-When env vars are missing → routes return `{ configured: false, error: "...not configured..." }` — no fake success.
+When OAuth env vars are missing → OAuth routes return `{ configured: false, error: "...not configured..." }` — no fake success. Codex local auth is separate: detection/import is allowed without OAuth env vars, but assignment is blocked until a real Codex CLI test succeeds.
 
 OAuth tokens are stored as `oauth_access_token` / `oauth_refresh_token` in `provider_connections`.  
 When expired, `dispatchCall` auto-refreshes. On refresh failure → `status = 'needs_reauth'` → `NeedsReauthError` thrown.
@@ -73,7 +75,12 @@ GOOGLE_CLIENT_SECRET=
 NEXTAUTH_SECRET=          # openssl rand -base64 32
 NEXTAUTH_URL=             # http://localhost:3001 for dev
 
-# ChatGPT OAuth (optional — for subscription OAuth)
+# ChatGPT / Codex Local (optional — OpenClaw-style local auth)
+CODEX_HOME=
+OPENAI_CODEX_AUTH_FILE=
+CODEX_MODEL=codex-cli-default
+
+# ChatGPT / Codex OAuth App (optional — advanced OAuth app path)
 OPENAI_OAUTH_CLIENT_ID=
 OPENAI_OAUTH_AUTH_URL=
 OPENAI_OAUTH_TOKEN_URL=
@@ -437,11 +444,12 @@ See `AIKO_PROVIDER_CONNECTION_AUDIT.md` for the full audit.
 | Ollama | ✅ Working | Default CEO brain |
 | Anthropic API | ✅ Ready | Enter key at `/connect-ai` |
 | OpenAI API | ✅ Ready | Enter key at `/connect-ai` |
-| ChatGPT OAuth | ⚠ Needs env vars | Routes built; `OPENAI_OAUTH_*` not set |
+| ChatGPT / Codex Local | ✅ Conditional | Uses local Codex CLI/app auth only after import and real test |
+| ChatGPT / Codex OAuth App | ⚠ Needs env vars | Routes built; `OPENAI_OAUTH_*` not set |
 | Claude Account OAuth | ⚠ Needs env vars | Routes built; `CLAUDE_OAUTH_*` not set |
 | Claude Code CLI | ✗ Not installed | N/A |
 
-Catalog entries for `chatgpt_oauth` and `claude_oauth` updated to `status: 'available'` — the routes ARE implemented, they just need operator configuration.
+Catalog entries for `openai-codex-local`, `chatgpt_oauth`, and `claude_oauth` are available, but each still requires its own real working auth path. Local Codex auth requires Codex login plus a passing CLI test; ChatGPT OAuth App and Claude OAuth require their env vars and a successful exchange.
 
 ---
 
@@ -463,12 +471,12 @@ AÏKO brain routing now follows:
 
 Auth method boundaries:
 
-- `oauth`: ChatGPT/Codex account tokens and any real configured OAuth flow.
+- `oauth`: ChatGPT/Codex OAuth App account tokens and any real configured OAuth flow.
 - `api_key`: OpenAI API, Anthropic API, OpenRouter, and custom endpoints.
-- `local`: local providers such as Ollama.
+- `local`: local providers such as Ollama and safe local Codex auth references.
 - `cli`: Claude Code CLI/local auth when detected and tested.
 - `none`: local/no-secret providers.
 
-OpenAI API key is separate from ChatGPT/Codex OAuth. Anthropic API key is separate from Claude account/Claude Code auth. Google login identifies the AÏKO user only; it is not provider auth.
+OpenAI API key is separate from ChatGPT/Codex Local and ChatGPT/Codex OAuth App. Anthropic API key is separate from Claude account/Claude Code auth. Google login identifies the AÏKO user only; it is not provider auth.
 
-`GET /api/auth-profiles/diagnostics` reports `can_ceo_think`, resolved CEO auth profile, auth method, provider, model, missing ChatGPT vars, Claude Code detection, Claude OAuth status, and API fallback availability without secrets.
+`GET /api/auth-profiles/diagnostics` reports `can_ceo_think`, resolved CEO auth profile, auth method, provider, model, Codex local detection, missing ChatGPT OAuth vars, Claude Code detection, Claude OAuth status, and API fallback availability without secrets.

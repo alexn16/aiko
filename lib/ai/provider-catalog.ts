@@ -16,6 +16,7 @@ export type ProviderCategory =
 
 export type CompatibilityType =
   | 'openai_compatible'
+  | 'openai_codex'
   | 'anthropic_messages'
   | 'claude_code_cli'
   | 'ollama_native'
@@ -51,12 +52,30 @@ export interface ProviderCatalogEntry {
 }
 
 export const CATALOG: ProviderCatalogEntry[] = [
-  // ── Subscription / OAuth (not available in this build) ──────────────────────
+  // ── Subscription / local auth / OAuth ───────────────────────────────────────
 
   {
+    id: 'openai-codex-local',
+    display_name: 'ChatGPT / Codex Local',
+    short_description: 'Use existing ChatGPT-managed Codex auth from the local Codex CLI/app',
+    category: 'subscription_oauth',
+    auth_type: 'local',
+    compatibility: 'openai_codex',
+    status: 'available',
+    requires_base_url: false,
+    requires_api_key: false,
+    supports_streaming: false,
+    supports_tools: false,
+    supports_chat: true,
+    model_suggestions: ['codex-cli-default'],
+    icon: '🟢',
+    notes: 'OpenClaw-style local path. Requires Codex CLI/app login on this machine. No OPENAI_OAUTH_* app env vars required. AÏKO only marks it connected after a real Codex CLI test call succeeds.',
+    capabilities: ['reasoning', 'research', 'writing', 'coding'],
+  },
+  {
     id: 'chatgpt_oauth',
-    display_name: 'ChatGPT / Codex',
-    short_description: 'Connect via your ChatGPT account (OAuth)',
+    display_name: 'ChatGPT / Codex OAuth App',
+    short_description: 'Advanced OAuth-app path for ChatGPT/Codex',
     category: 'subscription_oauth',
     auth_type: 'oauth',
     compatibility: 'openai_compatible',
@@ -67,7 +86,7 @@ export const CATALOG: ProviderCatalogEntry[] = [
     supports_tools: true,
     supports_chat: true,
     icon: '🟢',
-    notes: 'OAuth PKCE flow is implemented. Requires OPENAI_OAUTH_CLIENT_ID, OPENAI_OAUTH_AUTH_URL, OPENAI_OAUTH_TOKEN_URL env vars. If not configured, use OpenAI API key instead.',
+    notes: 'Advanced OAuth PKCE flow. Requires OPENAI_OAUTH_CLIENT_ID, OPENAI_OAUTH_AUTH_URL, OPENAI_OAUTH_TOKEN_URL, and OPENAI_OAUTH_REDIRECT_URI env vars. If not configured, use ChatGPT / Codex Local or OpenAI API key instead.',
     capabilities: ['reasoning', 'research', 'writing', 'coding', 'vision'],
   },
   {

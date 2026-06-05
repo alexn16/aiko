@@ -20,6 +20,7 @@ import type { ChatMessage } from './providers/openai-compat'
 import { callOpenAICompat, streamOpenAICompat, testOpenAICompat } from './providers/openai-compat'
 import { callAnthropic, streamAnthropic, testAnthropic } from './providers/anthropic'
 import { callClaudeCodeCli, testClaudeCodeCli } from './providers/claude-code-cli'
+import { callCodexCli, testCodexAuthProfile } from './providers/codex-auth'
 
 export type AgentRole = 'ceo' | 'research' | 'copywriting' | 'review' | 'qa' | 'local_fallback' | 'project_manager'
 
@@ -495,6 +496,7 @@ function getCompatibility(p: ProviderRow): string {
   if (['openai_api', 'ollama', 'openai_compatible', 'custom', 'chatgpt_direct'].includes(p.type)) return 'openai_compatible'
   if (['anthropic_api', 'anthropic_compatible', 'claude_direct'].includes(p.type)) return 'anthropic_messages'
   if (['claude-code-local'].includes(p.type)) return 'claude_code_cli'
+  if (['openai-codex-local', 'chatgpt_codex_local'].includes(p.type)) return 'openai_codex'
   return p.type
 }
 
@@ -510,6 +512,10 @@ async function dispatchCall(
 
   if (compat === 'claude_code_cli') {
     return callClaudeCodeCli(messages)
+  }
+
+  if (compat === 'openai_codex') {
+    return callCodexCli(messages, { model, jsonMode: opts.jsonMode })
   }
 
   if (compat === 'anthropic_messages') {
@@ -543,6 +549,12 @@ async function dispatchStream(
 
   if (compat === 'claude_code_cli') {
     const text = await callClaudeCodeCli(messages)
+    opts.onChunk(text)
+    return
+  }
+
+  if (compat === 'openai_codex') {
+    const text = await callCodexCli(messages, { model })
     opts.onChunk(text)
     return
   }
@@ -599,6 +611,9 @@ export async function testProvider(id: string): Promise<{ ok: boolean; error?: s
 
     if (compat === 'claude_code_cli') {
       await testClaudeCodeCli()
+    } else if (compat === 'openai_codex') {
+      const result = await testCodexAuthProfile((p as { user_id?: string | null }).user_id ?? null)
+      if (!result.ok) throw new Error(result.error ?? 'Codex local auth test failed.')
     } else if (compat === 'anthropic_messages') {
       await testAnthropic(key, model, baseURL || undefined)
     } else if (compat === 'openai_compatible' || compat === 'ollama_native') {

@@ -922,3 +922,32 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 ### Next highest-value improvement
 
 Improve CEO operational planning quality: when asked for a 7-day plan, the CEO should produce concrete daily tasks tied to the project launch checklist, assigned owner roles, current blockers, and whether each step is internal-only, Web Operator-safe, approval-gated, or blocked by missing capability.
+
+---
+
+## ChatGPT / Codex Local Auth Validation — 2026-06-05
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Result
+
+| Check | Result | Notes |
+|---|---|---|
+| Codex local status | ✅ Pass | `/api/auth-profiles/openai-codex/local/status` detected Codex CLI and local auth, but correctly showed `connected=false` before import/test. |
+| OAuth App distinction | ✅ Pass | Diagnostics showed ChatGPT / Codex OAuth App as not configured with missing `OPENAI_OAUTH_*` vars. |
+| Local import | ✅ Pass | Import created a safe auth-profile reference only. No token contents were returned. |
+| Real local test | ✅ Pass after adapter fix | Initial runtime testing found two CLI adapter bugs: unsupported `--ask-for-approval` flag and inherited stdin blocking `codex exec`. The adapter now uses supported flags and closes stdin explicitly. |
+| CEO assignment | ✅ Pass | Assignment was allowed only after the real Codex test passed. |
+| Router path | ✅ Pass | `/api/providers/test-ceo-brain` returned `AÏKO_CEO_OK` using `ChatGPT / Codex Local` / `codex-cli-default`. |
+| `/connect-ai` UI | ✅ Pass | Shows three distinct OpenAI paths: ChatGPT / Codex Local connected, ChatGPT / Codex OAuth App not configured, and OpenAI API as separate fallback. |
+| `/setup` UI | ✅ Pass | Setup resolves to `CEO brain connected` with ChatGPT / Codex Local after diagnostics settle. |
+
+### Safety notes
+
+- AÏKO did not expose access tokens, refresh tokens, API keys, raw auth-file contents, or local Codex auth paths.
+- AÏKO did not mark Codex connected from detection alone.
+- OpenAI API key fallback and Ollama local provider remained separate and available.

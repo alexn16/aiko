@@ -21,7 +21,7 @@ AÏKO is a self-hosted, agent-based operating system for marketing execution. It
 AÏKO behaves like a ChatGPT-style CEO for an AI marketing company. You speak naturally to the CEO, and it coordinates projects, assigns Project Managers, builds project memory, and orchestrates agents — all through conversation.
 
 **The app requires a real connected AI provider before CEO Chat works.**
-On first launch, AÏKO shows the setup screen where you connect your AI brain (OpenAI API, Anthropic API, Ollama, or a custom endpoint). The CEO Chat is disabled until a provider is connected and tested.
+On first launch, AÏKO shows the setup screen where you connect your AI brain (ChatGPT/Codex local auth, OpenAI API, Anthropic API, Ollama, or a custom endpoint). The CEO Chat is disabled until a provider is connected and tested.
 
 Example exchange:
 
@@ -62,7 +62,7 @@ AÏKO uses an OpenClaw-style provider catalog (`lib/ai/provider-catalog.ts`) to 
 - **AÏKO Permissions** = Operating Mode (research / full-access / locked)
 
 The catalog covers 26 providers across 6 categories:
-- **Subscription / OAuth**: ChatGPT, Claude direct (OAuth flow not yet built)
+- **Subscription / local / OAuth**: ChatGPT/Codex Local, ChatGPT/Codex OAuth App, Claude direct
 - **Direct API**: OpenAI, Anthropic, Gemini, Mistral, OpenRouter, Qwen, Moonshot, MiniMax, StepFun, BytePlus, DeepInfra, Fireworks, Chutes, Synthetic
 - **Gateway**: OpenRouter, Vercel AI Gateway, Cloudflare AI Gateway, Amazon Bedrock (planned), Alibaba Model Studio (planned), Qianfan (planned)
 - **Local**: Ollama
@@ -93,7 +93,7 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 
 **Legacy note**: Some background agents (`copywriting-agent.ts`, `research-agent.ts`, etc.) still use `callLLM` from `lib/models/provider.ts` — these are not reachable from the current UI and are safe to ignore. `model_configs` is checked by the setup-state/router path as a final legacy fallback only. All active features (CEO Chat, CEO Reviews, PM Chat, Reports, Lead extraction, Outreach drafting) use `callAI(role)`.
 
-**ChatGPT/Claude OAuth**: The catalog lists "ChatGPT direct" and "Claude direct" as OAuth-based entries. The OAuth flow is implemented — see `OPENAI_OAUTH_*` / `CLAUDE_OAUTH_*` env vars. In `AIKO_AUTH_MODE=optional`, the OAuth flow works without Google login. If env vars are missing, the cards show "not configured" and fall back to API key connections.
+**OpenAI/ChatGPT paths**: AÏKO now separates three OpenAI paths. **ChatGPT / Codex Local** reuses local Codex CLI/app auth after a real `codex exec` test succeeds, closest to OpenClaw-style login. **ChatGPT / Codex OAuth App** is the advanced self-hosted OAuth-client path and requires `OPENAI_OAUTH_*`. **OpenAI API Key** uses OpenAI Platform billing and is not ChatGPT subscription auth. Claude OAuth remains separate from Anthropic API key and Claude Code local auth.
 
 ## Product surfaces
 
@@ -123,6 +123,7 @@ Related MVP docs:
 - `AIKO_MVP_DEMO_SCRIPT.md` — 10-minute demo flow for showing the MVP safely.
 - `AIKO_DEMO_COMMANDS.md` — copy-paste CEO prompts for a clean MVP demo.
 - `AIKO_OWNER_OPERATING_MANUAL.md` — owner runbook for local operation, supervision, approvals, files, and self-improvement.
+- `AIKO_CODEX_AUTH_AUDIT.md` — ChatGPT/Codex local auth audit, detection model, and safety limits.
 - `AIKO_MVP_RELEASE_CHECKLIST.md` — release readiness and deployment safety checklist.
 - `AIKO_DEPLOYMENT_CHECKLIST.md` — hosted/team deployment checklist.
 - `AIKO_APP_MAP.md` — app map and route reference.
@@ -147,7 +148,7 @@ Open `http://localhost:3001/dashboard` for the owner overview. The dashboard is 
 
 Open `/setup` or `/connect-ai`. AÏKO is honest about provider state:
 
-- ChatGPT/Codex is connected only when ChatGPT OAuth is configured and a connected OAuth profile exists.
+- ChatGPT/Codex is connected only when Codex local auth or ChatGPT OAuth is configured, imported, tested, and connected.
 - Claude is connected only when Claude OAuth, Anthropic API, or local Claude Code auth is available.
 - Ollama is a local fallback profile and may be shown as the active CEO brain in local development.
 
@@ -177,7 +178,8 @@ AÏKO does not silently modify its own code. The user approves a proposal, copie
 
 ### What is not connected by default
 
-- ChatGPT/Codex OAuth may be unconfigured in local dev.
+- ChatGPT/Codex Local may be unavailable if Codex CLI/app is not installed or logged in.
+- ChatGPT/Codex OAuth App may be unconfigured in local dev.
 - Claude OAuth/API/CLI may be unconfigured in local dev.
 - Native platform APIs such as WhatsApp, LinkedIn, Facebook, Gmail, Canva, CRM, or Meta Business Suite are not assumed.
 - Missing platform capabilities become proposals, not automatic implementations.
@@ -234,10 +236,11 @@ Open `/setup`. AÏKO derives setup state from real provider profiles and CEO rol
 Open `/connect-ai` for provider profiles and role assignments.
 
 - Ollama local uses `OLLAMA_BASE_URL` and is a local fallback.
+- ChatGPT / Codex Local uses an existing local Codex CLI/app login. No `OPENAI_OAUTH_*` env vars are required, but AÏKO still requires a real test call before assignment.
 - OpenAI API uses `OPENAI_API_KEY` if supported in the current provider catalog.
 - Anthropic API uses `ANTHROPIC_API_KEY` if supported in the current provider catalog.
 - OpenRouter uses `OPENROUTER_API_KEY` if supported.
-- ChatGPT/Codex direct requires `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI`.
+- ChatGPT / Codex OAuth App requires `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI`.
 - Claude direct requires `CLAUDE_OAUTH_CLIENT_ID`, `CLAUDE_OAUTH_AUTH_URL`, and `CLAUDE_OAUTH_TOKEN_URL`.
 - Claude Code local can be detected through local CLI/auth or `CLAUDE_CODE_OAUTH_TOKEN`.
 
@@ -308,9 +311,9 @@ Then reload `/api/health` and `/operators`.
 
 Start Ollama locally and confirm `OLLAMA_BASE_URL` points to it, usually `http://localhost:11434`. `npm run setup:check` should report Ollama reachable.
 
-**ChatGPT OAuth not configured**
+**ChatGPT / Codex not connected**
 
-Set all required `OPENAI_OAUTH_*` variables. Until then, ChatGPT/Codex must remain shown as not configured.
+Use one of the three distinct OpenAI paths: sign in with Codex locally and import/test ChatGPT / Codex Local, configure all required `OPENAI_OAUTH_*` variables for the OAuth App path, or use an OpenAI API key. Until one path tests successfully, ChatGPT/Codex must remain shown as not connected.
 
 **Claude not connected**
 
@@ -1122,7 +1125,8 @@ Or toggle it in the app at `/mode` → Operating Mode.
 - "What decisions have been made?" → decision log answer from DB
 
 **Provider status (honest, no fake states):**
-- ChatGPT OAuth: `oauth_not_configured` — lists exact missing env var names
+- ChatGPT / Codex Local: detected/imported/tested state, with no token contents exposed
+- ChatGPT OAuth App: `oauth_not_configured` — lists exact missing env var names
 - Claude OAuth: `oauth_not_configured` — lists exact missing env var names
 - Ollama: `connected` (CEO brain)
 
@@ -1148,8 +1152,9 @@ Install app → first-run wizard → choose provider/auth profile → connect/te
 
 3. Open `http://localhost:3001/setup`. If no working CEO brain exists, AÏKO redirects dashboard pages to `/setup` automatically.
 4. Choose a provider path:
-   - **ChatGPT / Codex OAuth** when `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI` are configured.
-   - **OpenAI API key** as the reliable OpenAI fallback when ChatGPT OAuth is not configured.
+   - **ChatGPT / Codex Local** when the Codex CLI/app is installed, signed in with ChatGPT on this machine, imported, and tested.
+   - **ChatGPT / Codex OAuth App** when `OPENAI_OAUTH_CLIENT_ID`, `OPENAI_OAUTH_AUTH_URL`, `OPENAI_OAUTH_TOKEN_URL`, and `OPENAI_OAUTH_REDIRECT_URI` are configured.
+   - **OpenAI API key** as the reliable OpenAI fallback when ChatGPT/Codex local or OAuth auth is not connected.
    - **Claude Code local / Claude OAuth** only when local CLI/auth or OAuth env vars are detected.
    - **Anthropic API key** as the reliable Claude fallback.
    - **Ollama local** as the easiest offline/local path when Ollama is running and a model is pulled.
@@ -1157,7 +1162,7 @@ Install app → first-run wizard → choose provider/auth profile → connect/te
 5. Click **Test & Connect**. AÏKO creates an auth profile, runs the provider test, assigns it to CEO, then runs Brain Verification.
 6. When setup succeeds, use **Go to CEO Chat** or **Start First Campaign**.
 
-Google login is optional AÏKO identity in `AIKO_AUTH_MODE=optional`; it does not connect provider accounts. Provider auth is separate and stored as auth profiles. Without ChatGPT/Codex OAuth env vars, use OpenAI API key or Ollama instead. Without Claude Code/Claude OAuth, use Anthropic API key instead.
+Google login is optional AÏKO identity in `AIKO_AUTH_MODE=optional`; it does not connect provider accounts. Provider auth is separate and stored as auth profiles. Without Codex local auth or ChatGPT/Codex OAuth env vars, use OpenAI API key or Ollama instead. Without Claude Code/Claude OAuth, use Anthropic API key instead.
 
 You can inspect local readiness without printing secrets:
 
@@ -1211,18 +1216,37 @@ Create a Google OAuth app:
 
 #### AI provider (at least one required for CEO Chat)
 
-Connect an AI brain via `/setup`. The fastest path is Ollama local, OpenAI API key, or Anthropic API key — no Google login required in local mode.
+Connect an AI brain via `/setup`. The fastest paths are ChatGPT / Codex Local if Codex is already logged in, Ollama local, OpenAI API key, or Anthropic API key — no Google login required in local mode.
 
 | Provider | What you need | Where to get it |
 |---|---|---|
+| ChatGPT / Codex Local | Codex CLI/app signed in locally | `codex --login` or the Codex app |
 | OpenAI API | API key | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 | Anthropic API | API key | [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) |
 | OpenRouter | API key | [openrouter.ai/keys](https://openrouter.ai/keys) |
 | Ollama | Local install | `ollama pull llama3.2 && ollama serve` |
 
-#### Optional: ChatGPT subscription OAuth
+#### Optional: ChatGPT / Codex Local Auth
 
-Allows users to connect their ChatGPT subscription account instead of using an API key.
+This is the closest path to OpenClaw-style ChatGPT/Codex login. Sign in with Codex locally first, then import and test the local profile in AÏKO:
+
+```bash
+codex --login
+```
+
+Optional local detection overrides:
+
+```bash
+CODEX_HOME=
+OPENAI_CODEX_AUTH_FILE=
+CODEX_MODEL=codex-cli-default
+```
+
+AÏKO only stores a safe local auth-profile reference. It does not return or print Codex tokens, and it does not mark the profile connected until a real Codex CLI test call succeeds.
+
+#### Optional: ChatGPT / Codex OAuth App
+
+Allows users to connect ChatGPT/Codex through an app-owned OAuth flow instead of using local Codex auth or an API key.
 Requires registering an OAuth app with OpenAI (when publicly available).
 
 ```
@@ -1235,7 +1259,7 @@ OPENAI_OAUTH_SCOPE=openid profile email
 
 Redirect URI to register: `{NEXTAUTH_URL}/api/providers/oauth/chatgpt/callback`
 
-If these vars are not set, the ChatGPT OAuth card shows "not configured" — the app falls back to API key connections. No fake success, no silent failure.
+If these vars are not set, the ChatGPT / Codex OAuth App card shows "not configured" — the app falls back to Codex local auth, API key connections, or Ollama. No fake success, no silent failure.
 
 #### Optional: Claude account OAuth
 
@@ -1454,12 +1478,14 @@ AÏKO uses auth profiles for provider connections:
 
 Important distinctions:
 
-- ChatGPT/Codex OAuth (`chatgpt_oauth`) is separate from OpenAI API key (`openai_api`).
+- ChatGPT/Codex Local (`openai-codex-local`) is separate from ChatGPT/Codex OAuth App (`chatgpt_oauth`) and OpenAI API key (`openai_api`).
 - Anthropic API key (`anthropic_api`) is separate from Claude account/Claude Code local auth.
 - Google login is optional AÏKO user identity only; it does not connect ChatGPT, Claude, OpenAI API, or Anthropic API.
-- Ollama, OpenAI API key, Anthropic API key, OpenRouter, and custom endpoint profiles are the reliable working paths unless OAuth is explicitly configured.
+- Ollama, OpenAI API key, Anthropic API key, OpenRouter, and custom endpoint profiles remain reliable working paths. ChatGPT/Codex Local works only after local Codex auth is detected and a real CLI test succeeds.
 
-ChatGPT/Codex OAuth requires these env vars before the Connect button is enabled:
+ChatGPT/Codex Local requires Codex CLI/app auth on the same machine. It does not require `OPENAI_OAUTH_*`, and AÏKO must not expose local token contents.
+
+ChatGPT/Codex OAuth App requires these env vars before the Connect button is enabled:
 
 - `OPENAI_OAUTH_CLIENT_ID`
 - `OPENAI_OAUTH_AUTH_URL`
@@ -1467,7 +1493,7 @@ ChatGPT/Codex OAuth requires these env vars before the Connect button is enabled
 - `OPENAI_OAUTH_REDIRECT_URI`
 - `OPENAI_OAUTH_CLIENT_SECRET` only if required by the OAuth provider
 
-The `/connect-ai` page shows the current CEO brain, saved auth profiles, add-profile cards, diagnostics, missing OAuth variables, Claude Code local detection, and API fallback availability without exposing secrets.
+The `/connect-ai` page shows the current CEO brain, saved auth profiles, add-profile cards, Codex local detection, missing OAuth variables, Claude Code local detection, and API fallback availability without exposing secrets.
 
 ## Web Operator Skills for website workflows
 

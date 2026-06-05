@@ -43,6 +43,19 @@ async function commandVersion(command, args = ['--version']) {
   }
 }
 
+async function commandExists(command) {
+  return Boolean(await commandVersion(command))
+}
+
+async function fileExists(filePath) {
+  try {
+    await access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function ollamaReachable() {
   const base = process.env.OLLAMA_BASE_URL || 'http://localhost:11434'
   const controller = new AbortController()
@@ -80,10 +93,32 @@ async function writableDirectory(rawPath) {
   }
 }
 
+async function codexLocalProfileExists() {
+  if (!process.env.DATABASE_URL) return null
+  let client
+  try {
+    const pg = await import('pg')
+    client = new pg.Client({ connectionString: process.env.DATABASE_URL })
+    await client.connect()
+    const res = await client.query(
+      `SELECT 1 FROM provider_connections WHERE provider_catalog_id='openai-codex-local' LIMIT 1`,
+    )
+    return res.rowCount > 0
+  } catch {
+    return null
+  } finally {
+    if (client) await client.end().catch(() => {})
+  }
+}
+
 await loadDotEnvFile('.env')
 await loadDotEnvFile('.env.local')
 
 const npmVersion = await commandVersion('npm', ['--version'])
+const codexCliDetected = await commandExists('codex')
+const codexHome = process.env.CODEX_HOME || `${process.env.HOME || ''}/.codex`
+const codexAuthDetected = await fileExists(process.env.OPENAI_CODEX_AUTH_FILE || `${codexHome}/auth.json`)
+const codexProfileExists = await codexLocalProfileExists()
 const ollamaOk = await ollamaReachable()
 const playwrightOk = await playwrightReady()
 const generatedFilesWritable = await writableDirectory(process.env.GENERATED_FILES_DIR || 'storage/generated-files')
@@ -119,6 +154,9 @@ console.log(`AIKO_AUTH_MODE: ${process.env.AIKO_AUTH_MODE || 'optional'}`)
 console.log(`NEXTAUTH_URL present: ${yesNo(present('NEXTAUTH_URL'))}`)
 console.log(`Auth secret present: ${yesNo(present('AUTH_SECRET') || present('NEXTAUTH_SECRET'))}`)
 console.log(`Ollama reachable: ${yesNo(ollamaOk)}`)
+console.log(`Codex CLI detected: ${yesNo(codexCliDetected)}`)
+console.log(`Codex local auth detected: ${yesNo(codexAuthDetected)}`)
+console.log(`ChatGPT/Codex local profile exists: ${codexProfileExists === null ? 'unknown' : yesNo(codexProfileExists)}`)
 console.log(`Playwright Chromium installed: ${yesNo(playwrightOk)}`)
 console.log(`Generated files storage writable: ${yesNo(generatedFilesWritable)}`)
 console.log(`Screenshots storage writable: ${yesNo(screenshotsWritable)}`)
@@ -128,7 +166,7 @@ console.log('Provider configuration')
 console.log(`OpenAI API key: ${yesNo(present('OPENAI_API_KEY'))}`)
 console.log(`Anthropic API key: ${yesNo(present('ANTHROPIC_API_KEY'))}`)
 console.log(`OpenRouter API key: ${yesNo(present('OPENROUTER_API_KEY'))}`)
-console.log(`ChatGPT / Codex OAuth: ${yesNo(chatgptOAuthConfigured)}`)
+console.log(`ChatGPT / Codex OAuth App: ${yesNo(chatgptOAuthConfigured)}`)
 console.log(`Claude OAuth: ${yesNo(claudeOAuthConfigured)}`)
 console.log(`Claude Code token: ${yesNo(present('CLAUDE_CODE_OAUTH_TOKEN'))}`)
 console.log('')

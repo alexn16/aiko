@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth-options'
 import { db } from '@/lib/db/client'
 import { getProviderForRole } from '@/lib/ai/router'
 import { detectClaudeCodeLocal } from '@/lib/ai/providers/claude-code-cli'
+import { getCodexAuthStatus } from '@/lib/ai/providers/codex-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,7 @@ export async function GET() {
   try {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id ?? null
-    const [profilesRes, ceoProfile, claudeCode] = await Promise.all([
+    const [profilesRes, ceoProfile, claudeCode, codexLocal] = await Promise.all([
       db.query(
         `SELECT id, provider_catalog_id, COALESCE(display_name, name) AS display_name,
                 name, COALESCE(auth_method, auth_type) AS auth_method, compatibility,
@@ -56,6 +57,7 @@ export async function GET() {
       ),
       getProviderForRole('ceo', userId).catch(() => null),
       detectClaudeCodeLocal(),
+      getCodexAuthStatus(userId),
     ])
 
     const profiles = profilesRes.rows.map(sanitize)
@@ -77,6 +79,7 @@ export async function GET() {
         missing_env: chatgptMissing,
         client_secret_set: !!process.env.OPENAI_OAUTH_CLIENT_SECRET,
       },
+      chatgpt_codex_local: codexLocal,
       claude_code: claudeCode,
       claude_oauth: {
         configured: claudeOAuthMissing.length === 0,

@@ -46,6 +46,15 @@ async function commandExists(command) {
   }
 }
 
+async function fileExists(path) {
+  try {
+    await readFile(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function ollamaReachable() {
   const base = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
   const controller = new AbortController()
@@ -60,10 +69,32 @@ async function ollamaReachable() {
   }
 }
 
+async function codexLocalProfileExists() {
+  if (!process.env.DATABASE_URL) return null
+  let client
+  try {
+    const pg = await import('pg')
+    client = new pg.Client({ connectionString: process.env.DATABASE_URL })
+    await client.connect()
+    const res = await client.query(
+      `SELECT 1 FROM provider_connections WHERE provider_catalog_id='openai-codex-local' LIMIT 1`,
+    )
+    return res.rowCount > 0
+  } catch {
+    return null
+  } finally {
+    if (client) await client.end().catch(() => {})
+  }
+}
+
 await loadDotEnvLocal()
 
 const npmVersion = await commandVersion('npm', ['--version'])
 const claudeCliDetected = await commandExists('claude')
+const codexCliDetected = await commandExists('codex')
+const codexHome = process.env.CODEX_HOME ?? `${process.env.HOME ?? ''}/.codex`
+const codexAuthDetected = await fileExists(process.env.OPENAI_CODEX_AUTH_FILE ?? `${codexHome}/auth.json`)
+const codexProfileExists = await codexLocalProfileExists()
 const ollamaOk = await ollamaReachable()
 const chatgptConfigured = ['OPENAI_OAUTH_CLIENT_ID', 'OPENAI_OAUTH_AUTH_URL', 'OPENAI_OAUTH_TOKEN_URL', 'OPENAI_OAUTH_REDIRECT_URI'].every(present)
 const claudeOAuthConfigured = ['CLAUDE_OAUTH_CLIENT_ID', 'CLAUDE_OAUTH_AUTH_URL', 'CLAUDE_OAUTH_TOKEN_URL'].every(present)
@@ -77,7 +108,10 @@ console.log(`npm installed: ${yesNo(!!npmVersion)}${npmVersion ? ` (${npmVersion
 console.log(`DATABASE_URL present: ${yesNo(present('DATABASE_URL'))}`)
 console.log(`AIKO_AUTH_MODE: ${process.env.AIKO_AUTH_MODE ?? 'optional'}`)
 console.log(`Ollama reachable: ${yesNo(ollamaOk)}`)
-console.log(`ChatGPT OAuth configured: ${yesNo(chatgptConfigured)}`)
+console.log(`Codex CLI detected: ${yesNo(codexCliDetected)}`)
+console.log(`Codex local auth detected: ${yesNo(codexAuthDetected)}`)
+console.log(`ChatGPT/Codex local profile exists: ${codexProfileExists === null ? 'unknown' : yesNo(codexProfileExists)}`)
+console.log(`ChatGPT / Codex OAuth App configured: ${yesNo(chatgptConfigured)}`)
 console.log(`Claude OAuth configured: ${yesNo(claudeOAuthConfigured)}`)
 console.log(`Claude Code CLI detected: ${yesNo(claudeCliDetected)}`)
 console.log(`CLAUDE_CODE_OAUTH_TOKEN present: ${yesNo(present('CLAUDE_CODE_OAUTH_TOKEN'))}`)
@@ -87,10 +121,11 @@ console.log('')
 
 let next = 'Set DATABASE_URL, run npm install, then open /setup.'
 if (!present('DATABASE_URL')) next = 'Set DATABASE_URL before running AÏKO.'
+else if (codexCliDetected && codexAuthDetected) next = 'Open /setup and choose ChatGPT / Codex Local.'
 else if (ollamaOk) next = 'Open /setup and choose Ollama local.'
 else if (openaiKeyPresent) next = 'Open /setup and choose OpenAI API key.'
 else if (anthropicKeyPresent) next = 'Open /setup and choose Anthropic API key.'
-else if (chatgptConfigured) next = 'Open /setup and choose ChatGPT / Codex OAuth.'
+else if (chatgptConfigured) next = 'Open /setup and choose ChatGPT / Codex OAuth App.'
 else if (claudeCliDetected || claudeOAuthConfigured) next = 'Open /setup and choose Claude.'
 else next = 'Open /setup and connect Ollama, OpenAI API key, or Anthropic API key.'
 console.log(`Suggested next step: ${next}`)

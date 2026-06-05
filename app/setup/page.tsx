@@ -15,6 +15,16 @@ type SetupState = {
 }
 
 type AuthDiagnostics = {
+  chatgpt_codex_local: {
+    codex_cli_detected: boolean
+    auth_file_detected: boolean
+    auth_profile_exists: boolean
+    connected: boolean
+    can_import: boolean
+    can_test: boolean
+    instructions: string
+    last_error: string | null
+  }
   chatgpt_oauth: { configured: boolean; missing_env: string[] }
   claude_code: { available: boolean; cli_detected: boolean; token_env_detected: boolean; detail: string }
   claude_oauth: { configured: boolean; missing_env: string[] }
@@ -22,7 +32,7 @@ type AuthDiagnostics = {
 
 type WizardStep = 'choose' | 'testing' | 'assigning' | 'complete'
 
-type MethodId = 'chatgpt_oauth' | 'claude' | 'openai_api' | 'anthropic_api' | 'ollama' | 'openrouter' | 'custom_openai' | 'custom_anthropic'
+type MethodId = 'openai_codex_local' | 'chatgpt_oauth' | 'claude' | 'openai_api' | 'anthropic_api' | 'ollama' | 'openrouter' | 'custom_openai' | 'custom_anthropic'
 
 type MethodConfig = {
   id: MethodId
@@ -30,7 +40,7 @@ type MethodConfig = {
   catalogId?: string
   description: string
   fallback: string
-  kind: 'oauth' | 'claude' | 'form'
+  kind: 'codex_local' | 'oauth' | 'claude' | 'form'
   defaultModel?: string
   defaultBaseUrl?: string
   needsKey?: boolean
@@ -38,7 +48,8 @@ type MethodConfig = {
 }
 
 const METHODS: MethodConfig[] = [
-  { id: 'chatgpt_oauth', title: 'ChatGPT / Codex', catalogId: 'chatgpt_oauth', kind: 'oauth', description: 'Use ChatGPT/Codex OAuth when this AÏKO instance has OAuth env vars configured.', fallback: 'Use OpenAI API instead.' },
+  { id: 'openai_codex_local', title: 'ChatGPT / Codex Local', catalogId: 'openai-codex-local', kind: 'codex_local', description: 'Use your ChatGPT account through local Codex auth, similar to OpenClaw. No OAuth app env vars required.', fallback: 'Install/sign in to Codex first, then detect/import/test here.', defaultModel: 'codex-cli-default' },
+  { id: 'chatgpt_oauth', title: 'ChatGPT / Codex OAuth App', catalogId: 'chatgpt_oauth', kind: 'oauth', description: 'Advanced OAuth-app path when this AÏKO instance has OPENAI_OAUTH_* env vars configured.', fallback: 'Use ChatGPT / Codex Local or OpenAI API instead.' },
   { id: 'claude', title: 'Claude', catalogId: 'claude-code-local', kind: 'claude', description: 'Use Claude Code local/CLI or Claude OAuth only when detected/configured.', fallback: 'Use Anthropic API instead.', defaultModel: 'claude-code-local' },
   { id: 'openai_api', title: 'OpenAI API key', catalogId: 'openai_api', kind: 'form', description: 'Reliable GPT access with an OpenAI Platform API key.', fallback: 'Separate from ChatGPT/Codex OAuth.', defaultModel: 'gpt-4o', defaultBaseUrl: 'https://api.openai.com/v1', needsKey: true },
   { id: 'anthropic_api', title: 'Anthropic API key', catalogId: 'anthropic_api', kind: 'form', description: 'Reliable Claude access with an Anthropic API key.', fallback: 'Separate from Claude account/Claude Code auth.', defaultModel: 'claude-sonnet-4-5', needsKey: true },
@@ -94,6 +105,13 @@ export default function SetupPage() {
       const configured = !!diagnostics?.chatgpt_oauth.configured
       return { available: configured, label: configured ? 'Available' : 'Not configured', detail: diagnostics?.chatgpt_oauth.missing_env?.join(', ') }
     }
+    if (method.id === 'openai_codex_local') {
+      const codex = diagnostics?.chatgpt_codex_local
+      const available = !!codex?.connected || !!codex?.auth_file_detected
+      const label = codex?.connected ? 'Connected' : codex?.auth_file_detected ? 'Auth detected' : codex?.codex_cli_detected ? 'CLI detected' : 'Not detected'
+      const detail = `CLI ${codex?.codex_cli_detected ? 'detected' : 'not detected'} · local auth ${codex?.auth_file_detected ? 'detected' : 'not detected'} · profile ${codex?.auth_profile_exists ? 'exists' : 'missing'}`
+      return { available, label, detail }
+    }
     if (method.id === 'claude') {
       const claudeAvailable = !!diagnostics?.claude_code.available || !!diagnostics?.claude_oauth.configured
       const parts = [
@@ -114,6 +132,35 @@ export default function SetupPage() {
     try {
       if (method.id === 'chatgpt_oauth') {
         window.location.href = '/api/auth-profiles/openai-codex/start'
+        return
+      }
+      if (method.id === 'openai_codex_local') {
+        const importRes = await fetch('/api/auth-profiles/openai-codex/local/import', { method: 'POST' })
+        const imported = await importRes.json()
+        if (!importRes.ok) throw new Error(imported.error ?? 'Codex local auth was not detected.')
+
+        setStatus('Testing Codex local auth…')
+        const testRes = await fetch('/api/auth-profiles/openai-codex/local/test', { method: 'POST' })
+        const tested = await testRes.json()
+        if (!testRes.ok || !tested.ok) throw new Error(tested.error ?? 'Codex local auth test failed.')
+
+        setStep('assigning')
+        setStatus('Assigning Codex local profile to CEO…')
+        const assignRes = await fetch('/api/auth-profiles/openai-codex/local/assign-ceo', { method: 'POST' })
+        const assigned = await assignRes.json()
+        if (!assignRes.ok) throw new Error(assigned.error ?? 'Codex local assignment failed.')
+
+        setStatus('Verifying CEO brain…')
+        const brainRes = await fetch('/api/providers/test-ceo-brain', { method: 'POST' })
+        const brain = await brainRes.json()
+        if (!brain.success) throw new Error(brain.error ?? 'CEO brain verification failed.')
+
+        const completeRes = await fetch('/api/setup/complete', { method: 'POST' })
+        const complete = await completeRes.json()
+        if (!complete.ok) throw new Error(complete.reason ?? 'Setup is not complete yet.')
+        setStep('complete')
+        setStatus('CEO brain connected through ChatGPT / Codex Local.')
+        await load()
         return
       }
       if (method.id === 'claude' && !diagnostics?.claude_code.available) {
@@ -276,8 +323,9 @@ function ConnectionForm({ method, availability, model, setModel, baseUrl, setBas
         </>
       )}
       {method.kind !== 'form' && <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>{availability.detail ?? method.description}</p>}
+      {method.kind === 'codex_local' && <p style={{ fontSize: 11, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: 8 }}>Use your ChatGPT account through local Codex auth. Run `codex login` first if local auth is not detected. AÏKO will not mark this connected unless the Codex test call passes.</p>}
       <button disabled={busy || formDisabled} onClick={onSubmit} style={{ width: '100%', marginTop: 10, padding: '12px 14px', borderRadius: 11, border: 'none', background: busy || formDisabled ? '#e2e8f0' : '#0f172a', color: busy || formDisabled ? '#94a3b8' : '#fff', fontWeight: 900, cursor: busy || formDisabled ? 'default' : 'pointer' }}>
-        {busy ? 'Working…' : method.kind === 'oauth' ? 'Connect OAuth' : 'Test & Connect'}
+        {busy ? 'Working…' : method.kind === 'oauth' ? 'Connect OAuth App' : method.kind === 'codex_local' ? 'Import, test, assign Codex' : 'Test & Connect'}
       </button>
     </div>
   )

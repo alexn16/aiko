@@ -12,6 +12,9 @@ Use this checklist before a local private deployment or hosted/team deployment. 
 ## Optional Provider Environment Variables
 
 - [ ] `OLLAMA_BASE_URL` is set if using Ollama local.
+- [ ] `CODEX_HOME` is set only if overriding the default local Codex home.
+- [ ] `OPENAI_CODEX_AUTH_FILE` is set only if overriding the default Codex auth file.
+- [ ] `CODEX_MODEL` is set only if overriding Codex CLI default model selection.
 - [ ] `OPENAI_API_KEY` is set only if OpenAI API-key profiles are supported in this deployment.
 - [ ] `ANTHROPIC_API_KEY` is set only if Anthropic API-key profiles are supported in this deployment.
 - [ ] `OPENROUTER_API_KEY` is set only if OpenRouter profiles are supported in this deployment.
@@ -33,7 +36,8 @@ Use this checklist before a local private deployment or hosted/team deployment. 
 - [ ] `NEXTAUTH_URL` matches the local port, for example `http://localhost:3001`.
 - [ ] At least one AI provider is connected and tested in `/setup`.
 - [ ] `/dashboard` shows CEO brain connected or clearly explains setup is required.
-- [ ] ChatGPT/Codex and Claude show honest `not configured` / `not connected` states unless actually connected.
+- [ ] ChatGPT/Codex Local, ChatGPT/Codex OAuth App, OpenAI API key, and Claude show honest `not configured` / `not connected` states unless actually connected.
+- [ ] ChatGPT/Codex Local does not expose local token contents and is not assignable until a real Codex CLI test passes.
 
 ## Hosted / Team Mode
 
@@ -117,7 +121,8 @@ Use this checklist before a local private deployment or hosted/team deployment. 
 - [ ] No SMTP/direct-send path is active without explicit approval and launch readiness.
 - [ ] No auto-post/message/publish path is active.
 - [ ] Playwright sensitive screenshots are skipped.
-- [ ] ChatGPT/Codex connection is not faked when OAuth is unconfigured.
+- [ ] ChatGPT/Codex Local connection is not faked when Codex auth is merely detected/imported but not tested.
+- [ ] ChatGPT/Codex OAuth App connection is not faked when OAuth is unconfigured.
 - [ ] Claude connection is not faked when API/CLI/OAuth is unavailable.
 
 ## Deployment Blockers
