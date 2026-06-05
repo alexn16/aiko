@@ -174,6 +174,11 @@ function getPendingPlaybook(payload: Record<string, unknown> | null): PlaybookPl
   return playbook && typeof playbook === 'object' ? playbook as PlaybookPlanView : null
 }
 
+function actionLabel(actionType: string | null | undefined): string {
+  if (!actionType) return ''
+  return actionType.replace(/_/g, ' ')
+}
+
 export default function OperatorDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [operator, setOperator] = useState<WebOperator | null>(null)
@@ -348,6 +353,14 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
     }
   }
 
+  const latestAction = actions[0]
+  const activePlaybookName = latestAction?.playbook_name ?? getPendingPlaybook(operator?.pending_action_payload ?? null)?.playbook_name ?? null
+  const displayWorkflow = operator?.current_workflow ?? activePlaybookName ?? null
+  const displayGoal = operator?.current_goal
+    ?? operator?.current_task
+    ?? (operator?.pending_action_type ? `Waiting on ${actionLabel(operator.pending_action_type)}` : null)
+    ?? (latestAction?.action_type ? `Latest action: ${actionLabel(latestAction.action_type)}` : null)
+
   return (
     <div style={{ padding: '40px 32px', maxWidth: 900 }}>
       {/* Header */}
@@ -373,15 +386,15 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
             Current workflow
           </div>
           <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }}>
-            {operator.current_workflow ?? 'None'}
+            {displayWorkflow ?? 'None'}
           </div>
         </div>
         <div style={{ ...CARD, marginBottom: 0 }}>
           <div style={{ fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
             Current goal
           </div>
-          <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }} title={operator.current_goal ?? undefined}>
-            {truncate(operator.current_goal, 60) || 'Idle'}
+          <div style={{ fontSize: 13, color: '#0f172a', fontWeight: 500 }} title={displayGoal ?? undefined}>
+            {truncate(displayGoal, 60) || 'Idle'}
           </div>
         </div>
         <div style={{ ...CARD, marginBottom: 0 }}>

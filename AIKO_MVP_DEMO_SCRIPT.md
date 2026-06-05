@@ -35,7 +35,7 @@ Open `/setup`.
 Show:
 - First-run provider connection.
 - Ollama connected if this is the local demo brain.
-- ChatGPT/Codex and Claude connection truth: connected only when OAuth/API/CLI credentials actually work.
+- ChatGPT/Codex and Claude connection truth from `/dashboard` warnings or `/connect-ai`: connected only when OAuth/API/CLI credentials actually work.
 
 Say:
 > AÏKO does not fake provider connections. If ChatGPT or Claude is not configured, the UI says so. Ollama can be used as a local fallback.
@@ -122,7 +122,7 @@ Say:
 In CEO Chat, ask:
 > Generate an executive report for Demo Parking.
 
-Open the project Reports tab or `/reports`.
+Open the project link, then click the project `Reports` tab.
 
 Show:
 - Generated executive report.

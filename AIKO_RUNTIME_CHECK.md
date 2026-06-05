@@ -815,3 +815,45 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 | Storage | ✅ Generated files and screenshots writable. |
 | Safety | ✅ No safety model change; approval remains separate from execution; no WhatsApp/platform capability implemented. |
 | Deployment blockers | ✅ No runtime blocker found. |
+
+---
+
+## MVP Demo Flow Validation — 2026-06-05
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Demo steps
+
+| Step | Page used | Result | What the owner sees |
+|---|---|---|---|
+| 1. Dashboard | `/dashboard` | ✅ Pass | CEO brain connected via Ollama local, setup complete, Auto / Approval Required mode, quick links, active projects/operators, waiting-user count, pending approvals, improvement proposals, owner warnings, smoke checklist, recent files/reports/decisions. |
+| 2. Setup | `/setup` | ✅ Pass with doc correction | Setup shows the resolved CEO brain as `Ollama (local) / llama3.1:8b` and links to CEO Chat, First Campaign, and Connect AI. ChatGPT/Claude honesty is more visible on `/dashboard` and `/connect-ai`, so the demo script now says that explicitly. |
+| 3. CEO Chat hello | `/ceo` | ✅ Pass | `Hello, what are you?` received a CEO identity response. Local Ollama latency was visible; response completed after waiting. |
+| 3. CEO project creation | `/ceo` | ✅ Pass, issue fixed | `Create a marketing project for Demo Parking.` created the project and the First Campaign chip. A runtime inconsistency showed the CEO claiming Mara was assigned while the project chip said `No PM assigned`; fixed by normalizing top-level `assign_pm` into the existing executable `assign_pm` action. |
+| 4. Start Campaign | `/start-campaign?project_id=...` | ✅ Pass | Demo Parking strategy brief, first-campaign launch plan, recommended operator, research/review/draft/approval/resume/reply/trail steps, and safety copy all render. |
+| 5. Web Operator Canva task | `/ceo` | ✅ Pass | `Kevin, open Canva and create a draft Instagram post for Demo Parking.` delegated to Kevin, opened Canva directly, selected the Canva Instagram Draft playbook, then blocked for security/login takeover. No publish/share/download happened. |
+| 6. Operator detail | `/operators/[id]` | ✅ Pass, issue fixed | Current URL `https://www.canva.com/`, latest screenshot, `waiting_user`, `security_checkpoint`, Canva playbook checklist, manual takeover controls, approval/forbidden playbook steps. Summary cards now fall back to the active playbook/action instead of showing `None` / `Idle` while waiting. |
+| 7. Approvals | `/approvals` | ✅ Pass | Approval Center shows pending approval content and clear copy: approving grants internal permission only and does not send external emails or messages. |
+| 8. Executive report | `/ceo`, project `Reports` tab | ✅ Pass with doc correction | CEO generated an executive report for Demo Parking. The project Reports tab shows the executive report and `.md` / `.json` export buttons. The global `/reports` page has its own empty state, so the demo script now directs the owner to the project Reports tab. |
+| 9. Files | `/files` | ✅ Pass | Generated files page shows existing generated artifacts and download buttons. Demo Parking project exports are available from the project Reports tab; project bundle remains `if available`. |
+| 10. System improvements | `/system` | ✅ Pass | Capability map, Self-Improvement Timeline, proposal lifecycle groups, Codex prompt controls, implementation handoff metadata, validation guard state, and safety rules are visible. |
+
+### Issues found/fixed
+
+| Issue | Fix |
+|---|---|
+| Demo script implied ChatGPT/Claude honesty is shown directly on `/setup`; runtime shows it more clearly on `/dashboard` and `/connect-ai`. | Updated `AIKO_MVP_DEMO_SCRIPT.md`. |
+| Demo script allowed `/reports` as a reliable place for the generated project executive report, but runtime showed the global reports empty state. | Updated the demo script and owner manual to direct owners to the project Reports tab for project executive reports. |
+| CEO project creation could mention a PM assignment while no PM row was assigned if the model returned top-level `assign_pm` but omitted the structured `assign_pm` action. | Normalized top-level `assign_pm` into the existing executable action path. |
+| Operator detail summary cards showed `Current workflow: None` and `Current goal: Idle` while the operator was in `waiting_user` on a Canva playbook. | Added display fallbacks from the latest playbook/action so the owner sees the active workflow context. |
+
+### Honest blockers / notes
+
+- Canva reached a security checkpoint and correctly entered `waiting_user`; manual login/security completion was not performed.
+- No Canva publishing, sharing, downloading, posting, messaging, or external send was attempted.
+- ChatGPT/Codex and Claude remained honestly unconnected in local state.
+- Local Ollama responses were slow enough to be visible during the demo.

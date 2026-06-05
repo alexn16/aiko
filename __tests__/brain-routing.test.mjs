@@ -1171,6 +1171,68 @@ test('CEO create_project response shape includes start_campaign_url and launch_t
   assert.equal(other.start_campaign_url, null, 'Non-project intent → no start_campaign_url')
 })
 
+test('CEO create_project normalizes top-level assign_pm into executable action', () => {
+  function normalizeCeoActionsForExecution(parsed) {
+    const actions = Array.isArray(parsed.actions) ? parsed.actions : []
+    if (parsed.intent !== 'create_project') return actions
+
+    const hasAssignAction = actions.some(action => action.type === 'assign_pm')
+    const pmName = typeof parsed.assign_pm === 'string' ? parsed.assign_pm.trim() : ''
+    if (!pmName || pmName === 'null' || hasAssignAction) return actions
+
+    const createAction = actions.find(action => action.type === 'create_project')
+    const projectName = typeof parsed.project_name === 'string' && parsed.project_name.trim()
+      ? parsed.project_name.trim()
+      : typeof createAction?.data?.name === 'string'
+        ? createAction.data.name
+        : ''
+
+    if (!projectName) return actions
+
+    return [
+      ...actions,
+      {
+        type: 'assign_pm',
+        data: {
+          pm_name: pmName,
+          project_name: projectName,
+          focus: 'Prepare project memory and first campaign direction',
+        },
+      },
+    ]
+  }
+
+  const normalized = normalizeCeoActionsForExecution({
+    intent: 'create_project',
+    project_name: 'Demo Parking',
+    assign_pm: 'Mara',
+    actions: [
+      { type: 'create_project', data: { name: 'Demo Parking' } },
+      { type: 'update_company_memory', data: { summary: 'New project' } },
+    ],
+  })
+
+  const assignAction = normalized.find(action => action.type === 'assign_pm')
+  assert.ok(assignAction, 'assign_pm action added from top-level field')
+  assert.deepEqual(assignAction.data, {
+    pm_name: 'Mara',
+    project_name: 'Demo Parking',
+    focus: 'Prepare project memory and first campaign direction',
+  })
+
+  const alreadyExplicit = normalizeCeoActionsForExecution({
+    intent: 'create_project',
+    project_name: 'Demo Parking',
+    assign_pm: 'Mara',
+    actions: [
+      { type: 'create_project', data: { name: 'Demo Parking' } },
+      { type: 'assign_pm', data: { pm_name: 'Kenji', project_name: 'Demo Parking' } },
+    ],
+  })
+
+  assert.equal(alreadyExplicit.filter(action => action.type === 'assign_pm').length, 1)
+})
+
 // ── 48. Strategy brief creation is idempotent ─────────────────────────────────
 
 test('strategy brief creation is idempotent', () => {

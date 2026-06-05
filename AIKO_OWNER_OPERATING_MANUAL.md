@@ -149,6 +149,8 @@ Generate an executive report for Demo Parking.
 
 Open `/reports` or the project Reports tab.
 
+For a project-specific executive report, open the project workspace and click the `Reports` tab. The global `/reports` page has its own reporting empty state and may not show the latest project executive report.
+
 Open `/files` for generated artifacts:
 - Markdown reports.
 - JSON exports.

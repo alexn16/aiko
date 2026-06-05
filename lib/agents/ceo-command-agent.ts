@@ -427,6 +427,39 @@ async function executeActions(
   return resolvedProjectId
 }
 
+export function normalizeCeoActionsForExecution(parsed: Record<string, unknown>): Array<{ type: string; data: Record<string, unknown> }> {
+  const actions = Array.isArray(parsed.actions)
+    ? parsed.actions as Array<{ type: string; data: Record<string, unknown> }>
+    : []
+
+  if (parsed.intent !== 'create_project') return actions
+
+  const hasAssignAction = actions.some(action => action.type === 'assign_pm')
+  const pmName = typeof parsed.assign_pm === 'string' ? parsed.assign_pm.trim() : ''
+  if (!pmName || pmName === 'null' || hasAssignAction) return actions
+
+  const createAction = actions.find(action => action.type === 'create_project')
+  const projectName = typeof parsed.project_name === 'string' && parsed.project_name.trim()
+    ? parsed.project_name.trim()
+    : typeof createAction?.data?.name === 'string'
+      ? createAction.data.name
+      : ''
+
+  if (!projectName) return actions
+
+  return [
+    ...actions,
+    {
+      type: 'assign_pm',
+      data: {
+        pm_name: pmName,
+        project_name: projectName,
+        focus: 'Prepare project memory and first campaign direction',
+      },
+    },
+  ]
+}
+
 // ── Recall intent detection ────────────────────────────────────────────────────
 
 /**
@@ -845,7 +878,7 @@ export async function runCeoCommandAgent(
     }
   }
 
-  const actions = Array.isArray(parsed.actions) ? parsed.actions as Array<{ type: string; data: Record<string, unknown> }> : []
+  const actions = normalizeCeoActionsForExecution(parsed)
   const projectLookup = new Map<string, string>()
 
   const resolvedProjectId = await executeActions(actions, projectLookup)
