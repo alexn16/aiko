@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
+import { AikoBrand } from '@/components/brand/AikoBrand'
 import { CATALOG, type ProviderCatalogEntry } from '@/lib/ai/provider-catalog'
 
 type ProfileStatus = 'connected' | 'not_configured' | 'not_connected' | 'needs_reauth' | 'error' | string
@@ -172,6 +173,9 @@ export default function ConnectAIPage() {
       <AccountBanner sessionUser={session?.user} />
 
       <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 18 }}>
+          <AikoBrand size="md" />
+        </div>
         <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
           OpenClaw-style auth profiles
         </div>

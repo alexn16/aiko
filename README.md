@@ -1,8 +1,18 @@
 # AÏKO — AI Marketing Operating System
 
-AÏKO is a self-hosted, agent-based operating system for marketing execution.
-It coordinates specialized AI agents for lead research, enrichment, copy generation,
-outreach monitoring, qualification, reporting, and strategy — with a mandatory human approval gate before external sends.
+<p>
+  <img src="public/brand/aiko-logo.svg" alt="AÏKO — AI Marketing Operating System" width="420" />
+</p>
+
+**AÏKO is an AI Marketing Operating System: a virtual marketing company with a CEO, agents, Web Operators, approvals, reports, files, and controlled self-improvement.**
+
+![AÏKO dashboard mockup](public/brand/aiko-dashboard-mockup.png)
+
+Quick start: run AÏKO locally, then open [`/setup`](http://localhost:3001/setup) to connect a real CEO brain. This is a local/private MVP by default.
+
+Safety: AÏKO never bypasses login/CAPTCHA/security checks and never sends, posts, publishes, or messages without approval.
+
+AÏKO is a self-hosted, agent-based operating system for marketing execution. It coordinates specialized AI agents for lead research, enrichment, copy generation, outreach monitoring, qualification, reporting, and strategy — with a mandatory human approval gate before external sends.
 
 ## Default interface: CEO Chat
 

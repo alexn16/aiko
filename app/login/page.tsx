@@ -2,6 +2,7 @@
 import { signIn, useSession } from 'next-auth/react'
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { AikoBrand } from '@/components/brand/AikoBrand'
 
 // useSearchParams requires a Suspense boundary in Next.js 14 App Router
 export default function LoginPage() {
@@ -68,12 +69,7 @@ function LoginContent() {
       }}>
         {/* Logo */}
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.04em', marginBottom: 4 }}>
-            AÏKO
-          </div>
-          <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            AI Marketing OS
-          </div>
+          <AikoBrand size="md" />
         </div>
 
         <h1 style={{ fontSize: 17, fontWeight: 600, color: '#0f172a', margin: '0 0 8px', letterSpacing: '-0.02em' }}>

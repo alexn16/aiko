@@ -1,0 +1,27 @@
+<svg width="760" height="220" viewBox="0 0 760 220" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AÏKO logo</title>
+  <desc id="desc">AÏKO logo mark and wordmark for the AI Marketing Operating System.</desc>
+  <defs>
+    <linearGradient id="aiko-logo-gradient" x1="52" y1="181" x2="185" y2="41" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.48" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="aiko-logo-text-gradient" x1="214" y1="145" x2="515" y2="20" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.48" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="aiko-logo-orb" x1="92" y1="154" x2="148" y2="102" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#A5F3FC"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="184" height="184" rx="44" fill="#07111F"/>
+  <path d="M62 169L103.8 47.6C108.4 34.3 127.3 34 132.3 47.1L177 169H143.6L134.1 139.4H90.5L81 169H62Z" fill="url(#aiko-logo-gradient)"/>
+  <path d="M75 169L104.1 78.2C109 63.1 130.3 62.9 135.4 78L166 169" stroke="url(#aiko-logo-gradient)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M91 124H139" stroke="#7DD3FC" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="110" cy="156" r="14" fill="url(#aiko-logo-orb)"/>
+  <text x="230" y="114" fill="url(#aiko-logo-text-gradient)" font-family="Inter, Arial, sans-serif" font-size="82" font-weight="800" letter-spacing="-4">AÏKO</text>
+  <text x="234" y="154" fill="#64748B" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="3.4">AI MARKETING OPERATING SYSTEM</text>
+</svg>

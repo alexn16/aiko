@@ -1,0 +1,25 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AÏKO mark</title>
+  <desc id="desc">A stylized A shape with a blue and cyan gradient orb.</desc>
+  <defs>
+    <linearGradient id="aiko-mark-gradient" x1="54" y1="220" x2="209" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.46" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="aiko-orb-gradient" x1="92" y1="178" x2="152" y2="116" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#A5F3FC"/>
+    </linearGradient>
+    <filter id="aiko-glow" x="18" y="18" width="220" height="220" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="#07111F"/>
+  <path d="M70 207L119.4 55.7C124.1 41.2 144.6 41 149.8 55.2L204 207H164.2L152.8 171.4H98.8L87.6 207H70Z" fill="url(#aiko-mark-gradient)"/>
+  <path d="M111.2 137.8H141.4L127.6 92.6L111.2 137.8Z" fill="#07111F"/>
+  <path d="M61 207L118.8 55.6C123.9 42.2 142.9 41.8 148.6 55.6L210 207" stroke="url(#aiko-mark-gradient)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M90.5 154H159.5" stroke="#7DD3FC" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="128" cy="184" r="19" fill="url(#aiko-orb-gradient)"/>
+  <circle cx="128" cy="184" r="32" fill="#22D3EE" opacity="0.2" filter="url(#aiko-glow)"/>
+</svg>

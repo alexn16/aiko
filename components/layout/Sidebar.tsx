@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SidebarModeIndicator } from '@/components/mode/SidebarModeIndicator'
+import { AikoBrand } from '@/components/brand/AikoBrand'
 
 const CEO_ITEMS = [
   { href: '/ceo',              label: 'CEO' },
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/agents',     label: 'Agents' },
   { href: '/files',      label: 'Files' },
   { href: '/functions',  label: 'Functions' },
+  { href: '/brand',      label: 'Brand' },
   { href: '/mode',       label: 'Operating Mode' },
   { href: '/system',     label: 'System' },
   { href: '/settings',   label: 'Settings' },
@@ -75,18 +77,7 @@ export function Sidebar() {
     }}>
       {/* Logo */}
       <div style={{ padding: '22px 20px 18px' }}>
-        <div style={{
-          fontSize: 17,
-          fontWeight: 700,
-          color: '#0f172a',
-          letterSpacing: '-0.03em',
-          lineHeight: 1,
-        }}>
-          AÏKO
-        </div>
-        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3, fontWeight: 400 }}>
-          AI Marketing OS
-        </div>
+        <AikoBrand size="sm" />
       </div>
 
       <div style={{ height: 1, background: '#f1f5f9', margin: '0 0 8px' }} />

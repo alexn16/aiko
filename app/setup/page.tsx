@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { AikoBrand } from '@/components/brand/AikoBrand'
 import { CATALOG, type ProviderCatalogEntry } from '@/lib/ai/provider-catalog'
 
 type SetupState = {
@@ -184,7 +185,10 @@ export default function SetupPage() {
     <main style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#f8fafc,#eef2ff)', padding: '42px 20px', color: '#0f172a' }}>
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
         <header style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.14em', color: '#6366f1', textTransform: 'uppercase' }}>AÏKO Setup</div>
+          <div style={{ marginBottom: 18 }}>
+            <AikoBrand size="md" />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.14em', color: '#6366f1', textTransform: 'uppercase' }}>Setup</div>
           <h1 style={{ fontSize: 42, lineHeight: 1.05, letterSpacing: '-0.05em', margin: '8px 0' }}>Connect an AI brain to start.</h1>
           <p style={{ fontSize: 15, color: '#64748b', maxWidth: 760, lineHeight: 1.7 }}>
             Choose a provider, test the auth profile, assign it to the CEO brain, then enter AÏKO. Google login is optional identity in local mode; provider auth is separate.

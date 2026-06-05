@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { AgentGrid } from '@/components/agents/AgentGrid'
 import { ActivityFeed } from '@/components/agents/ActivityFeed'
+import { AikoBrand } from '@/components/brand/AikoBrand'
 import { Card } from '@/components/ui/Card'
 import { Agent, AgentLog } from '@/lib/db/schema'
 
@@ -184,6 +185,9 @@ export default function DashboardPage() {
     <div style={{ padding: '34px 32px 48px', maxWidth: 1180, margin: '0 auto' }} className="page-enter">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
+          <div style={{ marginBottom: 14 }}>
+            <AikoBrand size="md" />
+          </div>
           <h1 style={{ fontSize: 22, fontWeight: 750, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
             AÏKO MVP Dashboard
           </h1>

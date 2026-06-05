@@ -1,0 +1,13 @@
+<svg width="520" height="140" viewBox="0 0 520 140" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AÏKO wordmark</title>
+  <desc id="desc">AÏKO wordmark with AI Marketing Operating System subtitle.</desc>
+  <defs>
+    <linearGradient id="aiko-wordmark-gradient" x1="0" y1="124" x2="400" y2="-36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D4ED8"/>
+      <stop offset="0.55" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <text x="0" y="82" fill="url(#aiko-wordmark-gradient)" font-family="Inter, Arial, sans-serif" font-size="80" font-weight="800" letter-spacing="-4">AÏKO</text>
+  <text x="4" y="118" fill="#64748B" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="3">AI MARKETING OPERATING SYSTEM</text>
+</svg>
