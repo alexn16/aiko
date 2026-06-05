@@ -718,3 +718,11 @@ AÏKO now has a minimalist Project Autopilot marketing path for commands such as
 Main-flow copy is simplified: manual takeover says `Kevin needs your help. Complete this in the browser, then click Resume.` Approval says `Kevin needs approval before doing this.` Read-only mode and browser-runtime errors now use owner-facing copy.
 
 Runtime headed validation confirmed `/home` renders after a fresh dev restart, `Start marketing for ALB Parking.` resolves to the ALB Parking project instead of the latest active project, `Promote AÏKO.` uses AÏKO-specific public targets, and login/security walls pause with the simplified Resume guidance. No fake leads or external posting/sending actions were created.
+
+### Approval And Manual Takeover UX Simplification — 2026-06-05
+
+The main owner-facing attention flow is now reduced to one clear decision at a time. `/home` shows a single **Needs your attention** card: manual help says `Kevin needs your help` with `Complete this in the browser, then click Resume.`, approval says `Approval needed` with `Kevin needs approval before doing this.`, and the clear state says `All clear` / `AÏKO is ready.`
+
+`/approvals` now defaults to plain approval cards with a human-readable action title, project, risk sentence, Approve / Reject controls, and `View details`. Raw approval content and metadata are hidden by default. The page repeats the safety rule: `Approving does not execute automatically. Resume is still explicit.`
+
+`/operators` and `/operators/[id]` now put the current human state first and hide profile keys, waiting reasons, action IDs, skill/playbook internals, task payloads, and verbose action tables behind Advanced. Runtime validation confirmed Canva security pauses produce the simplified manual-help state, Facebook posting creates an approval without execution, and no post/send/message/publish/share/download action runs automatically.

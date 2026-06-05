@@ -32,6 +32,15 @@ type Action = {
   created_at: string
 }
 
+type ApprovalItem = {
+  id: string
+  title: string
+  content?: string
+  status: string
+  project_name?: string | null
+  item_type?: string
+}
+
 type CommandResult = {
   response?: string
   intent?: string
@@ -104,6 +113,7 @@ export default function HomePage() {
   const [projectId, setProjectId] = useState('')
   const [operators, setOperators] = useState<Operator[]>([])
   const [actions, setActions] = useState<Action[]>([])
+  const [approvalItems, setApprovalItems] = useState<ApprovalItem[]>([])
   const [pendingApprovals, setPendingApprovals] = useState(0)
   const [command, setCommand] = useState('')
   const [loading, setLoading] = useState(false)
@@ -119,6 +129,22 @@ export default function HomePage() {
     [operators],
   )
   const live = simpleStatus(activeOperator, pendingApprovals)
+  const waitingOperator = operators.find(op => op.status === 'waiting_user' || op.status === 'ready_to_resume') ?? null
+  const pendingApproval = approvalItems.find(item => item.status === 'pending') ?? null
+  const attentionState = waitingOperator
+    ? 'manual'
+    : pendingApproval
+      ? 'approval'
+      : 'clear'
+
+  async function updateApproval(id: string, status: 'approved' | 'rejected') {
+    await fetch(`/api/approval-items/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    await refresh()
+  }
 
   async function refresh() {
     const [projectRes, operatorRes, actionRes, approvalRes] = await Promise.all([
@@ -143,7 +169,9 @@ export default function HomePage() {
     }
     if (approvalRes.ok) {
       const data = await approvalRes.json()
-      setPendingApprovals(((data.items ?? []) as Array<{ status: string }>).filter(item => item.status === 'pending').length)
+      const rows = (data.items ?? []) as ApprovalItem[]
+      setApprovalItems(rows)
+      setPendingApprovals(rows.filter(item => item.status === 'pending').length)
     }
   }
 
@@ -274,41 +302,65 @@ export default function HomePage() {
           <aside style={cardStyle}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Live work</div>
-                <div style={{ color: live.tone, fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-                  {loading ? liveLabel : live.label}
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Needs your attention</div>
+                <div style={{ color: attentionState === 'clear' ? '#059669' : '#d97706', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+                  {attentionState === 'manual' ? 'Kevin needs your help' : attentionState === 'approval' ? 'Approval needed' : 'All clear'}
                 </div>
               </div>
-              {activeOperator?.id && (
-                <Link href={`/operators/${activeOperator.id}`} style={{ color: '#2563eb', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>
-                  View details
-                </Link>
-              )}
             </div>
             <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.6 }}>
-              {loading ? 'AÏKO is thinking, then Kevin will use the browser if the task needs web research.' : live.message}
+              {loading
+                ? 'AÏKO is thinking.'
+                : attentionState === 'manual'
+                  ? 'Complete this in the browser, then click Resume.'
+                  : attentionState === 'approval'
+                    ? 'Kevin needs approval before doing this.'
+                    : 'AÏKO is ready.'}
             </p>
-            {activeOperator?.current_url && (
-              <div style={{ fontSize: 12, color: '#64748b', wordBreak: 'break-all' }}>
-                Current website: <b>{activeOperator.current_url}</b>
-              </div>
-            )}
-            {activeOperator?.latest_screenshot && (
+            {waitingOperator?.latest_screenshot && (
               <img
-                src={activeOperator.latest_screenshot}
+                src={waitingOperator.latest_screenshot}
                 alt="Latest browser screenshot"
                 style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
               />
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-              {activeOperator?.id && (
-                <Link href={`/operators/${activeOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+              {attentionState === 'manual' && waitingOperator?.id && (
+                <>
+                <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
                   Open browser
                 </Link>
+                <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                  Resume
+                </Link>
+                </>
               )}
-              <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                Approvals
-              </Link>
+              {attentionState === 'approval' && pendingApproval && (
+                <>
+                  <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                    Review
+                  </Link>
+                  <button onClick={() => updateApproval(pendingApproval.id, 'approved')} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
+                    Approve
+                  </button>
+                  <button onClick={() => updateApproval(pendingApproval.id, 'rejected')} style={{ ...buttonStyle, background: '#fef2f2', borderColor: '#fecaca', color: '#b91c1c', padding: '8px 10px', textAlign: 'center' }}>
+                    Reject
+                  </button>
+                </>
+              )}
+              <details style={{ width: '100%', marginTop: 4 }}>
+                <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
+                  Advanced
+                </summary>
+                <div style={{ marginTop: 10, fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+                  <div>Live work: <b>{loading ? liveLabel : live.label}</b></div>
+                  {activeOperator?.current_url && <div style={{ wordBreak: 'break-all' }}>Website: {activeOperator.current_url}</div>}
+                  {pendingApproval && <div>Approval: {pendingApproval.title}</div>}
+                  <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 11 }}>
+                    {JSON.stringify({ activeOperator, pendingApproval, latestActions: actions.slice(0, 3) }, null, 2)}
+                  </pre>
+                </div>
+              </details>
             </div>
           </aside>
         </div>
@@ -362,7 +414,7 @@ export default function HomePage() {
 
         <section style={{ ...cardStyle, marginTop: 18 }}>
           <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>
-            Attention
+            Status overview
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
             {[

@@ -69,6 +69,25 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+function plainApprovalReason(item: ApprovalItem): string {
+  if (item.item_type === 'web_operator_action') return 'Kevin needs approval before doing this.'
+  if (/post|send|message|publish|share|download/i.test(`${item.title} ${item.content}`)) {
+    return 'Kevin needs approval before doing this.'
+  }
+  return 'Review this before AÏKO uses it.'
+}
+
+function plainApprovalTitle(item: ApprovalItem): string {
+  const source = `${item.title} ${item.content}`
+  if (/facebook/i.test(source) && /post|publish/i.test(source)) return 'Prepare Facebook post draft'
+  if (/facebook/i.test(source) && /message/i.test(source)) return 'Prepare Facebook message draft'
+  if (/gmail|email/i.test(source) && /send/i.test(source)) return 'Prepare email draft'
+  if (/canva/i.test(source) && /download|share|publish/i.test(source)) return 'Use Canva draft externally'
+  if (/post|publish/i.test(source)) return 'Prepare public post draft'
+  if (/send|message/i.test(source)) return 'Prepare message draft'
+  return item.title
+}
+
 // ── AddToCampaignButton ────────────────────────────────────────────────────────
 
 function AddToCampaignButton({ item, projects }: { item: ApprovalItem; projects: Project[] }) {
@@ -313,6 +332,8 @@ function ApprovalCard({
 
   const badge = STATUS_BADGE[item.status] ?? STATUS_BADGE.archived
   const isPending = item.status === 'pending'
+  const plainReason = plainApprovalReason(item)
+  const displayTitle = plainApprovalTitle(item)
 
   async function handleApprove() {
     setLoading(true)
@@ -349,8 +370,8 @@ function ApprovalCard({
       {/* Top row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>
-            {item.title}
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+            {displayTitle}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{
@@ -358,12 +379,6 @@ function ApprovalCard({
               fontSize: 10, fontWeight: 600, borderRadius: 4, padding: '2px 7px',
             }}>
               {item.status.replace(/_/g, ' ')}
-            </span>
-            <span style={{
-              fontSize: 10, fontWeight: 500, borderRadius: 4, padding: '2px 7px',
-              background: '#f0f9ff', color: '#0369a1',
-            }}>
-              {item.item_type.replace(/_/g, ' ')}
             </span>
           </div>
         </div>
@@ -377,50 +392,14 @@ function ApprovalCard({
             {item.project_name}
           </span>
         )}
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>
-          by {item.requested_by_role}
-        </span>
       </div>
 
-      {/* Content preview / expanded */}
-      {!expanded ? (
-        <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, marginBottom: 10 }}>
-          {item.content.slice(0, 150)}{item.content.length > 150 ? '…' : ''}
-        </div>
-      ) : (
-        <div style={{ marginBottom: 10 }}>
-          {isPending ? (
-            <textarea
-              value={editedContent}
-              onChange={e => setEditedContent(e.target.value)}
-              style={{
-                width: '100%', minHeight: 120, fontSize: 12, color: '#374151',
-                lineHeight: 1.6, padding: '10px 12px', borderRadius: 6,
-                border: '1px solid #e2e8f0', background: '#fafafa',
-                resize: 'vertical', outline: 'none', boxSizing: 'border-box',
-              }}
-            />
-          ) : (
-            <div style={{
-              fontSize: 12, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap',
-              background: '#fafafa', padding: '10px 12px', borderRadius: 6,
-              border: '1px solid #f1f5f9',
-            }}>
-              {item.content}
-            </div>
-          )}
-        </div>
-      )}
-
-      <button
-        onClick={() => setExpanded(e => !e)}
-        style={{
-          fontSize: 11, color: '#6366f1', background: 'none', border: 'none',
-          cursor: 'pointer', padding: 0, marginBottom: 10,
-        }}
-      >
-        {expanded ? 'Hide content' : 'View full content'}
-      </button>
+      <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.5, marginBottom: 8 }}>
+        {plainReason}
+      </div>
+      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 10 }}>
+        Approving does not execute automatically. Resume is still explicit.
+      </div>
 
       {/* Approved/rejected info */}
       {(item.status === 'approved' || item.status === 'rejected' || item.status === 'changes_requested') && item.reviewed_at && (
@@ -471,17 +450,6 @@ function ApprovalCard({
               Approve
             </button>
             <button
-              onClick={handleChanges}
-              disabled={loading}
-              style={{
-                fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 6,
-                border: '1px solid #e2e8f0', background: '#f3e8ff', color: '#7c3aed', cursor: 'pointer',
-                opacity: loading ? 0.6 : 1,
-              }}
-            >
-              {showNoteInput ? 'Send changes request' : 'Request changes'}
-            </button>
-            <button
               onClick={handleReject}
               disabled={loading}
               style={{
@@ -493,23 +461,95 @@ function ApprovalCard({
               Reject
             </button>
           </div>
-          <div style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>
-            Approving grants internal permission only — no external emails or messages are sent.
-          </div>
-          {showNoteInput && (
-            <input
-              autoFocus
-              value={noteInput}
-              onChange={e => setNoteInput(e.target.value)}
-              placeholder="Describe the changes needed…"
-              style={{
-                fontSize: 12, padding: '7px 10px', borderRadius: 6,
-                border: '1px solid #e2e8f0', outline: 'none', color: '#374151',
-              }}
-            />
-          )}
         </div>
       )}
+
+      <details
+        open={expanded}
+        onToggle={event => setExpanded(event.currentTarget.open)}
+        style={{ marginTop: 12 }}
+      >
+        <summary style={{ cursor: 'pointer', color: '#6366f1', fontSize: 11, fontWeight: 700 }}>
+          View details
+        </summary>
+        <div style={{ marginTop: 10 }}>
+          {isPending ? (
+            <textarea
+              value={editedContent}
+              onChange={e => setEditedContent(e.target.value)}
+              style={{
+                width: '100%', minHeight: 120, fontSize: 12, color: '#374151',
+                lineHeight: 1.6, padding: '10px 12px', borderRadius: 6,
+                border: '1px solid #e2e8f0', background: '#fafafa',
+                resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          ) : (
+            <div style={{
+              fontSize: 12, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap',
+              background: '#fafafa', padding: '10px 12px', borderRadius: 6,
+              border: '1px solid #f1f5f9',
+            }}>
+              {item.content}
+            </div>
+          )}
+          <pre style={{
+            overflow: 'auto',
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: 8,
+            padding: 10,
+            fontSize: 10,
+            color: '#475569',
+            marginTop: 10,
+          }}>
+            {JSON.stringify({
+              id: item.id,
+              item_type: item.item_type,
+              requested_by_role: item.requested_by_role,
+              output_id: item.output_id,
+              task_id: item.task_id,
+              status: item.status,
+              decision_reason: item.decision_reason,
+            }, null, 2)}
+          </pre>
+          {isPending && (
+            <div style={{ marginTop: 10 }}>
+              {showNoteInput && (
+                <input
+                  autoFocus
+                  value={noteInput}
+                  onChange={e => setNoteInput(e.target.value)}
+                  placeholder="Describe the changes needed…"
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    fontSize: 12,
+                    padding: '7px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    outline: 'none',
+                    color: '#374151',
+                    marginBottom: 8,
+                  }}
+                />
+              )}
+              <button
+                onClick={handleChanges}
+                disabled={loading}
+                style={{
+                  fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 6,
+                  border: '1px solid #e2e8f0', background: '#f3e8ff', color: '#7c3aed', cursor: 'pointer',
+                  opacity: loading ? 0.6 : 1,
+                }}
+              >
+                {showNoteInput ? 'Send changes request' : 'Request changes'}
+              </button>
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   )
 }
@@ -600,8 +640,7 @@ export default function ApprovalsPage() {
       }}>
         <span style={{ fontSize: 14 }}>&#128274;</span>
         <span>
-          Approving an item gives AÏKO permission to use it in the next step.
-          It does <strong>not</strong> send external emails or messages.
+          Approving does not execute automatically. Resume is still explicit.
         </span>
       </div>
 

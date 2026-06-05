@@ -9,6 +9,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 
 // ── 1. No provider → callAI throws a clear error ─────────────────────────────
 
@@ -3212,10 +3213,8 @@ test('150. CEO copy includes playbook and manual takeover language', () => {
     playbookId: 'facebook_group_research',
     playbookName: 'Facebook Group Research',
   })
-  assert.match(copy, /Facebook Group Research playbook/)
   assert.match(copy, /open Facebook directly/)
-  assert.match(copy, /pause if login\/security appears/)
-  assert.match(copy, /ask approval before joining, posting, commenting, or messaging/)
+  assert.match(copy, /stop before any external action/)
 })
 
 test('151. Playbook action creates step rows', () => {
@@ -3408,9 +3407,9 @@ function listStepsRedactedTest(steps) {
 
 function buildPlaybookCopyTest(operatorName, result) {
   if (result.playbookId === 'facebook_group_research') {
-    return `${operatorName} will use the Facebook Group Research playbook. They will open Facebook directly, pause if login/security appears, read visible group results, and ask approval before joining, posting, commenting, or messaging.`
+    return `${operatorName} will open Facebook directly and stop before any external action.`
   }
-  return `${operatorName} will use the ${result.playbookName} playbook.`
+  return `${operatorName} will use the ${result.playbookName} playbook. If login or CAPTCHA appears, ${operatorName} will pause.`
 }
 
 // ── Tests 114–120: Lead discovery workflow ────────────────────────────────────
@@ -3704,8 +3703,11 @@ test('130. URL instructions route to website_reader instead of unknown-site prop
 test('130b. Web Operator network failures use owner-facing copy', () => {
   function buildDelegationFailureMessage(rawError) {
     const clean = rawError.replace(/\u001b\[[0-9;]*m/g, '')
+    if (/skill blocked|forbidden|not allowed/i.test(clean)) {
+      return 'AÏKO cannot do this safely.'
+    }
     if (clean.includes("Executable doesn't exist") || clean.includes('browserType.launch')) {
-      return 'Browser runtime is missing. Run: npx playwright install chromium'
+      return 'Browser runtime is missing. Run: npx playwright install chromium.'
     }
     if (clean.includes('net::ERR_NAME_NOT_RESOLVED')) {
       return 'The Web Operator could not resolve that website address. Check the URL or network connection, then try again.'
@@ -4552,7 +4554,7 @@ test('195. autopilot does not fake leads when research returns zero results', ()
   function summarize(opportunities) {
     return opportunities.length > 0
       ? `${opportunities.length} opportunities found.`
-      : 'Research finished, but no useful results were extracted. Try a more specific target or let Kevin open websites directly.'
+      : 'Research finished, but no useful results were extracted.'
   }
   const opportunities = []
   const leadCandidates = opportunities.filter(o => o.company_name && o.source_url)
@@ -4580,4 +4582,62 @@ test('197. autopilot extracts punctuated project names', () => {
 
   assert.equal(extractProjectNameFromCommand('Start marketing for ALB Parking.'), 'ALB Parking')
   assert.equal(extractProjectNameFromCommand('Find customers for Demo Parking?'), 'Demo Parking')
+})
+
+test('198. /home attention card shows waiting_user as simple help message', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('Needs your attention'))
+  assert.ok(source.includes('Kevin needs your help'))
+  assert.ok(source.includes('Complete this in the browser, then click Resume.'))
+  assert.ok(source.includes('Open browser'))
+  assert.ok(source.includes('Resume'))
+  assert.ok(source.includes('Advanced'))
+})
+
+test('199. pending approval appears as simple approval message', () => {
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  const approvals = fs.readFileSync('app/(dashboard)/approvals/page.tsx', 'utf8')
+  assert.ok(home.includes('Approval needed'))
+  assert.ok(home.includes('Kevin needs approval before doing this.'))
+  assert.ok(approvals.includes('Kevin needs approval before doing this.'))
+  assert.ok(approvals.includes('Approving does not execute automatically. Resume is still explicit.'))
+})
+
+test('200. /approvals hides raw content and metadata behind details by default', () => {
+  const source = fs.readFileSync('app/(dashboard)/approvals/page.tsx', 'utf8')
+  const detailsIndex = source.indexOf('<details')
+  const textareaIndex = source.indexOf('<textarea')
+  const metadataIndex = source.indexOf('decision_reason: item.decision_reason')
+  assert.ok(detailsIndex > -1, 'details toggle exists')
+  assert.ok(textareaIndex > detailsIndex, 'editable raw content is inside details')
+  assert.ok(metadataIndex > detailsIndex, 'metadata JSON is inside details')
+  assert.ok(source.includes('View details'))
+})
+
+test('201. /operators detail hides technical JSON by default', () => {
+  const source = fs.readFileSync('app/(dashboard)/operators/[id]/page.tsx', 'utf8')
+  const mainStateIndex = source.indexOf('operatorMainState')
+  const advancedIndex = source.indexOf('<details style={CARD}>')
+  const payloadIndex = source.indexOf('JSON.stringify(operator.pending_action_payload)')
+  const playbookIdIndex = source.indexOf('currentPlaybook.playbook_id')
+  assert.ok(mainStateIndex > -1, 'simple state helper exists')
+  assert.ok(advancedIndex > -1, 'advanced toggle exists')
+  assert.ok(payloadIndex > advancedIndex, 'pending payload is in advanced section')
+  assert.ok(playbookIdIndex > advancedIndex, 'playbook id is in advanced section')
+})
+
+test('202. forbidden actions use simple safety copy', () => {
+  function buildDelegationFailureMessage(rawError) {
+    if (/skill blocked|forbidden|not allowed/i.test(rawError)) return 'AÏKO cannot do this safely.'
+    return rawError
+  }
+  assert.equal(buildDelegationFailureMessage('Skill blocked this action: post is forbidden'), 'AÏKO cannot do this safely.')
+})
+
+test('203. approval and resume safety rules remain explicit', () => {
+  const approvalRoute = fs.readFileSync('app/api/web-operator/approve-action/route.ts', 'utf8')
+  const resumeRoute = fs.readFileSync('app/api/web-operator/actions/[id]/resume/route.ts', 'utf8')
+  assert.ok(approvalRoute.includes('approval ≠ execution') || approvalRoute.includes('approval !== execution') || approvalRoute.includes('Resume is always an explicit separate step'))
+  assert.ok(resumeRoute.includes("approval_status !== 'approved'"))
+  assert.ok(resumeRoute.includes('canPerformAction'))
 })

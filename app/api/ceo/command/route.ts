@@ -44,22 +44,22 @@ function playbookDelegationCopy(operatorName: string, result: DelegationResult):
     const directCopy = ['Facebook', 'LinkedIn', 'Instagram', 'Canva', 'Gmail'].includes(siteName)
       ? `${operatorName} will open ${siteName} directly in their browser session.`
       : `${operatorName} will open the site in their browser session.`
-    return `${directCopy} If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+    return `${directCopy} If login or CAPTCHA appears, ${operatorName} will pause.`
   }
 
   if (result.playbookId === 'facebook_group_research') {
-    return `${operatorName} will use the Facebook Group Research playbook. They will open Facebook directly, pause if login/security appears, read visible group results, and ask approval before joining, posting, commenting, or messaging.`
+    return `${operatorName} will open Facebook directly and stop before any external action.`
   }
   if (result.playbookId === 'canva_instagram_draft') {
-    return `${operatorName} will use the Canva Instagram Draft playbook. They will open Canva directly, pause if login/security appears, create only a safe draft, and ask approval before publishing, sharing, or downloading final assets.`
+    return `${operatorName} will open Canva directly and prepare a safe draft. Kevin needs approval before publishing, sharing, or downloading.`
   }
   if (result.playbookId === 'gmail_prepare_draft') {
-    return `${operatorName} will use the Gmail Prepare Draft playbook. They will open Gmail directly, pause if login/security appears, prepare a draft, and ask approval before sending.`
+    return `${operatorName} will open Gmail directly and prepare a draft. Kevin needs approval before sending.`
   }
   if (result.playbookId === 'gmail_open_and_check') {
-    return `${operatorName} will use the Gmail Open and Check playbook. They will open Gmail directly, pause if login/security appears, and only read visible mail context requested by you.`
+    return `${operatorName} will open Gmail directly. If login or CAPTCHA appears, ${operatorName} will pause.`
   }
-  return `${operatorName} will use the ${result.playbookName} playbook. If a login, CAPTCHA, or security check appears, they will pause and ask you to take over — they will not bypass it automatically.`
+  return `${operatorName} will use the ${result.playbookName} playbook. If login or CAPTCHA appears, ${operatorName} will pause.`
 }
 
 function isStrategyExecutionPlannerIntent(command: string): boolean {

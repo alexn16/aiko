@@ -178,6 +178,35 @@ function actionLabel(actionType: string | null | undefined): string {
   return actionType.replace(/_/g, ' ')
 }
 
+function operatorMainState(operator: WebOperator): { title: string; message: string; tone: string } {
+  if (operator.requires_user_input || operator.status === 'waiting_user') {
+    return {
+      title: `${operator.name} is waiting for you`,
+      message: 'Complete the login, CAPTCHA, or security check in the browser, then click Resume.',
+      tone: '#d97706',
+    }
+  }
+  if (operator.status === 'working') {
+    return {
+      title: `${operator.name} is working`,
+      message: operator.current_task ?? 'Kevin is using the browser.',
+      tone: '#2563eb',
+    }
+  }
+  if (operator.status === 'waiting_approval') {
+    return {
+      title: 'Approval needed',
+      message: 'Kevin needs approval before doing this.',
+      tone: '#d97706',
+    }
+  }
+  return {
+    title: `${operator.name} is idle`,
+    message: 'AÏKO is ready.',
+    tone: '#059669',
+  }
+}
+
 export default function OperatorDetailPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [operator, setOperator] = useState<WebOperator | null>(null)
@@ -359,6 +388,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
     ?? operator?.current_task
     ?? (operator?.pending_action_type ? `Waiting on ${actionLabel(operator.pending_action_type)}` : null)
     ?? (latestAction?.action_type ? `Latest action: ${actionLabel(latestAction.action_type)}` : null)
+  const mainState = operatorMainState(operator)
 
   return (
     <div style={{ padding: '40px 32px', maxWidth: 900 }}>
@@ -378,8 +408,66 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         </div>
       </div>
 
+      <div style={{ ...CARD, border: `1px solid ${mainState.tone}35`, background: `${mainState.tone}10` }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: mainState.tone, marginBottom: 6 }}>
+          {mainState.title}
+        </div>
+        <div style={{ fontSize: 14, color: '#334155', lineHeight: 1.6, marginBottom: 12 }}>
+          {mainState.message}
+        </div>
+        {operator.current_url && (
+          <div style={{ fontSize: 12, color: '#475569', marginBottom: 12, wordBreak: 'break-all' }}>
+            Website: <a href={operator.current_url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb' }}>{operator.current_url}</a>
+          </div>
+        )}
+        {currentExecutionStep && (
+          <div style={{ fontSize: 12, color: '#475569', marginBottom: 12 }}>
+            Current step: <b>{currentExecutionStep.title}</b>
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {operator.current_url && (
+            <a href={operator.current_url} target="_blank" rel="noopener noreferrer" style={{ ...BTN, textDecoration: 'none' }}>
+              Open browser
+            </a>
+          )}
+          {(operator.requires_user_input || operator.status === 'waiting_user') && (
+            <>
+              <button
+                onClick={() => doAction('mark_user_controlling')}
+                disabled={actionLoading === 'mark_user_controlling'}
+                style={actionLoading === 'mark_user_controlling' ? BTN_LOADING : BTN}
+              >
+                {actionLoading === 'mark_user_controlling' ? 'Updating…' : 'I’m taking over'}
+              </button>
+              <button
+                onClick={() => doAction('mark_login_completed')}
+                disabled={actionLoading === 'mark_login_completed'}
+                style={actionLoading === 'mark_login_completed' ? BTN_LOADING : {
+                  ...BTN,
+                  background: '#0f172a',
+                  color: '#ffffff',
+                  border: '1px solid #0f172a',
+                }}
+              >
+                {actionLoading === 'mark_login_completed' ? 'Checking…' : 'Resume'}
+              </button>
+            </>
+          )}
+          {operator.status === 'waiting_approval' && (
+            <Link href="/approvals" style={{ ...BTN, textDecoration: 'none' }}>
+              Review approval
+            </Link>
+          )}
+        </div>
+      </div>
+
       {/* Status cards row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+      <details style={CARD}>
+        <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
+          Advanced
+        </summary>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
         <div style={{ ...CARD, marginBottom: 0 }}>
           <div style={{ fontSize: 9, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
             Current workflow
@@ -414,62 +502,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
           )}
         </div>
       </div>
-
-      {/* Waiting state banner — CAPTCHA / login / security checkpoint */}
-      {operator.requires_user_input && (
-        <div style={{
-          background: '#fffbeb',
-          border: '2px solid #f59e0b',
-          borderRadius: 10,
-          padding: '18px 20px',
-          marginBottom: 16,
-        }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
-            ⚠ {operator.name} needs your help
-          </div>
-          <div style={{ fontSize: 13, color: '#78350f', marginBottom: 4, lineHeight: 1.5 }}>
-            {waitingReasonLabel(operator.waiting_reason)}
-          </div>
-          {operator.current_url && (
-            <div style={{ fontSize: 11, color: '#b45309', marginBottom: 12, fontFamily: 'DM Mono, monospace' }}>
-              Currently at: <a href={operator.current_url} target="_blank" rel="noopener noreferrer"
-                style={{ color: '#b45309' }}>{operator.current_url.slice(0, 80)}</a>
-            </div>
-          )}
-          <div style={{ fontSize: 12, color: '#92400e', marginBottom: 14, lineHeight: 1.6 }}>
-            {!browserHeadless
-              ? 'Complete the action in the browser window, then click Resume.'
-              : 'The browser is running in headless mode. Restart with WEB_OPERATOR_HEADLESS=false to see and interact with it, then click Resume.'}
-          </div>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button
-              onClick={() => doAction('mark_login_completed')}
-              disabled={actionLoading === 'mark_login_completed'}
-              style={actionLoading === 'mark_login_completed' ? BTN_LOADING : {
-                ...BTN,
-                background: '#f59e0b',
-                color: '#ffffff',
-                border: '1px solid #f59e0b',
-                fontWeight: 700,
-              }}
-            >
-              {actionLoading === 'mark_login_completed' ? 'Checking…' : 'Resume'}
-            </button>
-            <button
-              onClick={() => doAction('mark_user_controlling')}
-              disabled={actionLoading === 'mark_user_controlling'}
-              style={actionLoading === 'mark_user_controlling' ? BTN_LOADING : {
-                ...BTN,
-                background: '#8b5cf6',
-                color: '#ffffff',
-                border: '1px solid #8b5cf6',
-              }}
-            >
-              {actionLoading === 'mark_user_controlling' ? 'Updating…' : 'I\'m taking over'}
-            </button>
-          </div>
-        </div>
-      )}
+      </details>
 
       {/* Feedback message */}
       {feedback && (
@@ -501,6 +534,11 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         </div>
       )}
 
+      <details style={CARD}>
+        <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
+          Advanced
+        </summary>
+        <div style={{ marginTop: 14 }}>
       {/* Current playbook */}
       {currentPlaybook && (
         <div style={CARD}>
@@ -829,6 +867,8 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
           </div>
         </div>
       )}
+        </div>
+      </details>
 
       {/* Microcopy footer */}
       <div style={{
@@ -840,7 +880,7 @@ export default function OperatorDetailPage({ params }: { params: { id: string } 
         lineHeight: 1.6,
         marginTop: 8,
       }}>
-        The operator browser is isolated. For login, CAPTCHA, or verification — complete it in the operator browser window and click &lsquo;Login / CAPTCHA completed&rsquo;.
+        Kevin needs your help. Complete this in the browser, then click Resume.
       </div>
     </div>
   )

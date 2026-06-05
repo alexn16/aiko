@@ -191,7 +191,7 @@ function buildCompletionMessage(actionType: string, output: Record<string, unkno
   if (actionType === 'search') {
     const count = Array.isArray(output.results) ? output.results.length : 0
     if (count === 0) {
-      return 'Research finished, but no useful results were extracted. Try a more specific target or let Kevin open websites directly.'
+      return 'Research finished, but no useful results were extracted.'
     }
     return `${opStr}completed search — ${count} result${count !== 1 ? 's' : ''} found. Lead extraction is running in the background.`
   }
@@ -206,8 +206,11 @@ function stripAnsi(text: string): string {
 
 export function buildDelegationFailureMessage(rawError: string): string {
   const clean = stripAnsi(rawError)
+  if (/skill blocked|forbidden|not allowed/i.test(clean)) {
+    return 'AÏKO cannot do this safely.'
+  }
   if (clean.includes("Executable doesn't exist") || clean.includes('browserType.launch')) {
-    return 'Browser runtime is missing. Run: npx playwright install chromium'
+    return 'Browser runtime is missing. Run: npx playwright install chromium.'
   }
   if (clean.includes('net::ERR_NAME_NOT_RESOLVED')) {
     return 'The Web Operator could not resolve that website address. Check the URL or network connection, then try again.'

@@ -19,8 +19,8 @@ const STATUS_COLOR: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   idle: 'idle',
   working: 'working',
-  waiting_approval: 'waiting approval',
-  waiting_user: 'waiting for user',
+  waiting_approval: 'needs approval',
+  waiting_user: 'needs your help',
   user_controlling: 'user controlling',
   ready_to_resume: 'ready to resume',
   paused: 'paused',
@@ -55,6 +55,22 @@ function truncate(str: string | null | undefined, n = 50): string {
 }
 
 interface Project { id: string; name: string }
+
+function operatorNotice(op: WebOperator): { title: string; text: string } | null {
+  if (op.status === 'waiting_approval') {
+    return {
+      title: 'Approval needed',
+      text: 'Kevin needs approval before doing this.',
+    }
+  }
+  if (op.status === 'waiting_user' || op.status === 'ready_to_resume' || op.requires_user_input) {
+    return {
+      title: 'Kevin needs your help',
+      text: 'Complete this in the browser, then click Resume.',
+    }
+  }
+  return null
+}
 
 export default function OperatorsPage() {
   const [operators, setOperators] = useState<WebOperator[]>([])
@@ -190,7 +206,9 @@ export default function OperatorsPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-          {operators.map(op => (
+          {operators.map(op => {
+            const notice = operatorNotice(op)
+            return (
             <div key={op.id} style={{
               background: '#ffffff',
               border: '1px solid #f1f5f9',
@@ -229,52 +247,17 @@ export default function OperatorsPage() {
                 </div>
               )}
 
-              {/* Waiting for user input */}
-              {op.requires_user_input && (
+              {/* Attention state */}
+              {notice && (
                 <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  display: 'block',
                   background: '#fffbeb', border: '1px solid #fde68a',
-                  borderRadius: 5, padding: '3px 8px', marginBottom: 8,
+                  borderRadius: 6, padding: '8px 10px', marginBottom: 8,
                 }}>
-                  <span style={{ fontSize: 11, color: '#92400e', fontWeight: 600 }}>
-                    Waiting for user input
-                  </span>
-                  {op.waiting_reason && (
-                    <span style={{ fontSize: 10, color: '#78350f' }}>— {truncate(op.waiting_reason, 50)}</span>
-                  )}
-                </div>
-              )}
-
-              {/* Current workflow chip */}
-              {op.current_workflow && (
-                <div style={{
-                  display: 'inline-block', padding: '2px 7px', borderRadius: 4,
-                  fontSize: 10, fontWeight: 600, background: '#ede9fe', color: '#6d28d9',
-                  marginBottom: 7, marginRight: 6,
-                }}>
-                  {op.current_workflow}
-                </div>
-              )}
-
-              {/* Current goal */}
-              {op.current_goal && (
-                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 5 }}>
-                  Goal: {truncate(op.current_goal, 60)}
-                </div>
-              )}
-
-              {/* Memory summary */}
-              {op.memory_summary && (
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 5, fontStyle: 'italic' }}>
-                  {truncate(op.memory_summary, 80)}
-                </div>
-              )}
-
-              {/* Current task */}
-              {op.current_task && (
-                <div style={{ fontSize: 12, color: '#374151', marginBottom: 4 }}>
-                  <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Task </span>
-                  {truncate(op.current_task, 60)}
+                  <div style={{ fontSize: 12, color: '#92400e', fontWeight: 700 }}>{notice.title}</div>
+                  <div style={{ fontSize: 11, color: '#78350f', marginTop: 2 }}>
+                    {notice.text}
+                  </div>
                 </div>
               )}
 
@@ -290,10 +273,19 @@ export default function OperatorsPage() {
                 Updated {timeAgo(op.updated_at)}
               </div>
 
-              {/* Profile key */}
-              <div style={{ fontSize: 9, color: '#cbd5e1', fontFamily: 'DM Mono, monospace', marginBottom: 12 }}>
-                profile: {op.browser_profile_key}
-              </div>
+              <details style={{ marginBottom: 12 }}>
+                <summary style={{ cursor: 'pointer', color: '#94a3b8', fontSize: 11, fontWeight: 700 }}>Advanced</summary>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 8, display: 'grid', gap: 5 }}>
+                  {op.current_workflow ? <div>Workflow: {op.current_workflow}</div> : null}
+                  {op.current_goal ? <div>Goal: {truncate(op.current_goal, 100)}</div> : null}
+                  {op.current_task ? <div>Task: {truncate(op.current_task, 100)}</div> : null}
+                  {op.memory_summary ? <div>{truncate(op.memory_summary, 120)}</div> : null}
+                </div>
+                <div style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'DM Mono, monospace', marginTop: 8 }}>
+                  profile: {op.browser_profile_key}
+                  {op.waiting_reason ? <div>reason: {op.waiting_reason}</div> : null}
+                </div>
+              </details>
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -343,7 +335,7 @@ export default function OperatorsPage() {
                 </Link>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 

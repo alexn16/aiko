@@ -211,7 +211,7 @@ export async function runMarketingResearchAutopilot(input: MarketingResearchAuto
       : 'done'
   const summary = uniqueOpps.length > 0
     ? `Kevin checked ${uniqueSites.length || 'several'} public web source${uniqueSites.length === 1 ? '' : 's'} and found ${uniqueOpps.length} visible marketing opportunit${uniqueOpps.length === 1 ? 'y' : 'ies'}.`
-    : 'Research finished, but no useful results were extracted. Try a more specific target or let Kevin open websites directly.'
+    : 'Research finished, but no useful results were extracted.'
   const recommended_next_action = uniqueOpps.length > 0
     ? `Review the strongest result, then ask Kevin to open it and prepare a draft outreach or content idea. Needs approval before posting or sending.`
     : `Try a more specific audience or channel, such as property managers, local business directories, Reddit communities, or competitor websites.`

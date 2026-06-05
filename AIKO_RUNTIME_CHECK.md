@@ -1014,3 +1014,34 @@ AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
 | AÏKO autopilot | `/api/ceo/command` | ✅ Pass | `Promote AÏKO.` uses AÏKO-specific public targets including Product Hunt and Hacker News Algolia. No project is incorrectly attached. |
 | Result honesty | API/UI | ✅ Pass | When no useful visible opportunities are extracted, AÏKO reports no useful results and recommends a more specific audience/channel. No fake leads. |
 | External side effects | Web Operator actions | ✅ Pass | Actions were limited to search/open URL/read visible public pages. No post/send/message/publish/share/download action was created. |
+
+---
+
+## Approval And Takeover UX Simplification — 2026-06-05
+
+### Command
+
+```bash
+WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Health | `/api/health` | ✅ Pass | `ok=true`, version `0.1.0`, database reachable, setup complete, Web Operator runtime available, headed mode enabled, storage writable. |
+| Canva manual help | `/api/ceo/command`, Web Operator | ✅ Pass | `Kevin, open Canva and create a draft Instagram post for ALB Parking.` opened `https://www.canva.com/` in headed mode and paused with `waiting_user` / `security_checkpoint`. No publish/share/download action was executed. |
+| Home manual state | `/home` | ✅ Pass | The Needs your attention card showed `Kevin needs your help`, `Complete this in the browser, then click Resume.`, and Open browser / Resume / Advanced. No raw JSON, action IDs, skill decisions, or waiting reasons were visible by default. |
+| Operator detail manual state | `/operators/31bccda5-5daf-4474-acfe-3fd73f9b2c1e` | ✅ Pass | The top card showed `Kevin is waiting for you`, current website, current step, Open browser, I’m taking over, Resume, and Advanced. Playbook/action internals stayed inside closed Advanced sections. |
+| Facebook approval gate | `/api/ceo/command`, `/api/approval-items` | ✅ Pass after copy fix | `Kevin, post on Facebook about ALB Parking.` created a pending approval item and did not execute the post. Runtime found duplicated approval wording in the CEO delegation message; the playbook add-on now says Kevin will open Facebook directly and stop before external action. |
+| Approvals page | `/approvals` | ✅ Pass after title fix | Pending Facebook approval showed `Prepare Facebook post draft`, `Kevin needs approval before doing this.`, `Approving does not execute automatically. Resume is still explicit.`, Approve / Reject / View details. Raw payload and metadata stayed hidden. |
+| Operators list | `/operators` | ✅ Pass after state fix | Runtime found a stale `requires_user_input` flag causing an approval-needed operator card to say manual help. The list now prioritizes status, shows approval copy for `waiting_approval`, and moves stale goal/task/memory text into Advanced. |
+| External side effects | API/UI | ✅ Pass | Approval was created, but no send/post/message/publish/share/download action was executed automatically. |
+
+### Fixes made
+
+| Issue | Fix |
+|---|---|
+| CEO delegation copy repeated `Kevin needs approval before doing this.` for Facebook approval requests. | Changed Facebook playbook add-on copy to `Kevin will open Facebook directly and stop before any external action.` |
+| `/approvals` default card title used the raw Web Operator instruction. | Added plain approval display titles such as `Prepare Facebook post draft`; raw content remains in View details. |
+| `/operators` list could show manual-help copy while the operator status was `waiting_approval`. | Added status-based notice selection and moved workflow/goal/task/memory lines behind Advanced. |
