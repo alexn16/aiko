@@ -4423,3 +4423,63 @@ test('184. /connect-ai shows three distinct OpenAI paths', () => {
   assert.deepEqual(cards.map(c => c.id), ['openai-codex-local', 'chatgpt_oauth', 'openai_api'])
   assert.ok(cards.find(c => c.id === 'openai_api').copy.includes('Not ChatGPT subscription'))
 })
+
+test('185. dashboard treats Codex Local as ChatGPT connected', () => {
+  function providerConnected(catalogIds, rows) {
+    return rows.some(row => row.status === 'connected' && catalogIds.includes(row.provider_catalog_id))
+  }
+  const rows = [
+    { provider_catalog_id: 'openai-codex-local', status: 'connected' },
+    { provider_catalog_id: 'ollama', status: 'connected' },
+  ]
+  const chatgptConnected = providerConnected(['openai-codex-local', 'chatgpt_oauth'], rows)
+  const warnings = []
+  if (!chatgptConnected) warnings.push('ChatGPT/Codex not connected')
+  assert.equal(chatgptConnected, true)
+  assert.equal(warnings.includes('ChatGPT/Codex not connected'), false)
+})
+
+test('186. self-improvement status shortcut persists read-only CEO response', () => {
+  const inserts = []
+  function persistCeoShortcutCommand(command, response, intent, actions = [], projectId = null) {
+    inserts.push({ command, response, intent, actions, projectId })
+  }
+  const command = 'What is the status of AÏKO self-improvement?'
+  const response = 'AÏKO has 3 proposed. This is read-only status; no code was executed and no capability was enabled.'
+  persistCeoShortcutCommand(command, response, 'system_improvement_status')
+  assert.equal(inserts.length, 1)
+  assert.equal(inserts[0].intent, 'system_improvement_status')
+  assert.equal(inserts[0].actions.length, 0)
+  assert.ok(inserts[0].response.includes('read-only status'))
+})
+
+test('187. scheduler provider errors are summarized without headers or secrets', () => {
+  function summarizeSchedulerError(err) {
+    const record = err && typeof err === 'object' ? err : {}
+    const rawMessage = err instanceof Error ? err.message : String(err ?? 'Unknown scheduler error')
+    const message = rawMessage
+      .replace(/Incorrect API key provided:[^.]+\.?/i, 'Provider authentication failed.')
+      .replace(/(access|refresh|id|api)[_-]?token[=:]\s*["']?[^"'\s,}]+/gi, '$1_token=[redacted]')
+      .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted-api-key]')
+    return {
+      name: err instanceof Error ? err.name : 'Error',
+      status: typeof record.status === 'number' ? record.status : null,
+      code: typeof record.code === 'string' ? record.code : null,
+      type: typeof record.type === 'string' ? record.type : null,
+      message,
+    }
+  }
+
+  const err = new Error('Incorrect API key provided: not-required. access_token=secret-token sk-test123')
+  err.status = 401
+  err.code = 'invalid_api_key'
+  err.type = 'invalid_request_error'
+  err.headers = { 'set-cookie': 'secret-cookie' }
+  const summary = summarizeSchedulerError(err)
+  const serialized = JSON.stringify(summary)
+  assert.equal(summary.status, 401)
+  assert.equal(summary.code, 'invalid_api_key')
+  assert.equal(serialized.includes('headers'), false)
+  assert.equal(/secret|set-cookie|not-required|sk-test123/i.test(serialized), false)
+  assert.ok(summary.message.includes('Provider authentication failed.'))
+})

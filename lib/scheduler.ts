@@ -4,6 +4,23 @@ import { getAllModelConfigs } from '@/lib/models/config'
 import { runCeoAgent } from '@/lib/agents/ceo-agent'
 import { runProjectManagerAgent } from '@/lib/agents/project-manager-agent'
 
+export function summarizeSchedulerError(err: unknown) {
+  const record = err && typeof err === 'object' ? err as Record<string, unknown> : {}
+  const rawMessage = err instanceof Error ? err.message : String(err ?? 'Unknown scheduler error')
+  const message = rawMessage
+    .replace(/Incorrect API key provided:[^.]+\.?/i, 'Provider authentication failed.')
+    .replace(/(access|refresh|id|api)[_-]?token[=:]\s*["']?[^"'\s,}]+/gi, '$1_token=[redacted]')
+    .replace(/sk-[A-Za-z0-9_-]+/g, '[redacted-api-key]')
+
+  return {
+    name: err instanceof Error ? err.name : 'Error',
+    status: typeof record.status === 'number' ? record.status : null,
+    code: typeof record.code === 'string' ? record.code : null,
+    type: typeof record.type === 'string' ? record.type : null,
+    message,
+  }
+}
+
 async function runScheduledAgents() {
   try {
     const configs = await getAllModelConfigs()
@@ -23,7 +40,7 @@ async function runScheduledAgents() {
           projectId: project.id,
           agentId: ceoRow.rows[0].id,
           modelConfig: configs['ceoAgent'] ?? fallback,
-        }).catch(err => console.error('[scheduler] CEO agent error:', err))
+        }).catch(err => console.error('[scheduler] CEO agent error:', summarizeSchedulerError(err)))
       }
 
       if (pmRow.rows[0]) {
@@ -31,11 +48,11 @@ async function runScheduledAgents() {
           projectId: project.id,
           agentId: pmRow.rows[0].id,
           modelConfig: configs['projectManagerAgent'] ?? fallback,
-        }).catch(err => console.error('[scheduler] PM agent error:', err))
+        }).catch(err => console.error('[scheduler] PM agent error:', summarizeSchedulerError(err)))
       }
     }
   } catch (err) {
-    console.error('[scheduler] error:', err)
+    console.error('[scheduler] error:', summarizeSchedulerError(err))
   }
 }
 

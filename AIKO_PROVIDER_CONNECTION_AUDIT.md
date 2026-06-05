@@ -66,6 +66,8 @@ Safe detection checks:
 
 AÏKO never returns Codex token contents, refresh tokens, API keys, raw auth file contents, or local secret paths. Detection/import alone is not connection; connected requires a passing test call.
 
+Dashboard and setup summaries count both `openai-codex-local` and `chatgpt_oauth` as ChatGPT/Codex connection paths. They must not warn that ChatGPT/Codex is disconnected when a tested Codex Local profile is connected and assigned to CEO.
+
 ## OAuth-capable but not configured
 
 ### ChatGPT / Codex

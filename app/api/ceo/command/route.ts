@@ -87,6 +87,20 @@ function isSelfImprovementTimelineIntent(command: string): boolean {
   return /\b(what improvements has a[ïi]ko proposed|status of (?:a[ïi]ko )?self-improvement|self-improvement status|which capabilities are missing|what was implemented recently|improvements has a[ïi]ko proposed|missing capabilities)\b/i.test(command)
 }
 
+async function persistCeoShortcutCommand(
+  command: string,
+  response: string,
+  intent: string,
+  actions: Array<Record<string, unknown>> = [],
+  projectId: string | null = null,
+) {
+  await db.query(
+    `INSERT INTO ceo_commands (command, response, intent, actions, project_id)
+     VALUES ($1, $2, $3, $4::jsonb, $5)`,
+    [command, response, intent, JSON.stringify(actions), projectId],
+  )
+}
+
 async function handleSelfImprovementTimelineCommand(command: string): Promise<NextResponse | null> {
   if (!isSelfImprovementTimelineIntent(command)) return null
 
@@ -99,6 +113,7 @@ async function handleSelfImprovementTimelineCommand(command: string): Promise<Ne
     ? ` Health: ${data.health.blocked_by_validation} blocked by validation, ${data.health.waiting_for_implementation} waiting for implementation, ${data.health.capabilities_validated_this_week} validated this week.`
     : ''
   const response = `AÏKO has ${data.summary.proposed} proposed, ${data.summary.approved} approved, ${data.summary.in_progress} in progress, ${data.summary.pending_validation} pending validation, ${data.summary.validated} validated, and ${data.summary.rejected} rejected improvement proposal${data.timeline.length === 1 ? '' : 's'}.${latestText}${health} This is read-only status; no code was executed and no capability was enabled.`
+  await persistCeoShortcutCommand(command, response, 'system_improvement_status')
 
   return NextResponse.json({
     response,
@@ -159,8 +174,10 @@ async function handleSelfImprovementLifecycleCommand(command: string): Promise<N
 
   const proposal = await findSelfImprovementProposalForCommand(command)
   if (!proposal) {
+    const response = 'I could not find a matching System Improvement Proposal. Create a strategy execution plan first so AÏKO can identify the missing capability.'
+    await persistCeoShortcutCommand(command, response, 'system_improvement_lifecycle')
     return NextResponse.json({
-      response: 'I could not find a matching System Improvement Proposal. Create a strategy execution plan first so AÏKO can identify the missing capability.',
+      response,
       intent: 'system_improvement_lifecycle',
       actions: [],
       project_id: null,
@@ -208,10 +225,13 @@ async function handleSelfImprovementLifecycleCommand(command: string): Promise<N
     }
   }
 
+  const actions = action ? [{ type: `system_improvement_${action}`, data: { proposal_id: id } }] : []
+  await persistCeoShortcutCommand(command, response, 'system_improvement_lifecycle', actions, projectId)
+
   return NextResponse.json({
     response,
     intent: 'system_improvement_lifecycle',
-    actions: action ? [{ type: `system_improvement_${action}`, data: { proposal_id: id } }] : [],
+    actions,
     project_id: projectId,
     delegation: null,
   })

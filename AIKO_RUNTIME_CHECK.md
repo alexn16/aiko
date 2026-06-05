@@ -951,3 +951,34 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 - AÏKO did not expose access tokens, refresh tokens, API keys, raw auth-file contents, or local Codex auth paths.
 - AÏKO did not mark Codex connected from detection alone.
 - OpenAI API key fallback and Ollama local provider remained separate and available.
+
+---
+
+## CEO Chat With Codex Local Brain — 2026-06-05
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Dashboard | `/dashboard`, `/api/dashboard/summary` | ✅ Pass after fix | CEO brain shows `ChatGPT / Codex Local`, model `codex-cli-default`, auth method `local`, and `running_on_ollama=false`. Fixed stale dashboard warning that counted only `chatgpt_oauth` as ChatGPT-connected. |
+| Connect AI | `/connect-ai` | ✅ Pass | Current CEO brain is ChatGPT / Codex Local. ChatGPT / Codex OAuth App remains separate and not configured. OpenAI API remains a separate API-key fallback. No tokens/secrets are displayed. |
+| CEO hello | `/ceo`, `/api/ceo/command` | ✅ Pass | `Hello, what are you?` returned a natural CEO response through the assigned Codex Local brain. No Ollama fallback was used. |
+| Create project | `/api/ceo/command` | ✅ Pass | `Create a marketing project for Codex Validation Demo.` created project `b11f9359-701a-4a69-849a-c8ff38cd76db`, assigned Sven, created a strategy brief, created a launch template, and showed action chips. |
+| Verify project rows | PostgreSQL | ✅ Pass | Project is active, Sven is PM, 1 strategy brief exists, 1 launch template exists, and decision log includes project creation, strategy brief, launch template, and PM assignment. |
+| Project recall | `/api/ceo/command` | ✅ Pass | `What are we doing for Codex Validation Demo?` answered from project context: validation demo, email-based workflow, Sven PM, 0/9 launch steps, next step target audience. |
+| Self-improvement status | `/api/ceo/command`, `/ceo` | ✅ Pass after fix | Read-only response returned no actions/delegation and is now persisted in CEO Chat history after reload. |
+| Logs/errors | dev server/API responses | ✅ Pass after fix | No Codex token, refresh token, API key, raw auth file, or local Codex path was exposed. Runtime shutdown exposed that the background scheduler was logging full provider error objects for legacy scheduled agents; this is now summarized without headers, cookies, stacks, or token-like strings. One transient Next dev static-path stack trace appeared during hot compilation for `/api/auth/[...nextauth]`; it did not appear in UI and subsequent requests succeeded. |
+
+### Fixes made
+
+| Issue | Fix |
+|---|---|
+| Dashboard still warned `ChatGPT/Codex not connected` even when CEO was assigned to ChatGPT / Codex Local. | Updated `/api/dashboard/summary` to count both `openai-codex-local` and `chatgpt_oauth` as ChatGPT/Codex connected. |
+| Self-improvement status shortcut returned from API but was not persisted into CEO Chat history, so it could disappear after reload. | Added persistence for self-improvement status/lifecycle shortcut responses into `ceo_commands`. |
+| Background scheduler logged raw provider error objects when legacy scheduled agents hit an invalid API-key fallback. | Added sanitized scheduler error summaries that keep status/code/type/message but drop headers, cookies, stacks, and token-like strings. |

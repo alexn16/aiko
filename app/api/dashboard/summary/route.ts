@@ -84,7 +84,7 @@ export async function GET() {
       getModeState(),
       getWebOperatorStatus(),
       getSystemImprovementTimeline(),
-      providerConnected(['chatgpt_oauth']),
+      providerConnected(['openai-codex-local', 'chatgpt_oauth']),
       providerConnected(['claude_oauth', 'anthropic_api']),
       detectClaudeCodeLocal().catch(() => ({ cli_detected: false, token_env_detected: false, local_auth_detected: false })),
       countQuery(`SELECT COUNT(*) FROM projects WHERE active=true`),
@@ -136,7 +136,7 @@ export async function GET() {
       warnings.push({
         severity: 'info',
         title: 'ChatGPT/Codex not connected',
-        message: 'ChatGPT direct OAuth is not connected. This is honest local state; AÏKO can still use another connected brain.',
+        message: 'No ChatGPT / Codex Local or OAuth App profile is connected. This is honest local state; AÏKO can still use another connected brain.',
         href: '/connect-ai',
       })
     }
