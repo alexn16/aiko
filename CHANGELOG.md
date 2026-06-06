@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.2.0] - 2026-06-06
+
+### Added
+
+- Simple `/home` command center for owner-friendly daily operation.
+- Daily Brief / Today view with priority attention items, next tasks, approvals, waiting operators, and recent outputs.
+- Brain Orchestrator for classifying natural owner commands and choosing the right internal flow.
+- Project Autopilot marketing research flow for commands like "Promote AÏKO" and "Start marketing for ALB Parking".
+- AI Content Skills for internal draft generation without Web Operator actions.
+- AI Research and Strategy Skills for plans, personas, campaign briefs, risks, and next-step recommendations.
+- Simple task management with `/tasks`, project task visibility, and internal-only task status updates.
+- Simplified approval and manual takeover UX.
+- Simplified grouped navigation with advanced pages collapsed by default.
+
+### Changed
+
+- Root now opens `/home` after setup.
+- `/dashboard` is now the advanced owner overview.
+- Technical details are hidden behind Advanced by default.
+- AI thinking tasks avoid Web Operator unless live web work is needed.
+
+### Safety
+
+- No auto-send, auto-post, or auto-publish behavior was added.
+- Manual takeover for login, CAPTCHA, QR, and security checkpoints is preserved.
+- Approval is still separate from execution.
+- Forbidden actions remain blocked.
+
 ## v0.1.0 - Local MVP
 
 ### Added

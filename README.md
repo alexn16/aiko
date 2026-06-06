@@ -1,4 +1,4 @@
-# AÏKO v0.1.0 — Local MVP
+# AÏKO v0.2.0 — Local AI Marketing Operating System
 
 <p>
   <img src="public/brand/aiko-logo.svg" alt="AÏKO — AI Marketing Operating System" width="420" />
@@ -121,6 +121,7 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 ## MVP operating guide
 
 Related MVP docs:
+- `AIKO_V0_2_RELEASE_NOTES.md` — v0.2.0 checkpoint summary covering Home, Daily Brief, Brain Orchestrator, AI Skills, tasks, and current safety status.
 - `AIKO_MVP_RELEASE_NOTES.md` — MVP release summary, verified behavior, provider truth, safety model, limitations, and first project flow.
 - `AIKO_MVP_DEMO_SCRIPT.md` — 10-minute demo flow for showing the MVP safely.
 - `AIKO_DEMO_COMMANDS.md` — copy-paste CEO prompts for a clean MVP demo.
