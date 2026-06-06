@@ -855,3 +855,39 @@ AÏKO now treats owner phrases such as “browser is unblocked,” “all is unb
 - “AÏKO cannot do this yet”
 
 The `/home` “Resume Kevin” button calls `/api/web-operator/resume-browser-work`. `/operators/[id]` Resume now clears manual blocker state before calling workflow resume. CEO Chat no longer replies with text-only “I’ll treat the browser as available” for unblock commands; it reports what state was actually changed.
+
+### Intensive Work Mode — 2026-06-06
+
+AÏKO now has a bounded Intensive Work Mode for owner-triggered continuous progress.
+
+New persistence and engine:
+
+- `lib/db/migrations/046_intensive_work_mode.sql`
+- `intensive_work_state`
+- `agent_work_queue`
+- `lib/intensive-work/engine.ts`
+
+The engine supports levels `off`, `planning_only`, `safe_internal`, `browser_research`, and `approval_required`. It runs one bounded cycle at a time, with defaults of 3 actions per cycle and 24 cycles per day. Work stops at approval, manual takeover, missing capability, operating-mode block, errors, or budget limits.
+
+New APIs:
+
+- `GET /api/intensive-work/status`
+- `POST /api/intensive-work/start`
+- `POST /api/intensive-work/pause`
+- `POST /api/intensive-work/run-cycle`
+- `POST /api/intensive-work/enqueue-project`
+
+UI updates:
+
+- `/home` has a simple “Intensive Work” card with Start, Run one cycle, Pause, View queue, and Advanced details.
+- `/work` shows queued, active/waiting, and completed work.
+- Sidebar exposes Work Queue.
+- `/agents` now derives visible agent status from active tasks, queued intensive work, and existing agent task records, so agents with work no longer look idle.
+
+CEO Chat now handles commands such as “keep working,” “work intensively,” “continue until blocked,” “always be working,” “move the project forward,” “run the company,” and “pause intensive work.” Starting intensive work enables the selected safe level, queues project work when a project is available, runs one immediate bounded cycle, and reports what happened.
+
+Safety remains unchanged:
+
+- `safe_internal` and `planning_only` do not create Web Operator actions.
+- Browser research is level-gated and stops at login, CAPTCHA, security checks, approval gates, and risky actions.
+- No send, post, message, publish, missing-capability enabling, or hidden unbounded loop was added.

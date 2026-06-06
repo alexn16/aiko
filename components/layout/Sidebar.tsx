@@ -21,6 +21,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/start-campaign', label: 'Start Campaign' },
       { href: '/tasks', label: 'Tasks' },
+      { href: '/work', label: 'Work Queue' },
       { href: '/leads', label: 'Leads' },
       { href: '/approvals', label: 'Approvals' },
       { href: '/reports', label: 'Reports' },
@@ -154,7 +155,7 @@ export function Sidebar() {
         color: '#e2e8f0',
         letterSpacing: '0.06em',
       }}>
-        v0.1.0 · local MVP
+        v0.2.0 · local MVP
       </div>
     </nav>
   )

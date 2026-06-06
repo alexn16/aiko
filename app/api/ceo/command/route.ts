@@ -22,6 +22,12 @@ import { classifyOwnerCommand, type OwnerCommandClassification, type OwnerComman
 import { formatDailyBriefForCEO, getDailyBrief } from '@/lib/daily-brief'
 import { isManualTakeoverCompletedIntent, resumeAllSafeBrowserWork } from '@/lib/web-operator/resume-controller'
 import {
+  enqueueProjectWork,
+  runWorkCycle,
+  setIntensiveWorkState,
+  type IntensiveWorkLevel,
+} from '@/lib/intensive-work/engine'
+import {
   inferAgentTaskType,
   inferAssignedAgentName,
   isAgentAssignmentIntent,
@@ -79,8 +85,25 @@ function isCreateStrategyTasksIntent(command: string): boolean {
   return /\bcreate tasks? from\b.*\bexecution plan\b/i.test(command)
 }
 
+function isStartIntensiveWorkIntent(command: string): boolean {
+  return /\b(keep working|work intensively|start intensive work|continue until blocked|always be working|don'?t wait for me|move the project forward|run the company)\b/i.test(command)
+}
+
+function isPauseIntensiveWorkIntent(command: string): boolean {
+  const phrases = ['pause intensive work', 'stop intensive work', 'pause always working', 'stop work mode']
+  if (phrases.some(phrase => command.toLowerCase().includes(phrase))) return true
+  return /\b(pause|stop)\s+(intensive work|always working|work mode)\b/i.test(command)
+}
+
+function intensiveLevelFromCommand(command: string): IntensiveWorkLevel {
+  if (/\b(browser|web research|use browser|public web|open websites)\b/i.test(command)) return 'browser_research'
+  if (/\b(approval required|approval mode)\b/i.test(command)) return 'approval_required'
+  if (/\b(planning only|plans only)\b/i.test(command)) return 'planning_only'
+  return 'safe_internal'
+}
+
 function extractProjectNameFromCommand(command: string): string | null {
-  const match = command.match(/\bfor\s+([^,.!?]+?)(?:[,.!?]|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
+  const match = command.match(/\b(?:for|on)\s+([^,.!?]+?)(?:[,.!?]|\s+until\b|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
   if (!match) return null
   return match[1].trim().replace(/\s+/g, ' ')
 }
@@ -357,6 +380,58 @@ async function handleManualTakeoverCompletedCommand(
   })
 }
 
+async function handleIntensiveWorkCommand(command: string): Promise<NextResponse | null> {
+  if (isPauseIntensiveWorkIntent(command)) {
+    const state = await setIntensiveWorkState({ enabled: false, level: 'off', paused_reason: 'Paused by CEO command.' })
+    const response = 'Intensive Work is paused. AÏKO will not run queued work until you start it again.'
+    await persistCeoShortcutCommand(command, response, 'intensive_work', [{ type: 'intensive_work_paused', data: { state } }], null)
+    return NextResponse.json({
+      response,
+      intent: 'intensive_work',
+      actions: [{ type: 'intensive_work_paused', data: { external_action_executed: false } }],
+      intensive_work: { state },
+      recall_chips: [{ label: 'View work queue', href: '/work' }],
+    })
+  }
+  if (!isStartIntensiveWorkIntent(command)) return null
+
+  const level = intensiveLevelFromCommand(command)
+  const projectName = extractProjectNameFromCommand(command)
+  const project = projectName ? await findProjectByNameOrAlias(projectName) : await getLatestActiveProject()
+  const state = await setIntensiveWorkState({ enabled: true, level, paused_reason: null })
+  const queued = project?.id
+    ? await enqueueProjectWork(String(project.id), { includeBrowserResearch: level === 'browser_research' || level === 'approval_required' })
+    : []
+  const cycle = await runWorkCycle()
+  const browserCopy = level === 'browser_research' || level === 'approval_required'
+    ? ' Browser research can run, but Kevin stops at login, CAPTCHA, security checks, approvals, and any risky action.'
+    : ' Browser actions will only run if you switch to Browser Research mode.'
+  const response = `I’ve started Intensive Work in ${level.replace(/_/g, ' ')} mode. AÏKO will keep creating plans, tasks, drafts, reports, and capability checks.${browserCopy} ${cycle.message}`
+  const actions = [{
+    type: 'intensive_work_started',
+    data: {
+      level,
+      project_id: project?.id ?? null,
+      queued_count: queued.length,
+      actions_run: cycle.actions_run,
+      external_action_executed: cycle.items.some(item => ['web_research', 'web_operator_action'].includes(item.work_type) && item.status !== 'queued'),
+    },
+  }]
+  await persistCeoShortcutCommand(command, response, 'intensive_work', actions, project?.id ? String(project.id) : null)
+  return NextResponse.json({
+    response,
+    intent: 'intensive_work',
+    actions,
+    project_id: project?.id ?? null,
+    intensive_work: { state, queued, cycle },
+    recall_chips: [
+      { label: 'View work queue', href: '/work' },
+      { label: 'Open tasks', href: '/tasks' },
+      ...(cycle.status === 'waiting' ? [{ label: 'Open operators', href: '/operators' }] : []),
+    ],
+  })
+}
+
 async function handleAgentAssignmentCommand(command: string): Promise<NextResponse | null> {
   if (!isAgentAssignmentIntent(command)) return null
 
@@ -532,6 +607,9 @@ export async function POST(request: NextRequest) {
 
     const manualTakeoverResponse = await handleManualTakeoverCompletedCommand(command.trim(), classification)
     if (manualTakeoverResponse) return manualTakeoverResponse
+
+    const intensiveWorkResponse = await handleIntensiveWorkCommand(command.trim())
+    if (intensiveWorkResponse) return intensiveWorkResponse
 
     const dailyBriefResponse = await handleDailyBriefCommand(command.trim(), userId)
     if (dailyBriefResponse) return dailyBriefResponse

@@ -1330,3 +1330,54 @@ returned `intent=manual_takeover_completed` and used the resume service instead 
 - Approval gates remain required.
 - Forbidden actions remain blocked.
 - Login/CAPTCHA/security are not bypassed.
+
+---
+
+## Intensive Work Mode — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+### Runtime validation plan
+
+| Step | Page/API | Expected |
+|---|---|---|
+| Status API | `/api/intensive-work/status` | Returns mode, queue, active work, recent work, and counts without secrets. |
+| CEO start command | `/api/ceo/command` | “I want AÏKO to keep working intensively on ALB Parking until it is blocked.” enables safe internal mode, queues project work, and runs one bounded cycle. |
+| Home card | `/home` | Shows Intensive Work status, current/queued work, Run one cycle, Pause, and View queue. |
+| Work queue | `/work` | Shows queued, active/waiting, and recently completed work. |
+| CEO pause command | `/api/ceo/command` | “pause intensive work” disables work mode and does not clear existing records. |
+| Browser research mode | `/api/ceo/command` | “start intensive work with browser research” only allows browser research level and stops at login/CAPTCHA/security/approval. |
+
+### Safety checks
+
+- `safe_internal` does not create Web Operator actions.
+- Work cycles are bounded by `max_actions_per_cycle`.
+- Browser work is level-gated.
+- Approval-needed work becomes `waiting_approval`.
+- Login/CAPTCHA/security work becomes `waiting_user`.
+- Missing capabilities become blocked/proposals and are not marked available.
+- No auto-send, auto-post, auto-message, or auto-publish path is added.
+
+### Local validation result
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Status API | `/api/intensive-work/status` | ✅ Pass | Initial state returned `enabled=false`, `level=off`, empty queue/active work, and no secrets. |
+| Health | `/api/health` | ✅ Pass | Database OK, setup complete, CEO can think, Web Operator runtime available, headed mode true. |
+| CEO start command | `/api/ceo/command` | ✅ Pass after fix | Command resolved ALB Parking correctly and returned `intent=intensive_work`. |
+| Work cycle | `runWorkCycle()` via CEO command | ✅ Pass | Safe internal mode completed 3 bounded items: strategy plan, next-step recommendation, and executive report for ALB Parking. |
+| External action guard | `/api/web-operator/actions?limit=1` | ✅ Pass | Latest Web Operator action remained an older waiting-user browser action; intensive safe-internal work returned `external_action_executed=false`. |
+| Home card | `/home` | ✅ Pass | Rendered “Intensive Work,” Working status, View queue, Run one cycle, Pause, and Advanced details. |
+| Work page | `/work` | ✅ Pass | Rendered Active/Waiting, Queued, Completed recently, Run one cycle, and Pause. |
+| Pause | `/api/ceo/command` | ✅ Pass | “pause intensive work” set `enabled=false`, `level=off`, and preserved recent completed work records. |
+| Off cycle | `/api/intensive-work/run-cycle` | ✅ Pass | Returned `status=off`, `actions_run=0`, and `stopped_reason=off`. |
+
+### Bugs found and fixed
+
+- First runtime CEO start command returned HTTP 500 because `setIntensiveWorkState()` inserted `NULL` into non-null default state columns on first write. Fixed the upsert to use default values on insert and partial values only on update.
+- The command “I want AÏKO to keep working intensively on ALB Parking until it is blocked” initially fell back to the latest project because project extraction only handled `for ...`. Fixed extraction to handle `for` and `on`, and to stop project names before `until`.
+- Sidebar footer still showed `v0.1.0`; updated to `v0.2.0`.

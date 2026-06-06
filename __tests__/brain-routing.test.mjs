@@ -5203,3 +5203,83 @@ test('271. resume browser work API is read-safe and exposes clean summary', () =
   assert.ok(route.includes('Kevin could not resume browser work right now.'))
   assert.equal(route.includes('delegateToWebOperator'), false)
 })
+
+test('272. intensive work migration creates state and bounded queue tables', () => {
+  const migration = fs.readFileSync('lib/db/migrations/046_intensive_work_mode.sql', 'utf8')
+  assert.ok(migration.includes('intensive_work_state'))
+  assert.ok(migration.includes('agent_work_queue'))
+  assert.ok(migration.includes('max_actions_per_cycle'))
+  assert.ok(migration.includes("'queued','working','waiting_user','waiting_approval','blocked','done','failed','skipped'"))
+})
+
+test('273. intensive mode off runs no work', () => {
+  const engine = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  assert.ok(engine.includes("if (!state.enabled || state.level === 'off')"))
+  assert.ok(engine.includes("message: 'Intensive Work is off.'"))
+})
+
+test('274. intensive work safe internal does not create Web Operator actions', () => {
+  const engine = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  const internalSection = engine.slice(engine.indexOf("['strategy_plan'"), engine.indexOf("if (item.work_type === 'web_research'"))
+  assert.ok(internalSection.includes('executeAISkill'))
+  assert.ok(internalSection.includes('generateProjectExecutiveReport'))
+  assert.equal(internalSection.includes('delegateSearch'), false)
+})
+
+test('275. browser research is level gated and stops at manual or approval boundaries', () => {
+  const engine = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  assert.ok(engine.includes("['browser_research', 'approval_required'].includes(state.level)"))
+  assert.ok(engine.includes("result.status === 'approval_required'"))
+  assert.ok(engine.includes("waiting_user"))
+  assert.ok(engine.includes('login|captcha|security|manual'))
+})
+
+test('276. intensive work cycle is bounded by max_actions_per_cycle', () => {
+  const engine = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  assert.ok(engine.includes('state.max_actions_per_cycle'))
+  assert.ok(engine.includes('results.length >= state.max_actions_per_cycle'))
+  assert.ok(engine.includes('max_cycles_per_day'))
+})
+
+test('277. CEO can start and pause intensive work without auto-publishing', () => {
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(route.includes('handleIntensiveWorkCommand'))
+  assert.ok(route.includes('always be working'))
+  assert.ok(route.includes('pause intensive work'))
+  assert.ok(route.includes('setIntensiveWorkState'))
+  assert.ok(route.includes('(?:for|on)'))
+  assert.ok(route.includes('\\s+until\\b'))
+  assert.equal(route.includes('publish_design'), false)
+})
+
+test('278. /home exposes simple Intensive Work card and run-cycle controls', () => {
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(home.includes('Intensive Work'))
+  assert.ok(home.includes('Start intensive work'))
+  assert.ok(home.includes('Run one cycle'))
+  assert.ok(home.includes('/api/intensive-work/run-cycle'))
+  assert.ok(home.includes('/api/intensive-work/status'))
+})
+
+test('279. /work page lists queue active and completed work', () => {
+  const page = fs.readFileSync('app/(dashboard)/work/page.tsx', 'utf8')
+  assert.ok(page.includes('Queued'))
+  assert.ok(page.includes('Active / Waiting'))
+  assert.ok(page.includes('Completed recently'))
+  assert.ok(page.includes('/api/intensive-work/run-cycle'))
+})
+
+test('280. agents page derives queued work from intensive work status', () => {
+  const agents = fs.readFileSync('app/(dashboard)/agents/page.tsx', 'utf8')
+  assert.ok(agents.includes('/api/intensive-work/status'))
+  assert.ok(agents.includes('queueWork'))
+  assert.ok(agents.includes("item.status === 'queued' ? 'queued'"))
+})
+
+test('281. intensive work does not contain direct send post or publish paths', () => {
+  const engine = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  assert.equal(/\bsend_email\b/.test(engine), false)
+  assert.equal(/\bsend_outreach\b/.test(engine), false)
+  assert.equal(/\bpost_without_approval\b/.test(engine), false)
+  assert.equal(/\bpublish_design\b/.test(engine), false)
+})

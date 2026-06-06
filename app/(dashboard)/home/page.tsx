@@ -80,6 +80,20 @@ type DailyBrief = {
   } | null
 }
 
+type IntensiveWorkStatus = {
+  state: {
+    enabled: boolean
+    level: string
+    max_actions_per_cycle: number
+    cycles_today: number
+    paused_reason: string | null
+  }
+  queue: Array<{ id: string; work_type: string; assigned_agent_name: string; status: string; output_summary?: string | null; blocked_reason?: string | null }>
+  active: Array<{ id: string; work_type: string; assigned_agent_name: string; status: string; output_summary?: string | null; blocked_reason?: string | null }>
+  recent: Array<{ id: string; work_type: string; assigned_agent_name: string; status: string; output_summary?: string | null; blocked_reason?: string | null }>
+  counts: Record<string, number>
+}
+
 type CommandResult = {
   response?: string
   intent?: string
@@ -191,6 +205,7 @@ export default function HomePage() {
   const [files, setFiles] = useState<GeneratedFile[]>([])
   const [tasks, setTasks] = useState<OwnerTask[]>([])
   const [dailyBrief, setDailyBrief] = useState<DailyBrief | null>(null)
+  const [intensiveWork, setIntensiveWork] = useState<IntensiveWorkStatus | null>(null)
   const [pendingApprovals, setPendingApprovals] = useState(0)
   const [command, setCommand] = useState('')
   const [loading, setLoading] = useState(false)
@@ -199,7 +214,9 @@ export default function HomePage() {
   const [savingDraft, setSavingDraft] = useState(false)
   const [creatingTasks, setCreatingTasks] = useState(false)
   const [resumingKevin, setResumingKevin] = useState(false)
+  const [runningWorkCycle, setRunningWorkCycle] = useState(false)
   const [resumeMessage, setResumeMessage] = useState('')
+  const [workMessage, setWorkMessage] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
   const selectedProject = useMemo(
@@ -250,7 +267,7 @@ export default function HomePage() {
   }
 
   async function refresh() {
-    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes, briefRes] = await Promise.all([
+    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes, briefRes, workRes] = await Promise.all([
       fetch('/api/projects'),
       fetch('/api/web-operators'),
       fetch('/api/web-operator/actions?limit=5'),
@@ -258,6 +275,7 @@ export default function HomePage() {
       fetch('/api/files?limit=1'),
       fetch('/api/tasks?limit=20'),
       fetch('/api/daily-brief'),
+      fetch('/api/intensive-work/status'),
     ])
     if (projectRes.ok) {
       const data = await projectRes.json()
@@ -293,6 +311,10 @@ export default function HomePage() {
     if (briefRes.ok) {
       const data = await briefRes.json()
       setDailyBrief(data as DailyBrief)
+    }
+    if (workRes.ok) {
+      const data = await workRes.json()
+      setIntensiveWork(data as IntensiveWorkStatus)
     }
   }
 
@@ -338,6 +360,55 @@ export default function HomePage() {
       setLiveLabel('Done')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function startIntensiveWork(level = 'safe_internal') {
+    setRunningWorkCycle(true)
+    setWorkMessage('')
+    try {
+      const res = await fetch('/api/intensive-work/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level, project_id: selectedProject?.id ?? null, run_immediately: true }),
+      })
+      const data = await res.json()
+      setWorkMessage(data.cycle?.message ?? 'Intensive Work started.')
+      await refresh()
+    } catch {
+      setWorkMessage('Could not start Intensive Work.')
+    } finally {
+      setRunningWorkCycle(false)
+    }
+  }
+
+  async function runWorkCycle() {
+    setRunningWorkCycle(true)
+    setWorkMessage('')
+    try {
+      const res = await fetch('/api/intensive-work/run-cycle', { method: 'POST' })
+      const data = await res.json()
+      setWorkMessage(data.message ?? 'Cycle finished.')
+      await refresh()
+    } catch {
+      setWorkMessage('Could not run work cycle.')
+    } finally {
+      setRunningWorkCycle(false)
+    }
+  }
+
+  async function pauseIntensiveWork() {
+    setRunningWorkCycle(true)
+    try {
+      await fetch('/api/intensive-work/pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Paused from Home.' }),
+      })
+      setWorkMessage('Intensive Work paused.')
+      await refresh()
+    } finally {
+      setRunningWorkCycle(false)
     }
   }
 
@@ -656,6 +727,49 @@ export default function HomePage() {
           </section>
 
           <aside style={{ display: 'grid', gap: 16 }}>
+            <section style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Intensive Work</div>
+                  <div style={{ color: intensiveWork?.state.enabled ? '#047857' : '#0f172a', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+                    {intensiveWork?.state.enabled ? 'Working' : 'Off'}
+                  </div>
+                </div>
+                <Link href="/work" style={{ color: '#2563eb', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>View queue</Link>
+              </div>
+              <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.6 }}>
+                AÏKO will keep working until it needs your approval or help.
+              </p>
+              <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 12 }}>
+                <div>Level: {(intensiveWork?.state.level ?? 'off').replace(/_/g, ' ')}</div>
+                <div>
+                  Current: {intensiveWork?.active[0]
+                    ? `${intensiveWork.active[0].assigned_agent_name} · ${intensiveWork.active[0].work_type.replace(/_/g, ' ')}`
+                    : intensiveWork?.queue[0]
+                      ? `${intensiveWork.queue[0].assigned_agent_name} queued`
+                      : 'No queued work'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }} onClick={() => startIntensiveWork('safe_internal')} disabled={runningWorkCycle}>
+                  {runningWorkCycle ? 'Working...' : 'Start intensive work'}
+                </button>
+                <button style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }} onClick={runWorkCycle} disabled={runningWorkCycle}>
+                  Run one cycle
+                </button>
+                <button style={{ ...buttonStyle, background: '#f8fafc', borderColor: '#e2e8f0', color: '#475569', padding: '8px 10px', textAlign: 'center' }} onClick={pauseIntensiveWork} disabled={runningWorkCycle}>
+                  Pause
+                </button>
+              </div>
+              {workMessage && <p style={{ ...mutedText, margin: '10px 0 0' }}>{workMessage}</p>}
+              <details style={{ marginTop: 10 }}>
+                <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>Advanced</summary>
+                <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 11 }}>
+                  {JSON.stringify(intensiveWork, null, 2)}
+                </pre>
+              </details>
+            </section>
+
             <section style={cardStyle}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
                 <div>

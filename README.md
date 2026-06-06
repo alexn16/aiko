@@ -20,6 +20,28 @@ AÏKO is a self-hosted, agent-based operating system for marketing execution. It
 
 CEO Chat remains available at `/ceo`. AÏKO behaves like a ChatGPT-style CEO for an AI marketing company. You speak naturally to the CEO, and it coordinates projects, assigns Project Managers, builds project memory, and orchestrates agents — all through conversation.
 
+## Intensive Work Mode
+
+Intensive Work lets AÏKO keep moving a project forward in bounded local cycles instead of stopping after one response. It is available from `/home`, `/work`, and CEO commands such as:
+
+```text
+Keep working intensively on ALB Parking until blocked.
+Pause intensive work.
+Start intensive work with browser research.
+```
+
+Levels:
+
+- `off`: AÏKO only works when commanded.
+- `planning_only`: internal plans, reports, tasks, and files only.
+- `safe_internal`: AI Skills, task creation, reports, summaries, files, project memory, and capability checks.
+- `browser_research`: Kevin may open/read public websites and research, but stops at login, CAPTCHA, security checks, approvals, and risky actions.
+- `approval_required`: browser work is allowed under the existing approval model. Approval still does not execute automatically.
+
+The local MVP uses a manual “Run one cycle” button and optional owner-triggered start commands. Each cycle is bounded by action and daily limits. AÏKO stops when approval is needed, manual browser help is needed, a missing capability is detected, operating mode blocks work, the cycle budget is reached, or the user pauses it.
+
+Safety remains unchanged: Intensive Work does not auto-send emails, auto-post, auto-message, auto-publish, bypass login/CAPTCHA/security, or mark missing capabilities as available.
+
 **The app requires a real connected AI provider before CEO Chat works.**
 On first launch, AÏKO shows the setup screen where you connect your AI brain (ChatGPT/Codex local auth, OpenAI API, Anthropic API, Ollama, or a custom endpoint). The CEO Chat is disabled until a provider is connected and tested.
 

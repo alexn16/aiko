@@ -58,15 +58,17 @@ export default function AgentsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [res, taskRes] = await Promise.all([
+      const [res, taskRes, intensiveRes] = await Promise.all([
         fetch('/api/custom-agents'),
         fetch('/api/tasks?limit=100'),
+        fetch('/api/intensive-work/status'),
       ])
       const data = await res.json()
       const taskData = taskRes.ok ? await taskRes.json() : { tasks: [] }
+      const intensiveData = intensiveRes.ok ? await intensiveRes.json() : { queue: [], active: [] }
       setBuiltIn(data.built_in ?? [])
       setCustom(data.custom   ?? [])
-      setWork((taskData.tasks ?? [])
+      const taskWork = (taskData.tasks ?? [])
         .filter((task: { assigned_agent_name?: string | null; output_summary?: string | null }) => task.assigned_agent_name)
         .map((task: {
           id: string
@@ -82,7 +84,18 @@ export default function AgentsPage() {
           status: task.status,
           output_summary: task.output_summary ?? null,
           output_file_id: task.output_file_id ?? null,
-        })))
+        }))
+      const queueWork = [...(intensiveData.active ?? []), ...(intensiveData.queue ?? [])]
+        .filter((item: { assigned_agent_name?: string }) => item.assigned_agent_name)
+        .map((item: { id: string; assigned_agent_name: string; work_type: string; status: string; output_summary?: string | null }) => ({
+          agent_name: item.assigned_agent_name,
+          task_id: item.id,
+          task_title: item.work_type.replace(/_/g, ' '),
+          status: item.status === 'queued' ? 'queued' : item.status,
+          output_summary: item.output_summary ?? null,
+          output_file_id: null,
+        }))
+      setWork([...queueWork, ...taskWork])
     } finally {
       setLoading(false)
     }
