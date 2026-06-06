@@ -1150,3 +1150,30 @@ AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
 
 - AI Research and Strategy Skills do not browse, create Web Operator actions, post, send, publish, message, or claim fresh external facts were checked.
 - If fresh market data, live competitor data, statistics, or current web facts are needed, the output says Web Operator research is needed instead of inventing facts.
+
+---
+
+## AI Skill Output Quality — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| 7-day plan quality | `/api/ai-skills/execute` | ✅ Pass | `Plan the next 7 days for ALB Parking.` returned `create_7_day_plan` with `structured_data.day_by_day_plan` present and 7 day entries after deterministic fallback handling. |
+| Persona quality | `/api/ai-skills/execute` | ✅ Pass | `Create a customer persona for AÏKO.` returned structured `pains`, `channels`, and `messaging_angles`. |
+| Next-step quality | `/api/ceo/command` | ✅ Pass | `What should we do next for ALB Parking?` returned `recommend_next_step`, no delegation, and structured `requires_web_operator`. |
+| Risk quality + save | `/api/ai-skills/execute`, `/files` | ✅ Pass | `What are the risks for ALB Parking? Save as markdown.` returned structured risks with mitigation and saved `ALB Parking Risk Analysis` as `ai_skill_output`. |
+| Create tasks | `/api/ai-skills/create-tasks`, `/api/agent-tasks` | ✅ Pass | Created 5 internal `agent_tasks` from the 7-day plan. No Web Operator action was created and no external action executed. |
+| No operator side effect | `/api/web-operator/actions` | ✅ Pass | Latest Web Operator action stayed `9188773a-e1d9-4777-96f5-a684fa38fb42` throughout internal AI skill execution and task creation. |
+| Bad request handling | `/api/ai-skills/create-tasks` | ✅ Pass after fix | Malformed JSON now returns a clean `400` instead of logging a stack trace. |
+
+### Safety
+
+- The quality pass changed output structure and internal task creation only.
+- It did not add browser actions, external execution, publishing, posting, messaging, or Web Operator delegation.

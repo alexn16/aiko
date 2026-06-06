@@ -29,6 +29,8 @@ export type AISkillOutput = {
   next_actions?: string[]
   needs_web_research?: boolean
   web_research_questions?: string[]
+  structured_data?: Record<string, unknown>
+  tasks_created?: number
 }
 
 export const BUILT_IN_AI_SKILLS: AISkill[] = [
@@ -436,7 +438,10 @@ export async function saveAISkillOutputAsFile(
     ? `\n\n## Web Research Needed\n\n${output.needs_web_research ? 'Yes' : 'No'}${output.web_research_questions?.length ? `\n\n${output.web_research_questions.map(item => `- ${item}`).join('\n')}` : ''}`
     : ''
   const body = output.content ?? output.summary ?? ''
-  const content = `# ${title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${body}${sectionText}${recommendationText}${nextActionText}${webResearchText}\n`
+  const structuredText = output.structured_data && Object.keys(output.structured_data).length
+    ? `\n\n## Structured Output\n\n\`\`\`json\n${JSON.stringify(output.structured_data, null, 2)}\n\`\`\``
+    : ''
+  const content = `# ${title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${body}${sectionText}${recommendationText}${nextActionText}${webResearchText}${structuredText}\n`
   return createGeneratedFile({
     project_id: options.projectId ?? null,
     filename: `${slug(title)}.md`,

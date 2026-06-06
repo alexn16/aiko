@@ -766,3 +766,15 @@ AÏKO now has internal AI Skills for strategy, planning, productivity, and analy
 The owner-command route now sends internal strategy requests such as `Plan the next 7 days`, `Create a customer persona`, `What are the risks?`, and `What should we do next?` to AI skill execution before generic delegation. `/home` renders structured outputs as a Strategy card with the web-research badge and Save/Copy controls. `Run Web Operator research` appears only as an explicit next action when the internal output says external research is still needed.
 
 Runtime validation confirmed `/api/ai-skills` returns 29 enabled skills, `Plan the next 7 days for ALB Parking` maps to `create_7_day_plan`, `What should we do next for ALB Parking?` maps to `recommend_next_step` with no delegation, and saved risk analysis appears in Files as an `AI skill output`. The latest Web Operator action ID did not change during internal research skill execution.
+
+### AI Skill Output Quality — 2026-06-06
+
+AI Skill strategy outputs now use skill-specific templates in `lib/ai-skills/output-templates.ts`. Templates define expected fields for `create_7_day_plan`, `create_customer_persona`, `create_campaign_brief`, `analyze_risks`, `recommend_next_step`, and `create_marketing_strategy`, including objectives, assumptions, day-by-day actions, owner roles, deliverables, success metrics, risks, mitigations, approval gates, missing capabilities, and next actions.
+
+`lib/ai-skills/research-executor.ts` now prompts for concise actionable Markdown plus a final structured block for UI parsing. If the provider omits or truncates that structured block, AÏKO builds deterministic structured fallbacks from the Markdown so owner-facing cards still have useful fields such as `day_by_day_plan`, persona pains/channels/messaging angles, risk mitigation, and `requires_web_operator`.
+
+`/home` now shows strategy outputs as a compact Strategy card: title, summary, top three recommendations, one next action, web-research badge, Save as file, Copy, Create another version, Create tasks, and Run Web Operator research only when the output says web research is needed. Full Markdown remains behind `View full output`; raw result JSON remains in Advanced details.
+
+`POST /api/ai-skills/create-tasks` creates internal `agent_tasks` from AI skill next actions or structured plan items. It returns `created_web_operator_action=false` and `external_action_executed=false`, and it does not call Web Operator delegation. Malformed JSON now returns a clean `400` instead of logging a stack trace.
+
+Runtime validation confirmed the 7-day ALB Parking plan produced a 7-entry `day_by_day_plan`, AÏKO persona output included pains/channels/messaging angles, next-step output included `requires_web_operator`, risk analysis included mitigation and saved to Files, and task creation added 5 internal tasks while the latest Web Operator action ID stayed unchanged.

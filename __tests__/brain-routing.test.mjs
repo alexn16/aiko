@@ -4876,3 +4876,65 @@ test('234. /skills lists research and strategy AI skills', () => {
   assert.ok(migration.includes('analyze_risks'))
   assert.ok(page.includes('AI Skills'))
 })
+
+test('235. 7-day plan output template includes day_by_day_plan', () => {
+  const source = fs.readFileSync('lib/ai-skills/output-templates.ts', 'utf8')
+  assert.ok(source.includes('create_7_day_plan'))
+  assert.ok(source.includes('day_by_day_plan'))
+  assert.ok(source.includes('success_metrics'))
+})
+
+test('236. persona output template includes pains channels and messaging angles', () => {
+  const source = fs.readFileSync('lib/ai-skills/output-templates.ts', 'utf8')
+  assert.ok(source.includes('create_customer_persona'))
+  assert.ok(source.includes('pains'))
+  assert.ok(source.includes('channels'))
+  assert.ok(source.includes('messaging_angles'))
+})
+
+test('237. risk output template includes mitigation owner and next action', () => {
+  const source = fs.readFileSync('lib/ai-skills/output-templates.ts', 'utf8')
+  assert.ok(source.includes('analyze_risks'))
+  assert.ok(source.includes('mitigation'))
+  assert.ok(source.includes('owner_role'))
+  assert.ok(source.includes('next_action'))
+})
+
+test('238. next-step output template includes requires_web_operator flag', () => {
+  const source = fs.readFileSync('lib/ai-skills/output-templates.ts', 'utf8')
+  assert.ok(source.includes('recommend_next_step'))
+  assert.ok(source.includes('requires_web_operator'))
+  assert.ok(source.includes('requires_approval'))
+})
+
+test('239. AI skill prompts mark assumptions and avoid fake external facts', () => {
+  const research = fs.readFileSync('lib/ai-skills/research-executor.ts', 'utf8')
+  const content = fs.readFileSync('lib/ai-skills/content-executor.ts', 'utf8')
+  assert.ok(research.includes('Mark assumptions clearly'))
+  assert.ok(research.includes('Do not invent external facts'))
+  assert.ok(content.includes('Mark assumptions clearly'))
+})
+
+test('240. /home strategy card shows top recommendations not raw JSON by default', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('Top recommendations'))
+  assert.ok(source.includes('View full output'))
+  assert.ok(source.includes('result.ai_skill_output.recommendations.slice(0, 3)'))
+  assert.ok(source.indexOf('View full output') < source.indexOf('Advanced details'))
+})
+
+test('241. create tasks from AI skill output creates internal tasks only', () => {
+  const route = fs.readFileSync('app/api/ai-skills/create-tasks/route.ts', 'utf8')
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(route.includes('createAgentTask'))
+  assert.ok(route.includes('created_web_operator_action: false'))
+  assert.ok(route.includes('external_action_executed: false'))
+  assert.ok(home.includes('Create tasks'))
+})
+
+test('242. AI skill task creation does not create Web Operator actions', () => {
+  const route = fs.readFileSync('app/api/ai-skills/create-tasks/route.ts', 'utf8')
+  assert.equal(route.includes('delegateToWebOperator'), false)
+  assert.equal(route.includes('web_operator_actions'), false)
+  assert.equal(route.includes('/api/web-operator'), false)
+})

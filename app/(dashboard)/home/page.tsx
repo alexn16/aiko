@@ -71,6 +71,8 @@ type CommandResult = {
     next_actions?: string[]
     needs_web_research?: boolean
     web_research_questions?: string[]
+    structured_data?: Record<string, unknown>
+    tasks_created?: number
   }
   delegation?: {
     status: string
@@ -162,6 +164,7 @@ export default function HomePage() {
   const [result, setResult] = useState<CommandResult | null>(null)
   const [liveLabel, setLiveLabel] = useState('Done')
   const [savingDraft, setSavingDraft] = useState(false)
+  const [creatingTasks, setCreatingTasks] = useState(false)
   const [copyStatus, setCopyStatus] = useState('')
 
   const selectedProject = useMemo(
@@ -285,8 +288,11 @@ export default function HomePage() {
       const webResearch = typeof output.needs_web_research === 'boolean'
         ? `\n\n## Web Research Needed\n\n${output.needs_web_research ? 'Yes' : 'No'}${output.web_research_questions?.length ? `\n\n${output.web_research_questions.map(item => `- ${item}`).join('\n')}` : ''}`
         : ''
+      const structured = output.structured_data && Object.keys(output.structured_data).length
+        ? `\n\n## Structured Output\n\n\`\`\`json\n${JSON.stringify(output.structured_data, null, 2)}\n\`\`\``
+        : ''
       const body = output.content ?? output.summary ?? ''
-      const content = `# ${output.title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${body}${sections}${recommendations}${nextActions}${webResearch}\n`
+      const content = `# ${output.title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${body}${sections}${recommendations}${nextActions}${webResearch}${structured}\n`
       const res = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -334,6 +340,32 @@ export default function HomePage() {
       output.next_actions?.length ? `Next actions:\n${output.next_actions.map(item => `- ${item}`).join('\n')}` : null,
     ].filter(Boolean).join('\n\n')
     return copyDraft(output.content ?? structured)
+  }
+
+  async function createTasksFromOutput(output: NonNullable<CommandResult['ai_skill_output']>) {
+    setCreatingTasks(true)
+    try {
+      const res = await fetch('/api/ai-skills/create-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: result?.project_id ?? selectedProject?.id ?? null,
+          output,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Could not create tasks.')
+      const count = Number(data.tasks_created ?? data.tasks?.length ?? 0)
+      setResult(prev => prev ? {
+        ...prev,
+        response: `Created ${count} internal task${count === 1 ? '' : 's'}. No external action was executed.`,
+        ai_skill_output: { ...output, tasks_created: count },
+      } : prev)
+    } catch (err) {
+      setResult(prev => prev ? { ...prev, response: err instanceof Error ? err.message : 'Could not create tasks.' } : prev)
+    } finally {
+      setCreatingTasks(false)
+    }
   }
 
   const quicks = [
@@ -627,18 +659,18 @@ export default function HomePage() {
                     </div>
                     {Array.isArray(result.ai_skill_output.recommendations) && result.ai_skill_output.recommendations.length > 0 && (
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Recommendations</div>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Top recommendations</div>
                         <ul style={{ margin: 0, paddingLeft: 18, color: '#0f172a', fontSize: 14, lineHeight: 1.6 }}>
-                          {result.ai_skill_output.recommendations.map(item => <li key={item}>{item}</li>)}
+                          {result.ai_skill_output.recommendations.slice(0, 3).map(item => <li key={item}>{item}</li>)}
                         </ul>
                       </div>
                     )}
                     {Array.isArray(result.ai_skill_output.next_actions) && result.ai_skill_output.next_actions.length > 0 && (
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Next actions</div>
-                        <ul style={{ margin: 0, paddingLeft: 18, color: '#0f172a', fontSize: 14, lineHeight: 1.6 }}>
-                          {result.ai_skill_output.next_actions.map(item => <li key={item}>{item}</li>)}
-                        </ul>
+                      <div style={{ border: '1px solid #dbeafe', background: '#eff6ff', borderRadius: 8, padding: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#1e40af', marginBottom: 6 }}>Next action</div>
+                        <p style={{ margin: 0, color: '#0f172a', fontSize: 14, lineHeight: 1.6 }}>
+                          {result.ai_skill_output.next_actions[0]}
+                        </p>
                       </div>
                     )}
                     <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
@@ -647,6 +679,27 @@ export default function HomePage() {
                         {result.ai_skill_output.needs_web_research ? 'Yes. Use Kevin to verify fresh external facts before relying on them.' : 'No. This can stay internal for now.'}
                       </p>
                     </div>
+                    <details>
+                      <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
+                        View full output
+                      </summary>
+                      <pre style={{
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'inherit',
+                        color: '#0f172a',
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 8,
+                        padding: 12,
+                        fontSize: 13,
+                        lineHeight: 1.55,
+                        maxHeight: 360,
+                        overflow: 'auto',
+                        marginTop: 10,
+                      }}>
+                        {result.ai_skill_output.content ?? result.ai_skill_output.summary}
+                      </pre>
+                    </details>
                   </div>
                 ) : (
                   <pre style={{
@@ -675,6 +728,11 @@ export default function HomePage() {
                   <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Create another version of ${result.ai_skill_output!.title}${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
                     Create another version
                   </button>
+                  {result.ai_skill_output.summary && Array.isArray(result.ai_skill_output.next_actions) && result.ai_skill_output.next_actions.length > 0 && (
+                    <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => createTasksFromOutput(result.ai_skill_output!)} disabled={creatingTasks}>
+                      {creatingTasks ? 'Creating...' : result.ai_skill_output.tasks_created ? `Tasks created (${result.ai_skill_output.tasks_created})` : 'Create tasks'}
+                    </button>
+                  )}
                   {result.ai_skill_output.needs_web_research && (
                     <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Kevin, research the open questions for ${result.ai_skill_output!.title}${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
                       Run Web Operator research
