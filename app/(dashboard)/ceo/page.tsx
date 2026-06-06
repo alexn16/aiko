@@ -99,20 +99,16 @@ interface BrainDiagnostics {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const WELCOME_MESSAGE = `Hello, I'm AÏKO CEO.
+const WELCOME_MESSAGE = `Hello. I'm AÏKO CEO.
 
-I manage your AI marketing company. You can give me a project, and I will assign a Project Manager, create a marketing team, build the project memory, prepare the project map, and coordinate research, leads, copywriting, outreach, approvals, and reports.
+Tell me what to move forward. I can plan, draft, assign work, generate reports, and coordinate Kevin in the browser.
 
-Nothing external will be sent without your approval.
-
-What project should we work on first?`
+Nothing external is sent without your approval.`
 
 const SUGGESTIONS = [
-  'Create a marketing team for ALB Parking',
-  'Show me what every team is doing',
-  'Run a CEO review',
-  'Prepare a campaign proposal',
-  'What needs my approval?',
+  'What should we do today?',
+  'Start marketing for ALB Parking',
+  'Generate a report',
 ]
 
 const FINDING_STYLE: Record<string, { dot: string; labelColor: string; bg: string; border: string }> = {
@@ -544,16 +540,21 @@ export default function CeoPage() {
                                 {cmd.response}
                               </div>
                               {cmd.actions.length > 0 && (
-                                <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                                  {cmd.actions.map((a, i) => (
-                                    <span key={i} style={{
-                                      fontSize: 10, color: '#6366f1', background: '#eef2ff',
-                                      borderRadius: 4, padding: '2px 7px', fontWeight: 500,
-                                    }}>
-                                      {a.type.replace(/_/g, ' ')}
-                                    </span>
-                                  ))}
-                                </div>
+                                <details style={{ marginTop: 8 }}>
+                                  <summary style={{ cursor: 'pointer', color: '#9ca3af', fontSize: 12, fontWeight: 700, listStyle: 'none' }}>
+                                    Actions
+                                  </summary>
+                                  <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                                    {cmd.actions.map((a, i) => (
+                                      <span key={i} style={{
+                                        fontSize: 10, color: '#6366f1', background: '#eef2ff',
+                                        borderRadius: 4, padding: '2px 7px', fontWeight: 500,
+                                      }}>
+                                        {a.type.replace(/_/g, ' ')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </details>
                               )}
                               <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 10, color: '#cbd5e1', marginTop: 5 }}>
                                 {ts(cmd.created_at)}
@@ -742,7 +743,7 @@ export default function CeoPage() {
               width: 248, flexShrink: 0, borderLeft: '1px solid #f1f5f9',
               overflowY: 'auto', padding: '20px 16px',
               display: 'flex', flexDirection: 'column', gap: 20,
-              background: '#fafafa',
+              background: '#fbfbfc',
             }}>
               <PanelSection label="Company memory">
                 {memory ? (

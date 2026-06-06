@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { AdvancedDisclosure } from '@/components/ui/AdvancedDisclosure'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { PrimaryAction } from '@/components/ui/PrimaryAction'
+import { StatusPill } from '@/components/ui/StatusPill'
 
 type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done' | 'archived'
 
@@ -36,12 +40,19 @@ const statusOptions: Array<{ value: string; label: string }> = [
   { value: 'archived', label: 'Archived' },
 ]
 
-const statusTone: Record<TaskStatus, { bg: string; color: string; label: string }> = {
-  todo: { bg: '#f1f5f9', color: '#475569', label: 'To do' },
-  in_progress: { bg: '#dbeafe', color: '#1d4ed8', label: 'In progress' },
-  blocked: { bg: '#fee2e2', color: '#991b1b', label: 'Blocked' },
-  done: { bg: '#dcfce7', color: '#166534', label: 'Done' },
-  archived: { bg: '#f3f4f6', color: '#6b7280', label: 'Archived' },
+const tabOptions: Array<{ value: string; label: string }> = [
+  { value: 'todo', label: 'Todo' },
+  { value: 'in_progress', label: 'Working' },
+  { value: 'blocked', label: 'Blocked' },
+  { value: 'done', label: 'Done' },
+]
+
+const statusTone: Record<TaskStatus, { tone: 'gray' | 'blue' | 'red' | 'green'; label: string }> = {
+  todo: { tone: 'gray', label: 'Todo' },
+  in_progress: { tone: 'blue', label: 'Working' },
+  blocked: { tone: 'red', label: 'Blocked' },
+  done: { tone: 'green', label: 'Done' },
+  archived: { tone: 'gray', label: 'Archived' },
 }
 
 const buttonStyle: React.CSSProperties = {
@@ -81,7 +92,7 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
   const [projectFilter, setProjectFilter] = useState(projectId ?? '')
   const [ownerFilter, setOwnerFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('todo')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
 
@@ -141,33 +152,57 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
   return (
     <div style={{ display: 'grid', gap: compact ? 12 : 16 }}>
       {!compact && (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          {!projectId && (
-            <select
-              value={projectFilter}
-              onChange={event => setProjectFilter(event.target.value)}
-              style={{ height: 38, border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', color: '#0f172a' }}
-            >
-              <option value="">All projects</option>
-              {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-            </select>
-          )}
-          <select
-            value={ownerFilter}
-            onChange={event => setOwnerFilter(event.target.value)}
-            style={{ height: 38, border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', color: '#0f172a' }}
-          >
-            <option value="">All owners</option>
-            {ownerRoles.map(role => <option key={role} value={role}>{formatRole(role)}</option>)}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={event => setStatusFilter(event.target.value)}
-            style={{ height: 38, border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', color: '#0f172a' }}
-          >
-            {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </div>
+        <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {tabOptions.map(tab => (
+              <button
+                key={tab.value}
+                onClick={() => setStatusFilter(tab.value)}
+                style={{
+                  border: '1px solid #e5e7eb',
+                  background: statusFilter === tab.value ? '#111827' : '#ffffff',
+                  color: statusFilter === tab.value ? '#ffffff' : '#6b7280',
+                  borderRadius: 999,
+                  padding: '8px 14px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <AdvancedDisclosure title="Filters">
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              {!projectId && (
+                <select
+                  value={projectFilter}
+                  onChange={event => setProjectFilter(event.target.value)}
+                  style={{ height: 38, border: '1px solid #d1d5db', borderRadius: 12, padding: '0 10px', color: '#111827' }}
+                >
+                  <option value="">All projects</option>
+                  {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+              )}
+              <select
+                value={ownerFilter}
+                onChange={event => setOwnerFilter(event.target.value)}
+                style={{ height: 38, border: '1px solid #d1d5db', borderRadius: 12, padding: '0 10px', color: '#111827' }}
+              >
+                <option value="">All owners</option>
+                {ownerRoles.map(role => <option key={role} value={role}>{formatRole(role)}</option>)}
+              </select>
+              <select
+                value={statusFilter}
+                onChange={event => setStatusFilter(event.target.value)}
+                style={{ height: 38, border: '1px solid #d1d5db', borderRadius: 12, padding: '0 10px', color: '#111827' }}
+              >
+                {statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+          </AdvancedDisclosure>
+        </>
       )}
 
       {message && (
@@ -179,55 +214,49 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
       {loading ? (
         <div style={{ color: '#64748b', fontSize: 13 }}>Loading tasks...</div>
       ) : tasks.length === 0 ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>
-          Tasks created from plans will appear here.
-        </div>
+        <EmptyState title="No tasks yet." description="Tasks created from plans will appear here." />
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gap: 0, borderTop: '1px solid #f3f4f6' }}>
           {tasks.map(task => {
             const tone = statusTone[task.status]
             return (
               <div key={task.id} style={{
-                border: '1px solid #e2e8f0',
+                borderBottom: '1px solid #f3f4f6',
                 background: '#ffffff',
-                borderRadius: 8,
-                padding: compact ? 12 : 14,
+                padding: compact ? '12px 0' : '16px 0',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 16, alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ color: '#0f172a', fontSize: compact ? 14 : 15, fontWeight: 900, lineHeight: 1.35 }}>
                       {task.title}
                     </div>
                     <div style={{ color: '#64748b', fontSize: 12, marginTop: 5, lineHeight: 1.5 }}>
-                      {task.project_name ?? 'No project'} · {task.assigned_agent_name ?? formatRole(task.owner_role)} · {task.source} · {taskAge(task.created_at)}
+                      {task.project_name ?? 'No project'} · {task.assigned_agent_name ?? formatRole(task.owner_role)}
                     </div>
                   </div>
-                  <span style={{
-                    flexShrink: 0,
-                    borderRadius: 999,
-                    padding: '4px 8px',
-                    background: tone.bg,
-                    color: tone.color,
-                    fontSize: 11,
-                    fontWeight: 900,
-                  }}>
-                    {tone.label}
-                  </span>
-                </div>
-                {!compact && ownerDescription(task.description) && (
-                  <p style={{ margin: '10px 0 0', color: '#334155', fontSize: 13, lineHeight: 1.55 }}>
-                    {ownerDescription(task.description)}
-                  </p>
-                )}
-                {!compact && task.output_summary && (
-                  <p style={{ margin: '10px 0 0', color: '#475569', fontSize: 13, lineHeight: 1.55 }}>
-                    <strong>Output:</strong> {task.output_summary}
-                  </p>
-                )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-                  {task.status !== 'done' && (
-                    <button style={buttonStyle} onClick={() => updateTask(task, 'done')}>Mark done</button>
+                  <StatusPill tone={tone.tone}>{tone.label}</StatusPill>
+                  {task.status !== 'done' ? (
+                    <PrimaryAction onClick={() => updateTask(task, 'done')} variant="secondary">Done</PrimaryAction>
+                  ) : (
+                    <PrimaryAction onClick={() => updateTask(task, 'todo')} variant="secondary">Reopen</PrimaryAction>
                   )}
+                </div>
+                {!compact && (
+                  <AdvancedDisclosure title="Details">
+                    {ownerDescription(task.description) && (
+                      <p style={{ margin: 0, color: '#334155', fontSize: 13, lineHeight: 1.55 }}>
+                        {ownerDescription(task.description)}
+                      </p>
+                    )}
+                    {task.output_summary && (
+                      <p style={{ margin: '10px 0 0', color: '#475569', fontSize: 13, lineHeight: 1.55 }}>
+                        <strong>Output:</strong> {task.output_summary}
+                      </p>
+                    )}
+                    <div style={{ color: '#6b7280', fontSize: 12, marginTop: 10 }}>
+                      Source: {task.source} · Created {taskAge(task.created_at)}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                   {task.status !== 'blocked' && task.status !== 'done' && (
                     <button style={{ ...buttonStyle, background: '#fff7ed', borderColor: '#fed7aa', color: '#c2410c' }} onClick={() => updateTask(task, 'blocked')}>Mark blocked</button>
                   )}
@@ -240,7 +269,9 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
                   {task.output_file_id && (
                     <Link href={`/files?file_id=${task.output_file_id}`} style={{ ...buttonStyle, textDecoration: 'none' }}>Open output</Link>
                   )}
-                </div>
+                    </div>
+                  </AdvancedDisclosure>
+                )}
               </div>
             )
           })}

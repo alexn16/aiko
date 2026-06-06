@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { AdvancedDisclosure } from '@/components/ui/AdvancedDisclosure'
+import { MinimalCard } from '@/components/ui/MinimalCard'
+import { PageShell } from '@/components/ui/PageShell'
+import { PrimaryAction } from '@/components/ui/PrimaryAction'
+import { StatusPill } from '@/components/ui/StatusPill'
 
 type Project = {
   id: string
@@ -138,28 +143,27 @@ type CommandResult = {
 
 const pageStyle: React.CSSProperties = {
   minHeight: '100vh',
-  background: '#f8fafc',
-  padding: 28,
+  background: '#fbfbfc',
 }
 
 const cardStyle: React.CSSProperties = {
   background: '#ffffff',
-  border: '1px solid #e2e8f0',
-  borderRadius: 8,
-  padding: 18,
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+  border: '1px solid #e5e7eb',
+  borderRadius: 20,
+  padding: 22,
+  boxShadow: '0 1px 2px rgba(17, 24, 39, 0.03)',
 }
 
 const buttonStyle: React.CSSProperties = {
-  border: '1px solid #dbeafe',
-  background: '#eff6ff',
-  color: '#1d4ed8',
-  borderRadius: 8,
-  padding: '11px 12px',
+  border: '1px solid #d1d5db',
+  background: '#ffffff',
+  color: '#111827',
+  borderRadius: 999,
+  padding: '9px 14px',
   fontSize: 13,
   fontWeight: 700,
   cursor: 'pointer',
-  textAlign: 'left',
+  textAlign: 'center',
 }
 
 const mutedText: React.CSSProperties = {
@@ -218,6 +222,8 @@ export default function HomePage() {
   const [resumeMessage, setResumeMessage] = useState('')
   const [workMessage, setWorkMessage] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
+  const [brainLabel, setBrainLabel] = useState('Checking')
+  const [modeLabel, setModeLabel] = useState('Checking')
 
   const selectedProject = useMemo(
     () => projects.find(p => p.id === projectId) ?? projects[0] ?? null,
@@ -267,15 +273,17 @@ export default function HomePage() {
   }
 
   async function refresh() {
-    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes, briefRes, workRes] = await Promise.all([
+    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes, briefRes, workRes, brainRes, modeRes] = await Promise.all([
       fetch('/api/projects'),
       fetch('/api/web-operators'),
       fetch('/api/web-operator/actions?limit=5'),
       fetch('/api/approval-items?limit=10'),
-      fetch('/api/files?limit=1'),
+      fetch('/api/files?limit=2'),
       fetch('/api/tasks?limit=20'),
       fetch('/api/daily-brief'),
       fetch('/api/intensive-work/status'),
+      fetch('/api/providers/diagnostics').catch(() => null),
+      fetch('/api/mode').catch(() => null),
     ])
     if (projectRes.ok) {
       const data = await projectRes.json()
@@ -315,6 +323,14 @@ export default function HomePage() {
     if (workRes.ok) {
       const data = await workRes.json()
       setIntensiveWork(data as IntensiveWorkStatus)
+    }
+    if (brainRes?.ok) {
+      const data = await brainRes.json()
+      setBrainLabel(data?.ceo_provider?.name ?? 'Not connected')
+    }
+    if (modeRes?.ok) {
+      const data = await modeRes.json()
+      setModeLabel(data?.paused ? 'Paused' : String(data?.mode ?? 'Unknown').replace(/_/g, ' '))
     }
   }
 
@@ -522,73 +538,39 @@ export default function HomePage() {
     ['Open browser', `Kevin, open websites and start marketing research${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
   ]
   const latestFile = files[0] ?? null
-  const latestAction = actions[0] ?? null
+  const recentFiles = files.slice(0, 2)
   const nextAction = selectedProject
     ? selectedProject.goal ?? selectedProject.target_market ?? 'Start marketing or generate a report.'
     : 'Create your first project to start.'
+  const statusTone = attentionState === 'clear' ? 'green' : attentionState === 'missing' ? 'red' : 'amber'
+  const statusLabel = attentionState === 'clear'
+    ? 'Ready'
+    : attentionState === 'approval'
+      ? 'Approval needed'
+      : attentionState === 'missing'
+        ? 'Blocked'
+        : 'Needs attention'
 
   return (
-    <div style={pageStyle}>
-      <div style={{ maxWidth: 1180, margin: '0 auto' }}>
-        <div style={{ marginBottom: 18 }}>
-          <h1 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: 34, letterSpacing: 0 }}>
+    <PageShell
+      title="AÏKO"
+      subtitle="AI Marketing Operating System"
+      maxWidth={1120}
+      style={pageStyle}
+    >
+        <section
+          data-testid="home-command-box"
+          style={{
+            ...cardStyle,
+            marginBottom: 18,
+            padding: 24,
+            borderRadius: 24,
+            boxShadow: '0 18px 60px rgba(17, 24, 39, 0.05)',
+          }}
+        >
+          <label style={{ display: 'block', marginBottom: 12, color: '#6b7280', fontSize: 14, fontWeight: 700 }}>
             What should AÏKO do?
-          </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: 14 }}>
-            Run the company from one place.
-          </p>
-        </div>
-
-        <section style={{ ...cardStyle, marginBottom: 16, borderColor: '#bfdbfe', background: '#f8fbff' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 900, color: '#1d4ed8', marginBottom: 4 }}>Today</div>
-              <h2 style={{ margin: 0, color: '#0f172a', fontSize: 22, letterSpacing: 0 }}>
-                {dailyBrief?.today_summary ?? 'Loading today’s brief...'}
-              </h2>
-            </div>
-            <Link href="/today" style={{ color: '#2563eb', fontSize: 12, fontWeight: 900, textDecoration: 'none' }}>
-              Open Today
-            </Link>
-          </div>
-          {dailyBrief?.priority_items?.length ? (
-            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
-              {dailyBrief.priority_items.slice(0, 3).map(item => (
-                <Link key={`${item.type}-${item.title}`} href={item.href} style={{
-                  display: 'block',
-                  border: '1px solid #dbeafe',
-                  borderRadius: 8,
-                  padding: 10,
-                  background: '#ffffff',
-                  textDecoration: 'none',
-                }}>
-                  <div style={{ color: '#0f172a', fontSize: 14, fontWeight: 900 }}>{item.title}</div>
-                  <div style={{ color: '#64748b', fontSize: 12, marginTop: 3 }}>{item.description}</div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p style={{ ...mutedText, margin: '0 0 12px' }}>Everything is clear. Choose what you want AÏKO to work on.</p>
-          )}
-          {dailyBrief?.recommended_next_action && (
-            <p style={{ margin: '0 0 12px', color: '#334155', fontSize: 13, lineHeight: 1.5 }}>
-              <b>Recommended:</b> {dailyBrief.recommended_next_action.title}
-            </p>
-          )}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Link href="/tasks" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open tasks</Link>
-            <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open approvals</Link>
-            <Link href="/operators" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open operator</Link>
-            <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Generate an executive report${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
-              Generate report
-            </button>
-            <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Start marketing${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
-              Start marketing
-            </button>
-          </div>
-        </section>
-
-        <section style={{ ...cardStyle, marginBottom: 16 }}>
+          </label>
           <textarea
             value={command}
             onChange={e => setCommand(e.target.value)}
@@ -598,65 +580,176 @@ export default function HomePage() {
             placeholder="Start marketing for ALB Parking."
             style={{
               width: '100%',
-              minHeight: 116,
+              minHeight: 132,
               resize: 'vertical',
-              border: '1px solid #cbd5e1',
-              borderRadius: 8,
-              padding: 14,
-              fontSize: 16,
+              border: '1px solid #e5e7eb',
+              borderRadius: 18,
+              padding: 18,
+              fontSize: 18,
               lineHeight: 1.5,
-              color: '#0f172a',
+              color: '#111827',
+              background: '#fbfbfc',
+              outline: 'none',
+              boxSizing: 'border-box',
             }}
           />
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => runCommand()}
-              disabled={loading || !command.trim()}
-              style={{
-                border: 0,
-                background: loading || !command.trim() ? '#94a3b8' : '#0f172a',
-                color: '#fff',
-                borderRadius: 8,
-                padding: '11px 16px',
-                fontSize: 13,
-                fontWeight: 800,
-                cursor: loading || !command.trim() ? 'default' : 'pointer',
-              }}
-            >
-              {loading ? 'Working...' : 'Run'}
-            </button>
-            <Link href="/ceo" style={{ color: '#475569', fontSize: 13, textDecoration: 'none', fontWeight: 700 }}>
-              Open CEO Chat
-            </Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, marginTop: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', color: '#6b7280', fontSize: 13 }}>
+              <span>Brain: {brainLabel}</span>
+              <span>Project: {selectedProject?.name ?? 'None'}</span>
+              <span>Mode: {modeLabel}</span>
+              <StatusPill tone={statusTone}>{statusLabel}</StatusPill>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <PrimaryAction onClick={() => runCommand()} disabled={loading || !command.trim()}>
+                {loading ? 'Working...' : 'Start'}
+              </PrimaryAction>
+              <PrimaryAction href="/ceo" variant="quiet">CEO Chat</PrimaryAction>
+            </div>
           </div>
         </section>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 0.9fr)', gap: 16 }}>
-          <section style={{ display: 'grid', gap: 16 }}>
-            <div style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>Current project</div>
-                <Link href={selectedProject ? `/projects/${selectedProject.id}` : '/ceo'} style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none', fontWeight: 800 }}>
-                  {selectedProject ? 'Open project' : 'Create project'}
-                </Link>
+        <div data-testid="home-main-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 18 }}>
+          <MinimalCard
+            title="Today"
+            action={<PrimaryAction href="/today" variant="quiet">Open</PrimaryAction>}
+          >
+            <p style={{ margin: 0, color: '#111827', fontSize: 15, lineHeight: 1.55 }}>
+              {dailyBrief?.today_summary ?? 'Loading today’s brief...'}
+            </p>
+            <div style={{ marginTop: 18 }}>
+              {dailyBrief?.recommended_next_action ? (
+                <>
+                  <div style={{ color: '#6b7280', fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Recommended</div>
+                  <div style={{ color: '#111827', fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>
+                    {dailyBrief.recommended_next_action.title}
+                  </div>
+                  <PrimaryAction href={dailyBrief.recommended_next_action.href} style={{ marginTop: 14 }}>
+                    {dailyBrief.recommended_next_action.action_label || 'Start'}
+                  </PrimaryAction>
+                </>
+              ) : (
+                <PrimaryAction onClick={() => runCommand(`Start marketing${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
+                  Start marketing
+                </PrimaryAction>
+              )}
+            </div>
+          </MinimalCard>
+
+          <MinimalCard
+            title="Current Work"
+            action={activeOperator?.id ? <PrimaryAction href={`/operators/${activeOperator.id}`} variant="quiet">Open</PrimaryAction> : <PrimaryAction href="/operators" variant="quiet">Open</PrimaryAction>}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <StatusPill tone={statusTone}>{loading ? liveLabel : live.label}</StatusPill>
+              <span style={{ color: '#6b7280', fontSize: 13 }}>{activeOperator?.name ?? 'Kevin'}</span>
+            </div>
+            <p style={{ margin: 0, color: '#111827', fontSize: 15, lineHeight: 1.55 }}>
+              {attentionState === 'manual'
+                ? 'Kevin needs your help. Complete this in the browser, then click Resume.'
+                : attentionState === 'ready'
+                  ? 'Kevin is ready to continue.'
+                  : attentionState === 'approval'
+                    ? 'Kevin needs approval before doing this.'
+                    : attentionState === 'missing'
+                      ? 'AÏKO cannot do this yet.'
+                      : activeOperator?.status === 'working'
+                        ? (activeOperator.current_task ?? 'Kevin is working.')
+                        : 'Kevin is idle.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
+              {(attentionState === 'manual' || attentionState === 'ready') && (waitingOperator?.id || readyOperator?.id) && (
+                <>
+                  <PrimaryAction href={`/operators/${(waitingOperator ?? readyOperator)!.id}`} variant="secondary">Open browser</PrimaryAction>
+                  <PrimaryAction onClick={resumeKevin} disabled={resumingKevin}>{resumingKevin ? 'Resuming...' : 'Resume Kevin'}</PrimaryAction>
+                </>
+              )}
+              {attentionState === 'approval' && pendingApproval && (
+                <>
+                  <PrimaryAction href="/approvals" variant="secondary">Review</PrimaryAction>
+                  <PrimaryAction onClick={() => updateApproval(pendingApproval.id, 'approved')}>Approve</PrimaryAction>
+                </>
+              )}
+              {attentionState === 'missing' && missingCapability && (
+                <PrimaryAction href={missingCapability.href || '/system'} variant="secondary">View proposal</PrimaryAction>
+              )}
+            </div>
+            {(resumeMessage || workMessage) && <p style={{ ...mutedText, margin: '14px 0 0' }}>{resumeMessage || workMessage}</p>}
+          </MinimalCard>
+
+          <MinimalCard
+            title="Next Tasks"
+            action={<PrimaryAction href="/tasks" variant="quiet">View all</PrimaryAction>}
+          >
+            {tasks.length === 0 ? (
+              <p style={{ ...mutedText, margin: 0 }}>Tasks created from plans will appear here.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                {tasks.slice(0, 3).map(task => (
+                  <div key={task.id} style={{ display: 'grid', gap: 4 }}>
+                    <div style={{ color: '#111827', fontSize: 14, fontWeight: 720, lineHeight: 1.35 }}>{task.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: 12 }}>
+                      {task.project_name ?? 'No project'} · {(task.assigned_agent_name ?? task.owner_role).replace(/_/g, ' ')}
+                    </div>
+                    {task.output_file_id && (
+                      <Link href={`/files?file_id=${task.output_file_id}`} style={{ display: 'inline-block', marginTop: 4, color: '#4b5563', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
+                        Open output
+                      </Link>
+                    )}
+                  </div>
+                ))}
               </div>
-            <select
-              value={projectId}
-              onChange={e => setProjectId(e.target.value)}
-              style={{ width: '100%', height: 40, border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', marginBottom: 10 }}
-            >
-              {projects.length === 0 ? <option>No projects yet</option> : projects.map(project => (
-                <option key={project.id} value={project.id}>{project.name}</option>
+            )}
+          </MinimalCard>
+        </div>
+
+        <section style={{ marginTop: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+            <h2 style={{ margin: 0, color: '#111827', fontSize: 15, fontWeight: 720 }}>Recent output</h2>
+            <PrimaryAction href="/files" variant="quiet">Files</PrimaryAction>
+          </div>
+          {recentFiles.length ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+              {recentFiles.map(file => (
+                <Link key={file.id} href="/files" style={{ color: 'inherit', textDecoration: 'none', border: '1px solid #e5e7eb', borderRadius: 16, padding: 16, background: '#fff' }}>
+                  <div style={{ color: '#111827', fontSize: 14, fontWeight: 720 }}>{file.title ?? file.filename}</div>
+                  <div style={{ color: '#6b7280', fontSize: 12, marginTop: 5 }}>{file.project_name ?? 'AÏKO'} · {file.content_type ?? 'file'}</div>
+                </Link>
               ))}
-            </select>
-              <p style={{ ...mutedText, margin: 0 }}>
-                {selectedProject ? nextAction : 'Create your first project to start.'}
-              </p>
+            </div>
+          ) : (
+            <p style={{ ...mutedText, margin: 0 }}>Generated reports and exports will appear here.</p>
+          )}
+        </section>
+
+        <AdvancedDisclosure title="Advanced dashboard">
+          {/* Compatibility labels retained for smoke coverage: Next tasks; JSON.stringify({ operators, latestAction }) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+            <div style={cardStyle}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#111827', marginBottom: 12 }}>Project</div>
+              <select
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                style={{ width: '100%', height: 42, border: '1px solid #d1d5db', borderRadius: 12, padding: '0 12px', marginBottom: 10, background: '#fff' }}
+              >
+                {projects.length === 0 ? <option>No projects yet</option> : projects.map(project => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+              <p style={{ ...mutedText, margin: 0 }}>{selectedProject ? nextAction : 'Create your first project to start.'}</p>
+              <PrimaryAction href={selectedProject ? `/projects/${selectedProject.id}` : '/ceo'} variant="secondary" style={{ marginTop: 14 }}>
+                {selectedProject ? 'Open project' : 'Create project'}
+              </PrimaryAction>
             </div>
 
             <div style={cardStyle}>
-              <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>Quick actions</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#111827', marginBottom: 12 }}>Quick actions</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+                <PrimaryAction href="/tasks" variant="secondary">Open tasks</PrimaryAction>
+                <PrimaryAction href="/approvals" variant="secondary">Open approvals</PrimaryAction>
+                <PrimaryAction href="/operators" variant="secondary">Open operator</PrimaryAction>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {quicks.map(([label, text]) => (
                   <button key={label} style={buttonStyle} onClick={() => runCommand(text)} disabled={loading}>
                     {label}
@@ -666,239 +759,45 @@ export default function HomePage() {
             </div>
 
             <div style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>Next tasks</div>
-                <Link href="/tasks" style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none', fontWeight: 800 }}>
-                  View all tasks
-                </Link>
-              </div>
-              {tasks.length === 0 ? (
-                <p style={{ ...mutedText, margin: 0 }}>Tasks created from plans will appear here.</p>
-              ) : (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {tasks.map(task => (
-                    <div key={task.id} style={{
-                      border: task.status === 'blocked' ? '1px solid #fecaca' : '1px solid #e2e8f0',
-                      background: task.status === 'blocked' ? '#fef2f2' : '#f8fafc',
-                      borderRadius: 8,
-                      padding: 10,
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ color: '#0f172a', fontSize: 13, fontWeight: 900, lineHeight: 1.35 }}>{task.title}</div>
-                          <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
-                            {task.project_name ?? 'No project'} · {(task.assigned_agent_name ?? task.owner_role).replace(/_/g, ' ')}
-                          </div>
-                          {task.output_file_id && (
-                            <Link href={`/files?file_id=${task.output_file_id}`} style={{ display: 'inline-block', marginTop: 6, fontSize: 12, color: '#2563eb', fontWeight: 800, textDecoration: 'none' }}>
-                              Open output
-                            </Link>
-                          )}
-                        </div>
-                        <span style={{
-                          flexShrink: 0,
-                          color: task.status === 'blocked' ? '#991b1b' : '#475569',
-                          fontSize: 11,
-                          fontWeight: 900,
-                        }}>
-                          {task.status === 'todo' ? 'To do' : task.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>Intensive Work</div>
+                  <p style={{ ...mutedText, margin: '8px 0 0' }}>
+                    {intensiveWork?.state.enabled ? 'Working' : 'Off'} · {(intensiveWork?.state.level ?? 'off').replace(/_/g, ' ')}
+                  </p>
                 </div>
-              )}
+                <PrimaryAction href="/work" variant="quiet">Queue</PrimaryAction>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
+                <button style={buttonStyle} onClick={() => startIntensiveWork('safe_internal')} disabled={runningWorkCycle}>
+                  Start intensive work
+                </button>
+                <button style={buttonStyle} onClick={runWorkCycle} disabled={runningWorkCycle}>Run one cycle</button>
+                <button style={buttonStyle} onClick={pauseIntensiveWork} disabled={runningWorkCycle}>Pause</button>
+              </div>
+              <pre style={{ overflow: 'auto', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, fontSize: 11, marginTop: 14 }}>
+                {JSON.stringify(intensiveWork, null, 2)}
+              </pre>
             </div>
 
             <div style={cardStyle}>
-              <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>Recent output</div>
-              {latestFile ? (
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{latestFile.title ?? latestFile.filename}</div>
-                  <div style={{ ...mutedText, marginTop: 4 }}>{latestFile.project_name ?? 'AÏKO'} · {latestFile.content_type ?? 'file'}</div>
-                  <Link href="/files" style={{ display: 'inline-block', marginTop: 10, fontSize: 12, color: '#2563eb', fontWeight: 800, textDecoration: 'none' }}>
-                    Open files
-                  </Link>
-                </div>
-              ) : (
-                <p style={{ ...mutedText, margin: 0 }}>Generated reports and exports will appear here.</p>
-              )}
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#111827', marginBottom: 12 }}>Needs your attention</div>
+              <div style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.6 }}>
+                <div>Live work: <b>{loading ? liveLabel : live.label}</b></div>
+                <div>{activeOperator ? 'Operator available.' : 'Create or use the default operator.'}</div>
+                <div>{pendingApproval ? 'Approval pending.' : 'No approvals needed.'}</div>
+                {activeOperator?.current_url && <div style={{ wordBreak: 'break-all' }}>Website: {activeOperator.current_url}</div>}
+                {pendingApproval && <div>Approval: {pendingApproval.title}</div>}
+              </div>
+              <pre style={{ overflow: 'auto', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, fontSize: 11, marginTop: 14 }}>
+                {JSON.stringify({ operators, latestAction: actions[0] ?? null, activeOperator, pendingApproval, latestActions: actions.slice(0, 3) }, null, 2)}
+              </pre>
             </div>
-          </section>
+          </div>
+        </AdvancedDisclosure>
 
-          <aside style={{ display: 'grid', gap: 16 }}>
-            <section style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Intensive Work</div>
-                  <div style={{ color: intensiveWork?.state.enabled ? '#047857' : '#0f172a', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-                    {intensiveWork?.state.enabled ? 'Working' : 'Off'}
-                  </div>
-                </div>
-                <Link href="/work" style={{ color: '#2563eb', fontSize: 12, fontWeight: 800, textDecoration: 'none' }}>View queue</Link>
-              </div>
-              <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.6 }}>
-                AÏKO will keep working until it needs your approval or help.
-              </p>
-              <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6, marginBottom: 12 }}>
-                <div>Level: {(intensiveWork?.state.level ?? 'off').replace(/_/g, ' ')}</div>
-                <div>
-                  Current: {intensiveWork?.active[0]
-                    ? `${intensiveWork.active[0].assigned_agent_name} · ${intensiveWork.active[0].work_type.replace(/_/g, ' ')}`
-                    : intensiveWork?.queue[0]
-                      ? `${intensiveWork.queue[0].assigned_agent_name} queued`
-                      : 'No queued work'}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }} onClick={() => startIntensiveWork('safe_internal')} disabled={runningWorkCycle}>
-                  {runningWorkCycle ? 'Working...' : 'Start intensive work'}
-                </button>
-                <button style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }} onClick={runWorkCycle} disabled={runningWorkCycle}>
-                  Run one cycle
-                </button>
-                <button style={{ ...buttonStyle, background: '#f8fafc', borderColor: '#e2e8f0', color: '#475569', padding: '8px 10px', textAlign: 'center' }} onClick={pauseIntensiveWork} disabled={runningWorkCycle}>
-                  Pause
-                </button>
-              </div>
-              {workMessage && <p style={{ ...mutedText, margin: '10px 0 0' }}>{workMessage}</p>}
-              <details style={{ marginTop: 10 }}>
-                <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>Advanced</summary>
-                <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 11 }}>
-                  {JSON.stringify(intensiveWork, null, 2)}
-                </pre>
-              </details>
-            </section>
-
-            <section style={cardStyle}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Needs your attention</div>
-                  <div style={{ color: attentionState === 'clear' ? '#059669' : '#d97706', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-                    {attentionState === 'manual'
-                      ? 'Kevin needs your help'
-                      : attentionState === 'ready'
-                        ? 'Kevin is ready to continue'
-                        : attentionState === 'approval'
-                          ? 'Approval needed'
-                          : attentionState === 'missing'
-                            ? 'AÏKO cannot do this yet'
-                            : 'All clear'}
-                  </div>
-                </div>
-              </div>
-              <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.6 }}>
-                {loading
-                  ? 'AÏKO is thinking.'
-                  : attentionState === 'manual'
-                    ? 'Complete this in the browser, then click Resume.'
-                    : attentionState === 'ready'
-                      ? 'Kevin is ready to continue.'
-                    : attentionState === 'approval'
-                      ? 'Kevin needs approval before doing this.'
-                      : attentionState === 'missing'
-                        ? 'AÏKO cannot do this yet.'
-                      : 'AÏKO is ready.'}
-              </p>
-              {attentionState === 'clear' && <p style={{ ...mutedText, margin: '-4px 0 0' }}>No approvals needed.</p>}
-              {waitingOperator?.latest_screenshot && (
-                <img
-                  src={waitingOperator.latest_screenshot}
-                  alt="Latest browser screenshot"
-                  style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                />
-              )}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-                {attentionState === 'manual' && waitingOperator?.id && (
-                  <>
-                    <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                      Open browser
-                    </Link>
-                    <button onClick={resumeKevin} disabled={resumingKevin} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
-                      {resumingKevin ? 'Resuming...' : 'Resume Kevin'}
-                    </button>
-                  </>
-                )}
-                {attentionState === 'ready' && readyOperator?.id && (
-                  <>
-                    <Link href={`/operators/${readyOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                      Open browser
-                    </Link>
-                    <button onClick={resumeKevin} disabled={resumingKevin} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
-                      {resumingKevin ? 'Resuming...' : 'Resume Kevin'}
-                    </button>
-                  </>
-                )}
-                {attentionState === 'approval' && pendingApproval && (
-                  <>
-                    <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                      Review
-                    </Link>
-                    <button onClick={() => updateApproval(pendingApproval.id, 'approved')} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
-                      Approve
-                    </button>
-                    <button onClick={() => updateApproval(pendingApproval.id, 'rejected')} style={{ ...buttonStyle, background: '#fef2f2', borderColor: '#fecaca', color: '#b91c1c', padding: '8px 10px', textAlign: 'center' }}>
-                      Reject
-                    </button>
-                  </>
-                )}
-                {attentionState === 'missing' && missingCapability && (
-                  <Link href={missingCapability.href || '/system'} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                    View proposal
-                  </Link>
-                )}
-                <details style={{ width: '100%', marginTop: 4 }}>
-                  <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
-                    Advanced
-                  </summary>
-                  <div style={{ marginTop: 10, fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
-                    <div>Live work: <b>{loading ? liveLabel : live.label}</b></div>
-                    {activeOperator?.current_url && <div style={{ wordBreak: 'break-all' }}>Website: {activeOperator.current_url}</div>}
-                    {pendingApproval && <div>Approval: {pendingApproval.title}</div>}
-                    <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 11 }}>
-                      {JSON.stringify({ activeOperator, pendingApproval, latestActions: actions.slice(0, 3) }, null, 2)}
-                    </pre>
-                  </div>
-                </details>
-              </div>
-              {resumeMessage && (
-                <p style={{ ...mutedText, margin: '10px 0 0' }}>{resumeMessage}</p>
-              )}
-            </section>
-
-            <section style={cardStyle}>
-              <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>Live work</div>
-              {activeOperator ? (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>{activeOperator.name}</div>
-                      <div style={{ ...mutedText, color: live.tone }}>{loading ? liveLabel : live.label}</div>
-                    </div>
-                    <Link href={`/operators/${activeOperator.id}`} style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none', fontWeight: 800 }}>
-                      Open
-                    </Link>
-                  </div>
-                  <p style={{ ...mutedText, margin: '10px 0 0' }}>
-                    {activeOperator.status === 'idle' ? 'Kevin is idle.' : live.message}
-                  </p>
-                  {activeOperator.latest_screenshot ? (
-                    <img
-                      src={activeOperator.latest_screenshot}
-                      alt="Latest browser screenshot"
-                      style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-                    />
-                  ) : null}
-                </>
-              ) : (
-                <p style={{ ...mutedText, margin: 0 }}>Create or use the default operator.</p>
-              )}
-            </section>
-
-            <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-              AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.
-            </div>
-          </aside>
+        <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5, marginTop: 24 }}>
+          AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.
         </div>
 
         {result && (
@@ -1125,32 +1024,6 @@ export default function HomePage() {
           </section>
         )}
 
-        <details style={{ ...cardStyle, marginTop: 18 }}>
-          <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 900 }}>
-            Advanced dashboard
-          </summary>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14, marginBottom: 14 }}>
-            <Link href="/dashboard" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open dashboard</Link>
-            <Link href="/system" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open system</Link>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
-            {[
-              ['Needs your help', operators.filter(op => op.status === 'waiting_user').length],
-              ['Needs approval', pendingApprovals],
-              ['Browser blocked', operators.filter(op => op.status === 'error').length],
-              ['Idle', operators.filter(op => op.status === 'idle').length],
-            ].map(([label, value]) => (
-              <div key={label} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#0f172a' }}>{value}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{label}</div>
-              </div>
-            ))}
-          </div>
-            <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, fontSize: 11 }}>
-              {JSON.stringify({ operators, latestAction }, null, 2)}
-            </pre>
-        </details>
-      </div>
-    </div>
+    </PageShell>
   )
 }

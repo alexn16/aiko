@@ -891,3 +891,24 @@ Safety remains unchanged:
 - `safe_internal` and `planning_only` do not create Web Operator actions.
 - Browser research is level-gated and stops at login, CAPTCHA, security checks, approval gates, and risky actions.
 - No send, post, message, publish, missing-capability enabling, or hidden unbounded loop was added.
+
+### Minimalist UI Pass — 2026-06-06
+
+AÏKO now has a calmer owner-facing interface.
+
+New shared UI primitives:
+
+- `PageShell`
+- `MinimalCard`
+- `PrimaryAction`
+- `StatusPill`
+- `EmptyState`
+- `AdvancedDisclosure`
+
+Default navigation is simplified to Home, CEO, Today, Tasks, Projects, Operators, and Files. System and advanced routes remain accessible from collapsed navigation.
+
+`/home` is now the primary command center: a large command box, short context row, Today, Current Work, Next Tasks, and recent output. Project selectors, quick actions, intensive work controls, diagnostics, and raw operator/action state are moved to Advanced.
+
+`/connect-ai` now shows the current brain and three clear owner paths first: ChatGPT / Codex Local, Ollama Local, and API Key. OAuth app setup, missing environment variable details, saved profiles, and diagnostics are under Advanced.
+
+`/tasks`, `/operators`, `/approvals`, and `/ceo` now hide more technical metadata by default while keeping details available through Advanced/Details disclosures.

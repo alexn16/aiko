@@ -1,9 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
-import { AikoBrand } from '@/components/brand/AikoBrand'
+import { AdvancedDisclosure } from '@/components/ui/AdvancedDisclosure'
+import { MinimalCard } from '@/components/ui/MinimalCard'
+import { PageShell } from '@/components/ui/PageShell'
+import { PrimaryAction } from '@/components/ui/PrimaryAction'
+import { StatusPill } from '@/components/ui/StatusPill'
 import { CATALOG, type ProviderCatalogEntry } from '@/lib/ai/provider-catalog'
 
 type ProfileStatus = 'connected' | 'not_configured' | 'not_connected' | 'needs_reauth' | 'error' | string
@@ -214,23 +218,12 @@ export default function ConnectAIPage() {
   const oauthError = searchParams.get('oauth_error')
 
   return (
-    <div style={{ padding: '40px', maxWidth: 1180 }} className="page-enter">
+    <PageShell
+      title="Connect AI"
+      subtitle="Choose the real brain AÏKO should use. Provider states stay honest."
+      maxWidth={1040}
+    >
       <AccountBanner sessionUser={session?.user} />
-
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ marginBottom: 18 }}>
-          <AikoBrand size="md" />
-        </div>
-        <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          AI connections
-        </div>
-        <h1 style={{ fontSize: 30, letterSpacing: '-0.03em', margin: '6px 0 8px', color: '#0f172a' }}>
-          Connect AI brains
-        </h1>
-        <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6, maxWidth: 760 }}>
-          Connect a real tested profile for the CEO brain. ChatGPT/Codex, API keys, Claude, and Ollama stay separate.
-        </p>
-      </div>
 
       {oauthSuccess && <Notice ok text={`${oauthSuccess === 'chatgpt' ? 'ChatGPT / Codex' : 'Claude'} OAuth connected and saved as an auth profile.`} />}
       {oauthError && <Notice text={`OAuth failed: ${decodeURIComponent(oauthError)}`} />}
@@ -238,9 +231,40 @@ export default function ConnectAIPage() {
 
       <CurrentBrain profile={ceoProfile} diagnostics={diagnostics} onTest={testProfile} />
 
-      <section style={{ marginTop: 28 }}>
-        <div style={LABEL}>Section 2 · Auth profiles</div>
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden' }}>
+      <section style={{ marginTop: 22 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
+          <SimpleConnectionCard
+            title="ChatGPT / Codex Local"
+            status={diagnostics?.chatgpt_codex_local.connected ? 'Connected' : diagnostics?.chatgpt_codex_local.auth_file_detected ? 'Detected' : 'Not detected'}
+            tone={diagnostics?.chatgpt_codex_local.connected ? 'green' : diagnostics?.chatgpt_codex_local.auth_file_detected ? 'amber' : 'gray'}
+            description="Use your local Codex login."
+            action={
+              diagnostics?.chatgpt_codex_local.connected
+                ? <PrimaryAction onClick={() => codexLocalAction('assign')} disabled={busy === 'codex:assign'}>Assign CEO</PrimaryAction>
+                : <PrimaryAction onClick={() => codexLocalAction(diagnostics?.chatgpt_codex_local.auth_file_detected ? 'import' : 'detect')} disabled={busy?.startsWith('codex:')}>Detect</PrimaryAction>
+            }
+          />
+          <SimpleConnectionCard
+            title="Ollama Local"
+            status={profiles.some(p => p.provider_catalog_id === 'ollama' && p.status === 'connected') ? 'Connected' : 'Local fallback'}
+            tone={profiles.some(p => p.provider_catalog_id === 'ollama' && p.status === 'connected') ? 'green' : 'gray'}
+            description="Run models on this machine."
+            action={<PrimaryAction onClick={() => setConfiguring(CATALOG.find(c => c.id === 'ollama') ?? null)} variant="secondary">Set up</PrimaryAction>}
+          />
+          <SimpleConnectionCard
+            title="API Key"
+            status={profiles.some(p => ['openai_api', 'anthropic_api'].includes(p.provider_catalog_id ?? '') && p.status === 'connected') ? 'Connected' : 'Optional'}
+            tone={profiles.some(p => ['openai_api', 'anthropic_api'].includes(p.provider_catalog_id ?? '') && p.status === 'connected') ? 'green' : 'gray'}
+            description="OpenAI or Anthropic Platform keys."
+            action={<PrimaryAction onClick={() => setConfiguring(CATALOG.find(c => c.id === 'openai_api') ?? null)} variant="secondary">Add key</PrimaryAction>}
+          />
+        </div>
+      </section>
+
+      <AdvancedDisclosure title="Advanced provider setup">
+        <section style={{ marginTop: 28 }}>
+          <div style={LABEL}>Auth profiles</div>
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 16, overflow: 'hidden' }}>
           {profiles.length === 0 ? (
             <div style={{ padding: 22, color: '#64748b', fontSize: 13 }}>
               No saved auth profiles yet. Add Ollama, OpenAI API, Anthropic API, OpenRouter, or configure ChatGPT/Codex OAuth below.
@@ -257,12 +281,15 @@ export default function ConnectAIPage() {
               onDelete={deleteProfile}
             />
           ))}
-        </div>
-      </section>
+          </div>
+        </section>
 
-      <section style={{ marginTop: 32 }}>
-        <div style={LABEL}>Section 3 · Add auth profile</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+        <section style={{ marginTop: 32 }}>
+          <div style={LABEL}>Add auth profile</div>
+          <p style={{ margin: '0 0 14px', color: '#6b7280', fontSize: 13 }}>
+            Advanced OAuth app setup is not configured unless the required environment variables are present.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
           {addCards.map(entry => (
             <AddCard
               key={entry.id}
@@ -273,10 +300,11 @@ export default function ConnectAIPage() {
               onCodexLocalAction={codexLocalAction}
             />
           ))}
-        </div>
-      </section>
+          </div>
+        </section>
 
-      <DiagnosticsPanel diagnostics={diagnostics} profiles={profiles} />
+        <DiagnosticsPanel diagnostics={diagnostics} profiles={profiles} />
+      </AdvancedDisclosure>
 
       {configuring && (
         <SetupDrawer
@@ -286,7 +314,22 @@ export default function ConnectAIPage() {
           onSaved={async () => { setConfiguring(null); await load() }}
         />
       )}
-    </div>
+    </PageShell>
+  )
+}
+
+function SimpleConnectionCard({ title, status, tone, description, action }: {
+  title: string
+  status: string
+  tone: 'green' | 'amber' | 'red' | 'gray' | 'blue'
+  description: string
+  action: ReactNode
+}) {
+  return (
+    <MinimalCard title={title} action={<StatusPill tone={tone}>{status}</StatusPill>}>
+      <p style={{ margin: 0, color: '#6b7280', fontSize: 13, lineHeight: 1.5, minHeight: 40 }}>{description}</p>
+      <div style={{ marginTop: 18 }}>{action}</div>
+    </MinimalCard>
   )
 }
 

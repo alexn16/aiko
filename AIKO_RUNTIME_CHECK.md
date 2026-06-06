@@ -1381,3 +1381,60 @@ AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
 - First runtime CEO start command returned HTTP 500 because `setIntensiveWorkState()` inserted `NULL` into non-null default state columns on first write. Fixed the upsert to use default values on insert and partial values only on update.
 - The command “I want AÏKO to keep working intensively on ALB Parking until it is blocked” initially fell back to the latest project because project extraction only handled `for ...`. Fixed extraction to handle `for` and `on`, and to stop project names before `until`.
 - Sidebar footer still showed `v0.1.0`; updated to `v0.2.0`.
+
+---
+
+## Minimalist UI Pass — 2026-06-06
+
+### Validation scope
+
+Pages targeted for runtime validation:
+
+- `/home`
+- `/ceo`
+- `/tasks`
+- `/operators`
+- `/operators/[id]`
+- `/approvals`
+- `/connect-ai`
+
+### Expected checks
+
+| Page | Expected |
+|---|---|
+| `/home` | One primary command box, short context row, three main cards, recent output, Advanced dashboard collapsed. |
+| `/ceo` | Chat-first view, shorter welcome copy, action metadata hidden under Actions. |
+| `/tasks` | Simple Todo / Working / Blocked / Done tabs, task metadata behind Details. |
+| `/operators` | Operator cards show name, status, current work, and Open. Controls hidden under Advanced. |
+| `/operators/[id]` | Primary state remains visible; playbook/action logs stay behind Advanced. |
+| `/approvals` | Pending approvals shown by default; history filters hidden under Advanced. |
+| `/connect-ai` | Current brain first, then ChatGPT/Codex Local, Ollama Local, API Key. OAuth/env diagnostics hidden under Advanced. |
+
+### Safety
+
+- Safety model unchanged.
+- Provider truth unchanged.
+- Web Operator behavior unchanged.
+- Approval requirements remain in place.
+- Login/CAPTCHA/security bypass remains blocked.
+
+### Local validation result
+
+Command:
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+| Page | Result | Notes |
+|---|---|---|
+| `/home` | ✅ Pass | Rendered AÏKO title, large command box, context row, Today, Current Work, Next Tasks, recent output, safety line, and collapsed Advanced dashboard. |
+| `/ceo` | ✅ Pass | Rendered chat-first view with shorter welcome copy and three suggestions. |
+| `/tasks` | ✅ Pass | Rendered Todo / Working / Blocked / Done tabs and Details disclosures. |
+| `/operators` | ✅ Pass | Rendered compact operator cards with name, status, current work, Open, and Advanced. |
+| `/operators/[id]` | ✅ Pass | Existing Kevin waiting-user state rendered as simple manual-help copy with Open browser, I’m taking over, Resume, and Advanced. |
+| `/approvals` | ✅ Pass | Pending-only default rendered with empty state when no approvals were pending. |
+| `/connect-ai` | ✅ Pass | Rendered current brain plus ChatGPT / Codex Local, Ollama Local, and API Key cards; advanced provider setup stayed collapsed. |
+| `/work` | ✅ Pass | Existing queue page rendered without blank or 500 state. |
+
+No runtime blocker was found. The browser still reflects existing local state: Kevin is waiting on a LinkedIn login page, which correctly remains a manual-help state.

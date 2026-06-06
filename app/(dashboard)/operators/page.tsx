@@ -2,6 +2,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { WebOperator } from '@/lib/web-operator/operators'
+import { AdvancedDisclosure } from '@/components/ui/AdvancedDisclosure'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { MinimalCard } from '@/components/ui/MinimalCard'
+import { PageShell } from '@/components/ui/PageShell'
+import { PrimaryAction } from '@/components/ui/PrimaryAction'
+import { StatusPill } from '@/components/ui/StatusPill'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,17 +34,14 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const color = STATUS_COLOR[status] ?? '#94a3b8'
   const label = STATUS_LABEL[status] ?? status.replace(/_/g, ' ')
+  const tone =
+    status === 'working' ? 'blue' :
+    status === 'waiting_approval' || status === 'waiting_user' || status === 'user_controlling' ? 'amber' :
+    status === 'ready_to_resume' ? 'green' :
+    status === 'error' ? 'red' : 'gray'
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5,
-    }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 11, color, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {label}
-      </span>
-    </span>
+    <StatusPill tone={tone}>{label}</StatusPill>
   )
 }
 
@@ -167,9 +170,8 @@ export default function OperatorsPage() {
 
   const CARD: React.CSSProperties = {
     background: '#ffffff',
-    border: '1px solid #f1f5f9',
-    borderRadius: 10,
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    border: '1px solid #e5e7eb',
+    borderRadius: 20,
     padding: '18px 20px',
     marginBottom: 16,
   }
@@ -186,24 +188,13 @@ export default function OperatorsPage() {
   }
 
   return (
-    <div style={{ padding: '40px 32px', maxWidth: 960 }}>
-      {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: '0 0 4px' }}>
-          Web Operators
-        </h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-          Browser agents for supervised web work.
-        </p>
-      </div>
+    <PageShell title="Operators" subtitle="Supervised browser work." maxWidth={960}>
 
       {/* Operator grid */}
       {loading ? (
         <div style={{ color: '#94a3b8', fontSize: 13 }}>Loading…</div>
       ) : operators.length === 0 ? (
-        <div style={{ ...CARD, color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>
-          No operators yet. Create one below.
-        </div>
+        <MinimalCard><EmptyState title="No operators yet." description="Create or use the default operator." /></MinimalCard>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
           {operators.map(op => {
@@ -211,10 +202,9 @@ export default function OperatorsPage() {
             return (
             <div key={op.id} style={{
               background: '#ffffff',
-              border: '1px solid #f1f5f9',
-              borderRadius: 10,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              padding: '18px 20px',
+              border: '1px solid #e5e7eb',
+              borderRadius: 20,
+              padding: 20,
             }}>
               {/* Name + status */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
@@ -231,21 +221,9 @@ export default function OperatorsPage() {
                 )}
               </div>
 
-              {/* Role badge */}
-              <div style={{
-                display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                fontSize: 10, fontWeight: 600, background: '#f1f5f9', color: '#64748b',
-                marginBottom: 10,
-              }}>
-                {op.role}
-              </div>
-
-              {/* Project */}
-              {op.project_name && (
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-                  Project: <span style={{ color: '#0f172a', fontWeight: 500 }}>{op.project_name}</span>
-                </div>
-              )}
+              <p style={{ minHeight: 40, margin: '0 0 14px', color: '#4b5563', fontSize: 13, lineHeight: 1.55 }}>
+                {notice?.text ?? op.current_task ?? op.current_goal ?? (op.status === 'idle' ? 'Kevin is idle.' : 'Working.')}
+              </p>
 
               {/* Attention state */}
               {notice && (
@@ -261,85 +239,69 @@ export default function OperatorsPage() {
                 </div>
               )}
 
-              {/* Current URL */}
-              {op.current_url && (
-                <div style={{ fontSize: 10, color: '#6366f1', fontFamily: 'DM Mono, monospace', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {truncate(op.current_url, 50)}
-                </div>
-              )}
-
-              {/* Last updated */}
-              <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 12 }}>
-                Updated {timeAgo(op.updated_at)}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginTop: 14 }}>
+                <PrimaryAction href={`/operators/${op.id}`}>Open</PrimaryAction>
+                <span style={{ fontSize: 12, color: '#9ca3af' }}>{op.project_name ?? 'No project'}</span>
               </div>
 
-              <details style={{ marginBottom: 12 }}>
-                <summary style={{ cursor: 'pointer', color: '#94a3b8', fontSize: 11, fontWeight: 700 }}>Advanced</summary>
+              <AdvancedDisclosure>
                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 8, display: 'grid', gap: 5 }}>
+                  <div>Role: {op.role}</div>
+                  {op.current_url ? <div style={{ wordBreak: 'break-all' }}>Website: {truncate(op.current_url, 90)}</div> : null}
                   {op.current_workflow ? <div>Workflow: {op.current_workflow}</div> : null}
                   {op.current_goal ? <div>Goal: {truncate(op.current_goal, 100)}</div> : null}
                   {op.current_task ? <div>Task: {truncate(op.current_task, 100)}</div> : null}
                   {op.memory_summary ? <div>{truncate(op.memory_summary, 120)}</div> : null}
+                  <div>Updated {timeAgo(op.updated_at)}</div>
                 </div>
                 <div style={{ fontSize: 9, color: '#94a3b8', fontFamily: 'DM Mono, monospace', marginTop: 8 }}>
                   profile: {op.browser_profile_key}
                   {op.waiting_reason ? <div>reason: {op.waiting_reason}</div> : null}
                 </div>
-              </details>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                {/* Assign to project */}
-                <select
-                  defaultValue=""
-                  onChange={e => { if (e.target.value) handleAssignProject(op.id, e.target.value) }}
-                  style={{
-                    background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 5,
-                    padding: '5px 8px', fontSize: 11, color: '#374151', cursor: 'pointer',
-                  }}
-                >
-                  <option value="" disabled>Assign project…</option>
-                  {projects.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-
-                {/* Stop session */}
-                {op.status === 'working' && (
-                  <button
-                    onClick={() => handleStopSession(op.id)}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 12 }}>
+                  <select
+                    defaultValue=""
+                    onChange={e => { if (e.target.value) handleAssignProject(op.id, e.target.value) }}
                     style={{
-                      background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
-                      borderRadius: 5, padding: '5px 12px', fontSize: 11,
-                      fontWeight: 600, cursor: 'pointer',
+                      background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 5,
+                      padding: '5px 8px', fontSize: 11, color: '#374151', cursor: 'pointer',
                     }}
                   >
-                    Stop session
-                  </button>
-                )}
+                    <option value="" disabled>Assign project…</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
 
-                {/* View detail */}
-                <Link
-                  href={`/operators/${op.id}`}
-                  style={{ fontSize: 11, color: '#0f172a', textDecoration: 'none', fontWeight: 600 }}
-                >
-                  View →
-                </Link>
+                  {op.status === 'working' && (
+                    <button
+                      onClick={() => handleStopSession(op.id)}
+                      style={{
+                        background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca',
+                        borderRadius: 5, padding: '5px 12px', fontSize: 11,
+                        fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      Stop session
+                    </button>
+                  )}
 
-                {/* View actions */}
-                <Link
-                  href={`/operator?operator_id=${op.id}`}
-                  style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none', fontWeight: 500 }}
-                >
-                  Actions →
-                </Link>
-              </div>
+                  <Link
+                    href={`/operator?operator_id=${op.id}`}
+                    style={{ fontSize: 11, color: '#6366f1', textDecoration: 'none', fontWeight: 500 }}
+                  >
+                    Actions →
+                  </Link>
+                </div>
+              </AdvancedDisclosure>
+
             </div>
           )})}
         </div>
       )}
 
       {/* Create new operator */}
+      <AdvancedDisclosure title="Create operator">
       <div style={CARD}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 14 }}>
           Create new operator
@@ -381,18 +343,15 @@ export default function OperatorsPage() {
           {creating ? 'Creating…' : 'Create operator'}
         </button>
       </div>
+      </AdvancedDisclosure>
 
       {/* Info note */}
       <div style={{
-        padding: '12px 16px', background: '#f8fafc', borderRadius: 8,
+        padding: '12px 0',
         fontSize: 12, color: '#64748b', lineHeight: 1.6,
       }}>
-        Name an operator in CEO Chat to route browser work:
-        <br />
-        &ldquo;Kevin, open Gmail.&rdquo; · &ldquo;Hana, research parking management companies.&rdquo; · &ldquo;Ask Kevin to search for leads.&rdquo;
-        <br />
         AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.
       </div>
-    </div>
+    </PageShell>
   )
 }

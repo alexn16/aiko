@@ -4,52 +4,41 @@ import { usePathname } from 'next/navigation'
 import { SidebarModeIndicator } from '@/components/mode/SidebarModeIndicator'
 import { AikoBrand } from '@/components/brand/AikoBrand'
 
-const NAV_GROUPS = [
-  {
-    label: 'Primary',
-    items: [
-      { href: '/home', label: 'Home' },
-      { href: '/today', label: 'Today' },
-      { href: '/ceo', label: 'CEO Chat' },
-      { href: '/projects', label: 'Projects' },
-      { href: '/operators', label: 'Operators' },
-      { href: '/files', label: 'Files' },
-    ],
-  },
-  {
-    label: 'Work',
-    items: [
-      { href: '/start-campaign', label: 'Start Campaign' },
-      { href: '/tasks', label: 'Tasks' },
-      { href: '/work', label: 'Work Queue' },
-      { href: '/leads', label: 'Leads' },
-      { href: '/approvals', label: 'Approvals' },
-      { href: '/reports', label: 'Reports' },
-    ],
-  },
-  {
-    label: 'System',
-    items: [
-      { href: '/connect-ai', label: 'Connect AI' },
-      { href: '/system', label: 'System' },
-      { href: '/mode', label: 'Mode' },
-    ],
-  },
+const PRIMARY_ITEMS = [
+  { href: '/home', label: 'Home' },
+  { href: '/ceo', label: 'CEO' }, // formerly CEO Chat
+  { href: '/today', label: 'Today' },
+  { href: '/tasks', label: 'Tasks' },
+  { href: '/projects', label: 'Projects' },
+  { href: '/operators', label: 'Operators' },
+  { href: '/files', label: 'Files' },
+]
+
+// Navigation groups retained conceptually: Primary, Work, System, Advanced.
+const SYSTEM_ITEMS = [
+  { href: '/connect-ai', label: 'Connect AI' },
+  { href: '/approvals', label: 'Approvals' },
+  { href: '/skills', label: 'Skills' },
+  { href: '/work', label: 'Work Queue' },
+  { href: '/system', label: 'System Improvements' },
+  { href: '/mode', label: 'Mode' },
+  { href: '/settings', label: 'Settings' },
+  { href: '/brand', label: 'Brand' },
 ]
 
 const ADVANCED_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/start-campaign', label: 'Start Campaign' },
+  { href: '/leads', label: 'Leads' },
+  { href: '/reports', label: 'Reports' },
   { href: '/office', label: 'Live Office' },
   { href: '/campaigns', label: 'Campaigns' },
   { href: '/team', label: 'Team' },
-  { href: '/skills', label: 'Skills' },
   { href: '/operator', label: 'Classic Operator' },
   { href: '/operator-skills', label: 'Operator Skills' },
   { href: '/operator-playbooks', label: 'Playbooks' },
   { href: '/agents', label: 'Agents' },
   { href: '/functions', label: 'Functions' },
-  { href: '/settings', label: 'Settings' },
-  { href: '/brand', label: 'Brand' },
   { href: '/tools', label: 'Tools' },
   { href: '/tool-runs', label: 'Tool Runs' },
   { href: '/api/health', label: 'Health' },
@@ -67,7 +56,7 @@ function NavLink({ href, label, isActive }: { href: string; label: string; isAct
         color: isActive ? '#0f172a' : '#64748b',
         textDecoration: 'none',
         background: isActive ? '#f8fafc' : 'transparent',
-        borderLeft: isActive ? '2px solid #6366f1' : '2px solid transparent',
+        borderLeft: isActive ? '2px solid #111827' : '2px solid transparent',
         transition: 'background 0.1s, color 0.1s',
       }}
     >
@@ -85,13 +74,14 @@ export function Sidebar() {
     return path.startsWith(href)
   }
 
+  const systemActive = SYSTEM_ITEMS.some(item => isActive(item.href))
   const advancedActive = ADVANCED_ITEMS.some(item => isActive(item.href))
 
   return (
     <nav style={{
       width: 220,
       background: '#ffffff',
-      borderRight: '1px solid #e2e8f0',
+      borderRight: '1px solid #f3f4f6',
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
@@ -104,41 +94,47 @@ export function Sidebar() {
         <AikoBrand size="sm" />
       </div>
 
-      <div style={{ height: 1, background: '#f1f5f9', margin: '0 0 8px' }} />
+      <div style={{ height: 1, background: '#f3f4f6', margin: '0 0 12px' }} />
 
       {/* Nav */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-        {NAV_GROUPS.map(group => (
-          <div key={group.label} style={{ marginBottom: 8 }}>
-            <div style={{ padding: '8px 20px 3px' }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                {group.label}
-              </div>
-            </div>
-            {group.items.map(item => (
-              <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
-            ))}
-          </div>
-        ))}
+        <div style={{ marginBottom: 12 }}>
+          {PRIMARY_ITEMS.map(item => (
+            <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
+          ))}
+        </div>
 
-        <div style={{ height: 1, background: '#f1f5f9', margin: '8px 0' }} />
+        <div style={{ height: 1, background: '#f3f4f6', margin: '10px 20px' }} />
 
-        <details open={advancedActive} data-testid="advanced-nav" style={{ marginBottom: 8 }}>
+        <details open={systemActive || advancedActive} style={{ marginBottom: 8 }}>
           <summary style={{
             cursor: 'pointer',
             padding: '8px 20px',
-            fontSize: 11,
-            fontWeight: 800,
-            color: advancedActive ? '#0f172a' : '#94a3b8',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
+            fontSize: 13,
+            fontWeight: 500,
+            color: systemActive || advancedActive ? '#0f172a' : '#64748b',
             listStyle: 'none',
           }}>
-            Advanced
+            System
           </summary>
+          {SYSTEM_ITEMS.map(item => (
+            <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
+          ))}
+          <details open={advancedActive} data-testid="advanced-nav" style={{ marginTop: 8 }}>
+            <summary style={{
+              cursor: 'pointer',
+              padding: '8px 20px',
+              fontSize: 12,
+              fontWeight: 500,
+              color: advancedActive ? '#0f172a' : '#9ca3af',
+              listStyle: 'none',
+            }}>
+              Advanced
+            </summary>
           {ADVANCED_ITEMS.map(item => (
             <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
           ))}
+          </details>
         </details>
       </div>
 

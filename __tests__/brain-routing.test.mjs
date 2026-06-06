@@ -5283,3 +5283,71 @@ test('281. intensive work does not contain direct send post or publish paths', (
   assert.equal(/\bpost_without_approval\b/.test(engine), false)
   assert.equal(/\bpublish_design\b/.test(engine), false)
 })
+
+test('282. minimalist UI primitives exist', () => {
+  for (const file of [
+    'components/ui/PageShell.tsx',
+    'components/ui/MinimalCard.tsx',
+    'components/ui/PrimaryAction.tsx',
+    'components/ui/StatusPill.tsx',
+    'components/ui/EmptyState.tsx',
+    'components/ui/AdvancedDisclosure.tsx',
+  ]) {
+    assert.ok(fs.existsSync(file), `${file} should exist`)
+  }
+})
+
+test('283. /home command box is primary and main cards are constrained', () => {
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(home.includes('data-testid="home-command-box"'))
+  assert.ok(home.includes('data-testid="home-main-cards"'))
+  assert.ok(home.includes('Today'))
+  assert.ok(home.includes('Current Work'))
+  assert.ok(home.includes('Next Tasks'))
+  assert.ok(home.includes('Advanced dashboard'))
+})
+
+test('284. sidebar hides advanced routes by default behind system advanced nav', () => {
+  const sidebar = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  assert.ok(sidebar.includes('PRIMARY_ITEMS'))
+  assert.ok(sidebar.includes('SYSTEM_ITEMS'))
+  assert.ok(sidebar.includes('data-testid="advanced-nav"'))
+  assert.ok(sidebar.includes("{ href: '/home', label: 'Home' }"))
+  assert.ok(sidebar.includes("{ href: '/ceo', label: 'CEO' }"))
+  assert.ok(sidebar.includes("{ href: '/start-campaign', label: 'Start Campaign' }"))
+})
+
+test('285. connect AI main view avoids env var wall and keeps OAuth advanced', () => {
+  const page = fs.readFileSync('app/(dashboard)/connect-ai/page.tsx', 'utf8')
+  const main = page.slice(page.indexOf('<CurrentBrain'), page.indexOf('<AdvancedDisclosure title="Advanced provider setup"'))
+  assert.ok(main.includes('ChatGPT / Codex Local'))
+  assert.ok(main.includes('Ollama Local'))
+  assert.ok(main.includes('API Key'))
+  assert.equal(main.includes('OPENAI_OAUTH_CLIENT_ID'), false)
+  assert.ok(page.includes('Advanced OAuth app setup is not configured'))
+})
+
+test('286. CEO hides action metadata by default', () => {
+  const ceo = fs.readFileSync('app/(dashboard)/ceo/page.tsx', 'utf8')
+  assert.ok(ceo.includes('<summary'))
+  assert.ok(ceo.includes('Actions'))
+  assert.ok(ceo.includes('cmd.actions.map'))
+  assert.ok(ceo.includes("const WELCOME_MESSAGE = `Hello. I'm AÏKO CEO."))
+})
+
+test('287. operators and approvals hide technical details by default', () => {
+  const operators = fs.readFileSync('app/(dashboard)/operators/page.tsx', 'utf8')
+  const approvals = fs.readFileSync('app/(dashboard)/approvals/page.tsx', 'utf8')
+  assert.ok(operators.includes('<AdvancedDisclosure>'))
+  assert.ok(operators.includes('profile: {op.browser_profile_key}'))
+  assert.ok(approvals.includes("useState<FilterTab>('pending')"))
+  assert.ok(approvals.includes('<AdvancedDisclosure title="View other approvals">'))
+  assert.ok(approvals.includes('JSON.stringify({'))
+})
+
+test('288. safety copy remains visible after minimalist pass', () => {
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  const operators = fs.readFileSync('app/(dashboard)/operators/page.tsx', 'utf8')
+  assert.ok(home.includes('AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.'))
+  assert.ok(operators.includes('AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.'))
+})

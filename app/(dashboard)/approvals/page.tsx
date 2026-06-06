@@ -1,5 +1,8 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import { AdvancedDisclosure } from '@/components/ui/AdvancedDisclosure'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { PageShell } from '@/components/ui/PageShell'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -559,7 +562,7 @@ function ApprovalCard({
 export default function ApprovalsPage() {
   const [items, setItems] = useState<ApprovalItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<FilterTab>('all')
+  const [activeTab, setActiveTab] = useState<FilterTab>('pending')
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const [projects, setProjects] = useState<Project[]>([])
 
@@ -620,28 +623,11 @@ export default function ApprovalsPage() {
   const pendingCount = items.filter(i => i.status === 'pending').length
 
   return (
-    <div style={{ padding: '40px 32px', maxWidth: 780 }} className="page-enter">
-
-      {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
-          Approval Center
-        </h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-          Review anything risky before Kevin continues.
-        </p>
-      </div>
+    <PageShell title="Approvals" subtitle="Review anything risky before Kevin continues." maxWidth={780} style={{ minHeight: '100vh' }}>
 
       {/* Safety microcopy banner */}
-      <div style={{
-        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8,
-        padding: '10px 14px', marginBottom: 20, fontSize: 12, color: '#64748b',
-        display: 'flex', alignItems: 'center', gap: 8,
-      }}>
-        <span style={{ fontSize: 14 }}>&#128274;</span>
-        <span>
-          Approving does not execute automatically. Resume is still explicit.
-        </span>
+      <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 22 }}>
+        Approving does not execute automatically. Resume is still explicit.
       </div>
 
       {/* Filters row */}
@@ -673,27 +659,28 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Filter tabs */}
-      <div style={{
-        display: 'flex', borderBottom: '1px solid #f1f5f9',
-        marginBottom: 20, flexWrap: 'wrap',
-      }}>
-        {FILTER_TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: '8px 4px', marginRight: 18, height: 38, fontSize: 12,
-              fontWeight: activeTab === t.id ? 600 : 400,
-              color: activeTab === t.id ? '#0f172a' : '#94a3b8',
-              borderBottom: activeTab === t.id ? '2px solid #0f172a' : '2px solid transparent',
-              transition: 'color 0.1s', whiteSpace: 'nowrap',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <AdvancedDisclosure title="View other approvals">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+          {FILTER_TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              style={{
+                border: '1px solid #e5e7eb',
+                background: activeTab === t.id ? '#111827' : '#ffffff',
+                color: activeTab === t.id ? '#ffffff' : '#6b7280',
+                borderRadius: 999,
+                padding: '8px 14px',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </AdvancedDisclosure>
 
       {/* Item list */}
       {loading ? (
@@ -701,14 +688,10 @@ export default function ApprovalsPage() {
           Loading…
         </div>
       ) : items.length === 0 ? (
-        <div style={{
-          fontSize: 13, color: '#94a3b8', fontStyle: 'italic',
-          padding: '32px 0', textAlign: 'center',
-        }}>
-          {activeTab === 'pending'
-            ? 'No items pending review. Agents will add items here automatically when outputs require approval.'
-            : 'No items found.'}
-        </div>
+        <EmptyState
+          title={activeTab === 'pending' ? 'No approvals needed.' : 'No items found.'}
+          description={activeTab === 'pending' ? 'Kevin will ask here before anything risky continues.' : undefined}
+        />
       ) : (
         <div>
           {items.map(item => (
@@ -721,7 +704,6 @@ export default function ApprovalsPage() {
           ))}
         </div>
       )}
-
-    </div>
+    </PageShell>
   )
 }
