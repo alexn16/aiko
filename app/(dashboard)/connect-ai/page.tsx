@@ -222,14 +222,13 @@ export default function ConnectAIPage() {
           <AikoBrand size="md" />
         </div>
         <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          OpenClaw-style auth profiles
+          AI connections
         </div>
         <h1 style={{ fontSize: 30, letterSpacing: '-0.03em', margin: '6px 0 8px', color: '#0f172a' }}>
           Connect AI brains
         </h1>
-        <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.7, maxWidth: 850 }}>
-          AÏKO now resolves AI access through provider catalog → auth profile → auth method → model → role assignment → test call.
-          ChatGPT/Codex OAuth is separate from OpenAI API keys, Claude Code/local is separate from Anthropic API keys, and Google login only identifies the AÏKO user.
+        <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6, maxWidth: 760 }}>
+          Connect a real tested profile for the CEO brain. ChatGPT/Codex, API keys, Claude, and Ollama stay separate.
         </p>
       </div>
 

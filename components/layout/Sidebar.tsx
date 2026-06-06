@@ -4,34 +4,51 @@ import { usePathname } from 'next/navigation'
 import { SidebarModeIndicator } from '@/components/mode/SidebarModeIndicator'
 import { AikoBrand } from '@/components/brand/AikoBrand'
 
-const CEO_ITEMS = [
-  { href: '/ceo',              label: 'CEO' },
-  { href: '/start-campaign',   label: '▶ First Campaign' },
-  { href: '/projects',         label: 'Projects' },
-  { href: '/connect-ai',       label: 'Connect AI' },
+const NAV_GROUPS = [
+  {
+    label: 'Primary',
+    items: [
+      { href: '/home', label: 'Home' },
+      { href: '/ceo', label: 'CEO Chat' },
+      { href: '/projects', label: 'Projects' },
+      { href: '/operators', label: 'Operators' },
+      { href: '/files', label: 'Files' },
+    ],
+  },
+  {
+    label: 'Work',
+    items: [
+      { href: '/start-campaign', label: 'Start Campaign' },
+      { href: '/leads', label: 'Leads' },
+      { href: '/approvals', label: 'Approvals' },
+      { href: '/reports', label: 'Reports' },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { href: '/connect-ai', label: 'Connect AI' },
+      { href: '/system', label: 'System' },
+      { href: '/mode', label: 'Mode' },
+    ],
+  },
 ]
 
-const NAV_ITEMS = [
-  { href: '/home',       label: 'Home' },
-  { href: '/dashboard',  label: 'Dashboard' },
-  { href: '/office',     label: 'Live Office' },
-  { href: '/team',       label: 'Team' },
-  { href: '/leads',      label: 'Leads' },
-  { href: '/approvals',  label: 'Approvals' },
-  { href: '/campaigns',  label: 'Campaigns' },
-  { href: '/reports',    label: 'Reports' },
-  // { href: '/tools',      label: 'Tools' },      // hidden from nav — available at /tools for debugging
-  // { href: '/tool-runs',  label: 'Tool Runs' },  // hidden from nav — available at /tool-runs for debugging
-  { href: '/operators',  label: 'Operators' },
+const ADVANCED_ITEMS = [
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/office', label: 'Live Office' },
+  { href: '/campaigns', label: 'Campaigns' },
+  { href: '/team', label: 'Team' },
+  { href: '/operator', label: 'Classic Operator' },
   { href: '/operator-skills', label: 'Operator Skills' },
-  { href: '/operator-playbooks', label: 'Operator Playbooks' },
-  { href: '/agents',     label: 'Agents' },
-  { href: '/files',      label: 'Files' },
-  { href: '/functions',  label: 'Functions' },
-  { href: '/brand',      label: 'Brand' },
-  { href: '/mode',       label: 'Operating Mode' },
-  { href: '/system',     label: 'System' },
-  { href: '/settings',   label: 'Settings' },
+  { href: '/operator-playbooks', label: 'Playbooks' },
+  { href: '/agents', label: 'Agents' },
+  { href: '/functions', label: 'Functions' },
+  { href: '/settings', label: 'Settings' },
+  { href: '/brand', label: 'Brand' },
+  { href: '/tools', label: 'Tools' },
+  { href: '/tool-runs', label: 'Tool Runs' },
+  { href: '/api/health', label: 'Health' },
 ]
 
 function NavLink({ href, label, isActive }: { href: string; label: string; isActive: boolean }) {
@@ -59,9 +76,12 @@ export function Sidebar() {
   const path = usePathname()
 
   function isActive(href: string) {
+    if (href === '/operator') return path === '/operator'
     if (href === '/home') return path === '/home' || path === '/'
     return path.startsWith(href)
   }
+
+  const advancedActive = ADVANCED_ITEMS.some(item => isActive(item.href))
 
   return (
     <nav style={{
@@ -84,23 +104,38 @@ export function Sidebar() {
 
       {/* Nav */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-        {/* CEO section */}
-        <div style={{ padding: '4px 20px 2px', marginTop: 2 }}>
-          <div style={{ fontSize: 9, fontWeight: 600, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Command
+        {NAV_GROUPS.map(group => (
+          <div key={group.label} style={{ marginBottom: 8 }}>
+            <div style={{ padding: '8px 20px 3px' }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                {group.label}
+              </div>
+            </div>
+            {group.items.map(item => (
+              <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
+            ))}
           </div>
-        </div>
-        {CEO_ITEMS.map(item => (
-          <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
         ))}
 
-        {/* Separator */}
         <div style={{ height: 1, background: '#f1f5f9', margin: '8px 0' }} />
 
-        {/* Standard nav */}
-        {NAV_ITEMS.map(item => (
-          <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
-        ))}
+        <details open={advancedActive} data-testid="advanced-nav" style={{ marginBottom: 8 }}>
+          <summary style={{
+            cursor: 'pointer',
+            padding: '8px 20px',
+            fontSize: 11,
+            fontWeight: 800,
+            color: advancedActive ? '#0f172a' : '#94a3b8',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            listStyle: 'none',
+          }}>
+            Advanced
+          </summary>
+          {ADVANCED_ITEMS.map(item => (
+            <NavLink key={item.href} href={item.href} label={item.label} isActive={isActive(item.href)} />
+          ))}
+        </details>
       </div>
 
       {/* Mode indicator */}

@@ -1045,3 +1045,26 @@ WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 | CEO delegation copy repeated `Kevin needs approval before doing this.` for Facebook approval requests. | Changed Facebook playbook add-on copy to `Kevin will open Facebook directly and stop before any external action.` |
 | `/approvals` default card title used the raw Web Operator instruction. | Added plain approval display titles such as `Prepare Facebook post draft`; raw content remains in View details. |
 | `/operators` list could show manual-help copy while the operator status was `waiting_approval`. | Added status-based notice selection and moved workflow/goal/task/memory lines behind Advanced. |
+
+---
+
+## Minimal Main App Navigation And Home — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Home | `/home` | ✅ Pass | Shows the big command box, current project, Needs your attention, Live work, Quick actions, Recent output, short safety line, and collapsed Advanced dashboard. Initial read before hydration showed empty states; after client data load, projects and latest file appeared correctly. |
+| Dashboard | `/dashboard` | ✅ Pass | Renders as the advanced overview. Sidebar Advanced group opens because `/dashboard` is an advanced route. No 500 or blank state. |
+| CEO Chat | `/ceo` | ✅ Pass | Renders with CEO brain status and the simplified grouped sidebar. No missing primary links. |
+| Operators | `/operators` | ✅ Pass | Main copy is shorter, approval/manual state remains simple, and Advanced remains available for details. |
+| Approvals | `/approvals` | ✅ Pass | Plain approval card remains intact; no raw metadata shown by default. |
+| Connect AI | `/connect-ai` | ✅ Pass | Main copy is shorter and provider truth remains explicit: Codex Local, OAuth App, API keys, Claude, and Ollama are still separate. |
+| Navigation | Sidebar | ✅ Pass | Primary, Work, and System groups are visible. Advanced routes remain linked and are collapsed by default unless the active page is advanced. |
+| Safety | UI/API | ✅ Pass | Safety copy remains visible: AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without the user. No execution or provider-state behavior changed. |

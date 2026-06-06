@@ -41,6 +41,16 @@ type ApprovalItem = {
   item_type?: string
 }
 
+type GeneratedFile = {
+  id: string
+  filename: string
+  title?: string | null
+  content_type?: string | null
+  source_entity_type?: string | null
+  created_at: string
+  project_name?: string | null
+}
+
 type CommandResult = {
   response?: string
   intent?: string
@@ -88,6 +98,12 @@ const buttonStyle: React.CSSProperties = {
   textAlign: 'left',
 }
 
+const mutedText: React.CSSProperties = {
+  color: '#64748b',
+  fontSize: 13,
+  lineHeight: 1.5,
+}
+
 function simpleStatus(op?: Operator | null, pendingApprovalCount = 0): { label: string; tone: string; message: string } {
   if (op?.status === 'working') return { label: 'Opening browser', tone: '#2563eb', message: op.current_task ?? 'Kevin is working.' }
   if (op?.status === 'waiting_user') return { label: 'Needs your help', tone: '#d97706', message: 'Kevin needs your help. Complete this in the browser, then click Resume.' }
@@ -114,6 +130,7 @@ export default function HomePage() {
   const [operators, setOperators] = useState<Operator[]>([])
   const [actions, setActions] = useState<Action[]>([])
   const [approvalItems, setApprovalItems] = useState<ApprovalItem[]>([])
+  const [files, setFiles] = useState<GeneratedFile[]>([])
   const [pendingApprovals, setPendingApprovals] = useState(0)
   const [command, setCommand] = useState('')
   const [loading, setLoading] = useState(false)
@@ -147,11 +164,12 @@ export default function HomePage() {
   }
 
   async function refresh() {
-    const [projectRes, operatorRes, actionRes, approvalRes] = await Promise.all([
+    const [projectRes, operatorRes, actionRes, approvalRes, fileRes] = await Promise.all([
       fetch('/api/projects'),
       fetch('/api/web-operators'),
       fetch('/api/web-operator/actions?limit=5'),
       fetch('/api/approval-items?limit=10'),
+      fetch('/api/files?limit=1'),
     ])
     if (projectRes.ok) {
       const data = await projectRes.json()
@@ -172,6 +190,10 @@ export default function HomePage() {
       const rows = (data.items ?? []) as ApprovalItem[]
       setApprovalItems(rows)
       setPendingApprovals(rows.filter(item => item.status === 'pending').length)
+    }
+    if (fileRes.ok) {
+      const data = await fileRes.json()
+      setFiles((data.files ?? []) as GeneratedFile[])
     }
   }
 
@@ -212,155 +234,220 @@ export default function HomePage() {
 
   const quicks = [
     ['Start marketing', `Start marketing${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
-    ['Find customers', `Find customers${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
-    ['Research competitors', `Research competitors${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
     ['Create content', `Create a content draft${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
+    ['Find customers', `Find customers${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
     ['Generate report', `Generate an executive report${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
-    ['Open browser operator', `Kevin, open websites and start marketing research${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
+    ['Open browser', `Kevin, open websites and start marketing research${selectedProject ? ` for ${selectedProject.name}` : ''}.`],
   ]
+  const latestFile = files[0] ?? null
+  const latestAction = actions[0] ?? null
+  const nextAction = selectedProject
+    ? selectedProject.goal ?? selectedProject.target_market ?? 'Start marketing or generate a report.'
+    : 'Create your first project to start.'
 
   return (
     <div style={pageStyle}>
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 11, color: '#64748b', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-            AÏKO Home
-          </div>
-          <h1 style={{ margin: '6px 0 8px', color: '#0f172a', fontSize: 34, letterSpacing: 0 }}>
+        <div style={{ marginBottom: 18 }}>
+          <h1 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: 34, letterSpacing: 0 }}>
             What should AÏKO do?
           </h1>
-          <p style={{ margin: 0, color: '#64748b', fontSize: 15 }}>
-            Simple command center for project work. Advanced systems stay in Dashboard and System.
+          <p style={{ margin: 0, color: '#64748b', fontSize: 14 }}>
+            Run the company from one place.
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.75fr)', gap: 18 }}>
-          <section style={cardStyle}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 800, color: '#334155', marginBottom: 8 }}>
-              Current project
-            </label>
+        <section style={{ ...cardStyle, marginBottom: 16 }}>
+          <textarea
+            value={command}
+            onChange={e => setCommand(e.target.value)}
+            onKeyDown={e => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runCommand()
+            }}
+            placeholder="Start marketing for ALB Parking."
+            style={{
+              width: '100%',
+              minHeight: 116,
+              resize: 'vertical',
+              border: '1px solid #cbd5e1',
+              borderRadius: 8,
+              padding: 14,
+              fontSize: 16,
+              lineHeight: 1.5,
+              color: '#0f172a',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => runCommand()}
+              disabled={loading || !command.trim()}
+              style={{
+                border: 0,
+                background: loading || !command.trim() ? '#94a3b8' : '#0f172a',
+                color: '#fff',
+                borderRadius: 8,
+                padding: '11px 16px',
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: loading || !command.trim() ? 'default' : 'pointer',
+              }}
+            >
+              {loading ? 'Working...' : 'Run'}
+            </button>
+            <Link href="/ceo" style={{ color: '#475569', fontSize: 13, textDecoration: 'none', fontWeight: 700 }}>
+              Open CEO Chat
+            </Link>
+          </div>
+        </section>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 0.9fr)', gap: 16 }}>
+          <section style={{ display: 'grid', gap: 16 }}>
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>Current project</div>
+                <Link href={selectedProject ? `/projects/${selectedProject.id}` : '/ceo'} style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none', fontWeight: 800 }}>
+                  {selectedProject ? 'Open project' : 'Create project'}
+                </Link>
+              </div>
             <select
               value={projectId}
               onChange={e => setProjectId(e.target.value)}
-              style={{ width: '100%', height: 42, border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', marginBottom: 14 }}
+              style={{ width: '100%', height: 40, border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', marginBottom: 10 }}
             >
               {projects.length === 0 ? <option>No projects yet</option> : projects.map(project => (
                 <option key={project.id} value={project.id}>{project.name}</option>
               ))}
             </select>
-
-            <textarea
-              value={command}
-              onChange={e => setCommand(e.target.value)}
-              onKeyDown={e => {
-                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runCommand()
-              }}
-              placeholder="Start marketing for ALB Parking."
-              style={{
-                width: '100%',
-                minHeight: 112,
-                resize: 'vertical',
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                padding: 13,
-                fontSize: 15,
-                lineHeight: 1.5,
-                color: '#0f172a',
-              }}
-            />
-            <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-              <button
-                onClick={() => runCommand()}
-                disabled={loading || !command.trim()}
-                style={{
-                  border: 0,
-                  background: loading || !command.trim() ? '#94a3b8' : '#0f172a',
-                  color: '#fff',
-                  borderRadius: 8,
-                  padding: '11px 16px',
-                  fontSize: 13,
-                  fontWeight: 800,
-                  cursor: loading || !command.trim() ? 'default' : 'pointer',
-                }}
-              >
-                {loading ? 'Working…' : 'Run'}
-              </button>
-              <Link href="/ceo" style={{ color: '#475569', fontSize: 13, alignSelf: 'center', textDecoration: 'none', fontWeight: 700 }}>
-                Open CEO Chat
-              </Link>
+              <p style={{ ...mutedText, margin: 0 }}>
+                {selectedProject ? nextAction : 'Create your first project to start.'}
+              </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 18 }}>
-              {quicks.map(([label, text]) => (
-                <button key={label} style={buttonStyle} onClick={() => runCommand(text)} disabled={loading}>
-                  {label}
-                </button>
-              ))}
+            <div style={cardStyle}>
+              <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>Quick actions</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+                {quicks.map(([label, text]) => (
+                  <button key={label} style={buttonStyle} onClick={() => runCommand(text)} disabled={loading}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>Recent output</div>
+              {latestFile ? (
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{latestFile.title ?? latestFile.filename}</div>
+                  <div style={{ ...mutedText, marginTop: 4 }}>{latestFile.project_name ?? 'AÏKO'} · {latestFile.content_type ?? 'file'}</div>
+                  <Link href="/files" style={{ display: 'inline-block', marginTop: 10, fontSize: 12, color: '#2563eb', fontWeight: 800, textDecoration: 'none' }}>
+                    Open files
+                  </Link>
+                </div>
+              ) : (
+                <p style={{ ...mutedText, margin: 0 }}>Generated reports and exports will appear here.</p>
+              )}
             </div>
           </section>
 
-          <aside style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Needs your attention</div>
-                <div style={{ color: attentionState === 'clear' ? '#059669' : '#d97706', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-                  {attentionState === 'manual' ? 'Kevin needs your help' : attentionState === 'approval' ? 'Approval needed' : 'All clear'}
+          <aside style={{ display: 'grid', gap: 16 }}>
+            <section style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Needs your attention</div>
+                  <div style={{ color: attentionState === 'clear' ? '#059669' : '#d97706', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
+                    {attentionState === 'manual' ? 'Kevin needs your help' : attentionState === 'approval' ? 'Approval needed' : 'All clear'}
+                  </div>
                 </div>
               </div>
-            </div>
-            <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.6 }}>
-              {loading
-                ? 'AÏKO is thinking.'
-                : attentionState === 'manual'
-                  ? 'Complete this in the browser, then click Resume.'
-                  : attentionState === 'approval'
-                    ? 'Kevin needs approval before doing this.'
-                    : 'AÏKO is ready.'}
-            </p>
-            {waitingOperator?.latest_screenshot && (
-              <img
-                src={waitingOperator.latest_screenshot}
-                alt="Latest browser screenshot"
-                style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
-              />
-            )}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-              {attentionState === 'manual' && waitingOperator?.id && (
-                <>
-                <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                  Open browser
-                </Link>
-                <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                  Resume
-                </Link>
-                </>
+              <p style={{ color: '#475569', fontSize: 13, lineHeight: 1.6 }}>
+                {loading
+                  ? 'AÏKO is thinking.'
+                  : attentionState === 'manual'
+                    ? 'Complete this in the browser, then click Resume.'
+                    : attentionState === 'approval'
+                      ? 'Kevin needs approval before doing this.'
+                      : 'AÏKO is ready.'}
+              </p>
+              {attentionState === 'clear' && <p style={{ ...mutedText, margin: '-4px 0 0' }}>No approvals needed.</p>}
+              {waitingOperator?.latest_screenshot && (
+                <img
+                  src={waitingOperator.latest_screenshot}
+                  alt="Latest browser screenshot"
+                  style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                />
               )}
-              {attentionState === 'approval' && pendingApproval && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+                {attentionState === 'manual' && waitingOperator?.id && (
+                  <>
+                    <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                      Open browser
+                    </Link>
+                    <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                      Resume
+                    </Link>
+                  </>
+                )}
+                {attentionState === 'approval' && pendingApproval && (
+                  <>
+                    <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                      Review
+                    </Link>
+                    <button onClick={() => updateApproval(pendingApproval.id, 'approved')} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
+                      Approve
+                    </button>
+                    <button onClick={() => updateApproval(pendingApproval.id, 'rejected')} style={{ ...buttonStyle, background: '#fef2f2', borderColor: '#fecaca', color: '#b91c1c', padding: '8px 10px', textAlign: 'center' }}>
+                      Reject
+                    </button>
+                  </>
+                )}
+                <details style={{ width: '100%', marginTop: 4 }}>
+                  <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
+                    Advanced
+                  </summary>
+                  <div style={{ marginTop: 10, fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+                    <div>Live work: <b>{loading ? liveLabel : live.label}</b></div>
+                    {activeOperator?.current_url && <div style={{ wordBreak: 'break-all' }}>Website: {activeOperator.current_url}</div>}
+                    {pendingApproval && <div>Approval: {pendingApproval.title}</div>}
+                    <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 11 }}>
+                      {JSON.stringify({ activeOperator, pendingApproval, latestActions: actions.slice(0, 3) }, null, 2)}
+                    </pre>
+                  </div>
+                </details>
+              </div>
+            </section>
+
+            <section style={cardStyle}>
+              <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>Live work</div>
+              {activeOperator ? (
                 <>
-                  <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                    Review
-                  </Link>
-                  <button onClick={() => updateApproval(pendingApproval.id, 'approved')} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
-                    Approve
-                  </button>
-                  <button onClick={() => updateApproval(pendingApproval.id, 'rejected')} style={{ ...buttonStyle, background: '#fef2f2', borderColor: '#fecaca', color: '#b91c1c', padding: '8px 10px', textAlign: 'center' }}>
-                    Reject
-                  </button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a' }}>{activeOperator.name}</div>
+                      <div style={{ ...mutedText, color: live.tone }}>{loading ? liveLabel : live.label}</div>
+                    </div>
+                    <Link href={`/operators/${activeOperator.id}`} style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none', fontWeight: 800 }}>
+                      Open
+                    </Link>
+                  </div>
+                  <p style={{ ...mutedText, margin: '10px 0 0' }}>
+                    {activeOperator.status === 'idle' ? 'Kevin is idle.' : live.message}
+                  </p>
+                  {activeOperator.latest_screenshot ? (
+                    <img
+                      src={activeOperator.latest_screenshot}
+                      alt="Latest browser screenshot"
+                      style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                    />
+                  ) : null}
                 </>
+              ) : (
+                <p style={{ ...mutedText, margin: 0 }}>Create or use the default operator.</p>
               )}
-              <details style={{ width: '100%', marginTop: 4 }}>
-                <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
-                  Advanced
-                </summary>
-                <div style={{ marginTop: 10, fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
-                  <div>Live work: <b>{loading ? liveLabel : live.label}</b></div>
-                  {activeOperator?.current_url && <div style={{ wordBreak: 'break-all' }}>Website: {activeOperator.current_url}</div>}
-                  {pendingApproval && <div>Approval: {pendingApproval.title}</div>}
-                  <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, fontSize: 11 }}>
-                    {JSON.stringify({ activeOperator, pendingApproval, latestActions: actions.slice(0, 3) }, null, 2)}
-                  </pre>
-                </div>
-              </details>
+            </section>
+
+            <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+              AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.
             </div>
           </aside>
         </div>
@@ -412,16 +499,20 @@ export default function HomePage() {
           </section>
         )}
 
-        <section style={{ ...cardStyle, marginTop: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 10 }}>
-            Status overview
+        <details style={{ ...cardStyle, marginTop: 18 }}>
+          <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 900 }}>
+            Advanced dashboard
+          </summary>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14, marginBottom: 14 }}>
+            <Link href="/dashboard" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open dashboard</Link>
+            <Link href="/system" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open system</Link>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
             {[
               ['Needs your help', operators.filter(op => op.status === 'waiting_user').length],
               ['Needs approval', pendingApprovals],
               ['Browser blocked', operators.filter(op => op.status === 'error').length],
-              ['Done', operators.filter(op => op.status === 'idle').length],
+              ['Idle', operators.filter(op => op.status === 'idle').length],
             ].map(([label, value]) => (
               <div key={label} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
                 <div style={{ fontSize: 22, fontWeight: 900, color: '#0f172a' }}>{value}</div>
@@ -429,15 +520,10 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-          <details style={{ marginTop: 14 }}>
-            <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
-              Advanced details
-            </summary>
             <pre style={{ overflow: 'auto', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 12, fontSize: 11 }}>
-              {JSON.stringify({ operators, actions: actions.slice(0, 5) }, null, 2)}
+              {JSON.stringify({ operators, latestAction }, null, 2)}
             </pre>
-          </details>
-        </section>
+        </details>
       </div>
     </div>
   )

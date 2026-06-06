@@ -726,3 +726,11 @@ The main owner-facing attention flow is now reduced to one clear decision at a t
 `/approvals` now defaults to plain approval cards with a human-readable action title, project, risk sentence, Approve / Reject controls, and `View details`. Raw approval content and metadata are hidden by default. The page repeats the safety rule: `Approving does not execute automatically. Resume is still explicit.`
 
 `/operators` and `/operators/[id]` now put the current human state first and hide profile keys, waiting reasons, action IDs, skill/playbook internals, task payloads, and verbose action tables behind Advanced. Runtime validation confirmed Canva security pauses produce the simplified manual-help state, Facebook posting creates an approval without execution, and no post/send/message/publish/share/download action runs automatically.
+
+### Minimal Main App Navigation And Home — 2026-06-06
+
+The main shell now uses grouped navigation instead of a dense flat sidebar. Primary shows Home, CEO Chat, Projects, Operators, and Files. Work shows Start Campaign, Leads, Approvals, and Reports. System shows Connect AI, System, and Mode. All other existing routes remain available under a collapsed Advanced group; Advanced opens automatically only when the active route is itself advanced.
+
+`/home` is now the default owner operating screen: a large command box, current project with next action, Needs your attention, Live work, quick actions, recent output, and one short safety line. The old status metrics and raw diagnostic payloads moved into a collapsed Advanced dashboard section with links to Dashboard and System.
+
+Main-page copy was shortened on Dashboard, Setup, Connect AI, Operators, and Approvals. Empty states now tell the owner what to expect: create the first project, use the default operator, no approvals needed, Kevin is idle, and generated reports/exports will appear in Files.

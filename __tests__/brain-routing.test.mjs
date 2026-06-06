@@ -4641,3 +4641,54 @@ test('203. approval and resume safety rules remain explicit', () => {
   assert.ok(resumeRoute.includes("approval_status !== 'approved'"))
   assert.ok(resumeRoute.includes('canPerformAction'))
 })
+
+test('204. sidebar groups primary work system and advanced navigation', () => {
+  const source = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  for (const label of ['Primary', 'Work', 'System', 'Advanced']) {
+    assert.ok(source.includes(label), `${label} group should exist`)
+  }
+  for (const label of ['Home', 'CEO Chat', 'Projects', 'Operators', 'Files', 'Start Campaign', 'Leads', 'Approvals', 'Reports', 'Connect AI', 'Mode']) {
+    assert.ok(source.includes(label), `${label} nav item should exist`)
+  }
+})
+
+test('205. advanced nav is collapsed by default unless an advanced route is active', () => {
+  const source = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  assert.ok(source.includes('data-testid="advanced-nav"'))
+  assert.ok(source.includes('open={advancedActive}'))
+  assert.ok(source.includes('const advancedActive = ADVANCED_ITEMS.some'))
+})
+
+test('206. /home shows command box attention card and hides advanced dashboard by default', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('What should AÏKO do?'))
+  assert.ok(source.includes('Needs your attention'))
+  assert.ok(source.includes('Advanced dashboard'))
+  const advancedIndex = source.indexOf('Advanced dashboard')
+  const preIndex = source.indexOf('JSON.stringify({ operators, latestAction }')
+  assert.ok(preIndex > advancedIndex, 'advanced diagnostics should live after Advanced dashboard summary')
+})
+
+test('207. home empty states are present', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('Create your first project to start.'))
+  assert.ok(source.includes('Create or use the default operator.'))
+  assert.ok(source.includes('Generated reports and exports will appear here.'))
+  assert.ok(source.includes('No approvals needed.'))
+  assert.ok(source.includes('Kevin is idle.'))
+})
+
+test('208. short safety line exists on main owner surfaces', () => {
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  const operators = fs.readFileSync('app/(dashboard)/operators/page.tsx', 'utf8')
+  const safety = 'AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.'
+  assert.ok(home.includes(safety))
+  assert.ok(operators.includes(safety))
+})
+
+test('209. sidebar keeps advanced routes accessible', () => {
+  const source = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  for (const href of ['/dashboard', '/office', '/campaigns', '/team', '/operator', '/operator-skills', '/operator-playbooks', '/agents', '/functions', '/settings', '/brand', '/tools', '/tool-runs', '/api/health']) {
+    assert.ok(source.includes(`href: '${href}'`), `${href} should remain linked`)
+  }
+})

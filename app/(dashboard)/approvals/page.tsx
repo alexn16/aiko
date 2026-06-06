@@ -628,7 +628,7 @@ export default function ApprovalsPage() {
           Approval Center
         </h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-          Review and approve agent outputs before external use.
+          Review anything risky before Kevin continues.
         </p>
       </div>
 

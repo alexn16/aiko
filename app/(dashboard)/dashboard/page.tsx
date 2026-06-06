@@ -192,7 +192,7 @@ export default function DashboardPage() {
             AÏKO MVP Dashboard
           </h1>
           <p style={{ margin: '5px 0 0', fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>
-            Owner overview for setup, safety, work in progress, and supervised execution.
+            Advanced overview for setup, safety, and work in progress.
           </p>
         </div>
         <StatusPill

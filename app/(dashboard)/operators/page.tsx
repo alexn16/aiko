@@ -193,7 +193,7 @@ export default function OperatorsPage() {
           Web Operators
         </h1>
         <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-          Named browser agents working in parallel. Each operator has an isolated browser context — separate cookies, sessions, and storage state.
+          Browser agents for supervised web work.
         </p>
       </div>
 
@@ -387,11 +387,11 @@ export default function OperatorsPage() {
         padding: '12px 16px', background: '#f8fafc', borderRadius: 8,
         fontSize: 12, color: '#64748b', lineHeight: 1.6,
       }}>
-        Name an operator in CEO Chat to route tasks to them:
+        Name an operator in CEO Chat to route browser work:
         <br />
         &ldquo;Kevin, open Gmail.&rdquo; · &ldquo;Hana, research parking management companies.&rdquo; · &ldquo;Ask Kevin to search for leads.&rdquo;
         <br />
-        Each operator&apos;s browser profile is isolated — cookies and login sessions never mix.
+        AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.
       </div>
     </div>
   )

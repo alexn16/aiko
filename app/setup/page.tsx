@@ -237,8 +237,8 @@ export default function SetupPage() {
           </div>
           <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.14em', color: '#6366f1', textTransform: 'uppercase' }}>Setup</div>
           <h1 style={{ fontSize: 42, lineHeight: 1.05, letterSpacing: '-0.05em', margin: '8px 0' }}>Connect an AI brain to start.</h1>
-          <p style={{ fontSize: 15, color: '#64748b', maxWidth: 760, lineHeight: 1.7 }}>
-            Choose a provider, test the auth profile, assign it to the CEO brain, then enter AÏKO. Google login is optional identity in local mode; provider auth is separate.
+          <p style={{ fontSize: 15, color: '#64748b', maxWidth: 720, lineHeight: 1.6 }}>
+            Choose a provider, test it, assign it to CEO, then enter AÏKO.
           </p>
           {setupState?.reason && <div style={{ marginTop: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: 12, fontSize: 13 }}>{setupState.reason}</div>}
         </header>
@@ -285,7 +285,7 @@ export default function SetupPage() {
                 busy={step === 'testing' || step === 'assigning'}
               />
               <StepTitle n={3} title="Assign CEO brain" muted />
-              <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>After a provider test passes, setup assigns it to CEO and runs Brain Verification. Setup does not fake success.</p>
+              <p style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>AÏKO only starts after a real test passes.</p>
               {status && <div style={{ marginTop: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, fontSize: 12 }}>{status}</div>}
               {error && <div style={{ marginTop: 12, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: 10, color: '#991b1b', fontSize: 12 }}>{error}</div>}
             </section>
