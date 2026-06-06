@@ -4760,3 +4760,62 @@ test('218. home command keeps explicit project names instead of appending select
   assert.ok(source.includes('\\bfor\\s+[^.?!]+'))
   assert.ok(source.includes('projects.some(project'))
 })
+
+test('219. LinkedIn content prompt recommends write_linkedin_post', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes("return 'write_linkedin_post'"))
+  assert.ok(source.includes('Write LinkedIn Post'))
+})
+
+test('220. Reddit content prompt recommends write_reddit_post', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes("return 'write_reddit_post'"))
+  assert.ok(source.includes('Write Reddit Post'))
+})
+
+test('221. improve email prompt recommends improve_email', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes("return 'improve_email'"))
+  assert.ok(source.includes('Improve Email'))
+})
+
+test('222. content skill route does not create Web Operator actions', () => {
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  const executeRoute = fs.readFileSync('app/api/ai-skills/execute/route.ts', 'utf8')
+  assert.ok(route.includes("classification.intent === 'content_creation'"))
+  assert.ok(route.includes('ai_skill_output'))
+  assert.ok(executeRoute.includes('created_web_operator_action: false'))
+  assert.ok(executeRoute.includes('external_action_executed: false'))
+})
+
+test('223. publishing request returns draft-only warning', () => {
+  const source = fs.readFileSync('lib/ai-skills/content-executor.ts', 'utf8')
+  assert.ok(source.includes('Draft created only. Publishing or sending requires approval.'))
+  assert.ok(source.includes('If the user asks to publish/send/post, write the draft only.'))
+})
+
+test('224. save_as_file creates generated file metadata for AI skill output', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  const filesRoute = fs.readFileSync('app/api/files/route.ts', 'utf8')
+  const filesPage = fs.readFileSync('app/(dashboard)/files/page.tsx', 'utf8')
+  assert.ok(source.includes("source_entity_type: 'ai_skill_output'"))
+  assert.ok(source.includes("generated_by_role: 'copywriting'"))
+  assert.ok(filesRoute.includes('source_entity_type'))
+  assert.ok(filesPage.includes("ai_skill_output:  'AI skill output'"))
+})
+
+test('225. /skills shows AI Skills Web Operator Skills and Playbooks', () => {
+  const source = fs.readFileSync('app/(dashboard)/skills/page.tsx', 'utf8')
+  const sidebar = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  assert.ok(source.includes('AI Skills'))
+  assert.ok(source.includes('Web Operator Skills'))
+  assert.ok(source.includes('Playbooks'))
+  assert.ok(sidebar.includes("href: '/skills'"))
+})
+
+test('226. AI skill output prompt forbids hidden reasoning and provider secrets', () => {
+  const source = fs.readFileSync('lib/ai-skills/content-executor.ts', 'utf8')
+  assert.ok(source.includes('Do not include hidden reasoning'))
+  assert.ok(source.includes('tokens, secrets'))
+  assert.ok(source.includes('Return only the final draft content'))
+})

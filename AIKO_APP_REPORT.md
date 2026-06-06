@@ -744,3 +744,15 @@ The CEO command route now classifies first, resolves explicit project references
 Runtime validation covered `Promote AÏKO`, `Start marketing for ALB Parking`, `Create a LinkedIn post for AÏKO`, `Open Canva`, `Generate a report for ALB Parking`, and `What should we do next?`. A runtime issue where `/home` appended the selected project to commands that already named another project was fixed, so `ALB Parking` now resolves explicitly instead of becoming `ALB Parking for Codex Validation Demo`.
 
 Safety remains unchanged: the orchestrator recommends flows and shows a short visible plan, but does not bypass login/CAPTCHA/security, does not auto-send/post/publish, and does not execute risky actions without the existing approval/resume gates.
+
+### Internal AI Content Skills — 2026-06-06
+
+AÏKO now has an internal AI Skills registry for text-generation work. The `ai_skills` table stores enabled skills, category, input/output schemas, and safety level. Seeded content skills include LinkedIn posts, X/Twitter posts, Reddit posts, emails, email improvement, blog outlines, landing page copy, content ideas, summaries, and rewrites.
+
+`lib/ai-skills.ts` provides the registry, recommendation, execution, and generated-file save helpers. `lib/ai-skills/content-executor.ts` runs content skills through `callAI(role: 'copywriting')`, adds project context when a project is known, and returns draft output with suggested next actions. It does not browse or create Web Operator actions.
+
+`/api/ai-skills` lists AI skills, and `/api/ai-skills/execute` recommends or executes a content skill. CEO commands classified as `content_creation` now route to the AI skill executor before the generic CEO agent, returning `ai_skill_output` and no delegation. `/home` renders AI skill output in a clean Draft card with Save as file, Copy, Create another version, and Advanced.
+
+`/skills` now shows AI Skills, Web Operator Skills, and Playbooks together. `/files` labels AI skill Markdown outputs as `AI skill output`.
+
+Safety remains explicit: AI Content Skills produce internal drafts only. If a prompt asks to post, send, publish, message, share, submit, or upload, AÏKO returns `Draft created only. Publishing or sending requires approval.` No Web Operator action or external side effect is created by the content executor.

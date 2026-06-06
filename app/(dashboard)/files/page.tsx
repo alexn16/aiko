@@ -22,6 +22,7 @@ const SOURCE_ENTITY_LABEL: Record<string, string> = {
   strategy_brief:   'Strategy brief',
   decision_log:     'Decision log',
   project_bundle:   'Project bundle',
+  ai_skill_output:  'AI skill output',
 }
 
 const CONTENT_TYPE_LABEL: Record<string, string> = {

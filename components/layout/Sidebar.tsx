@@ -39,6 +39,7 @@ const ADVANCED_ITEMS = [
   { href: '/office', label: 'Live Office' },
   { href: '/campaigns', label: 'Campaigns' },
   { href: '/team', label: 'Team' },
+  { href: '/skills', label: 'Skills' },
   { href: '/operator', label: 'Classic Operator' },
   { href: '/operator-skills', label: 'Operator Skills' },
   { href: '/operator-playbooks', label: 'Playbooks' },

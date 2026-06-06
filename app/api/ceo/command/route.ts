@@ -421,6 +421,43 @@ export async function POST(request: NextRequest) {
     // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').
     const provider = await getProviderForRole('ceo', userId) ?? await getAnyConnectedProvider(userId)
     if (provider) {
+      if (classification.intent === 'content_creation') {
+        const { executeAISkill, recommendAISkillForPrompt } = await import('@/lib/ai-skills')
+        const skillId = recommendAISkillForPrompt(command.trim())
+        const projectId = classification.project_reference.id ?? null
+        const shouldSave = /\b(save|export|markdown|file)\b/i.test(command.trim())
+        const output = await executeAISkill(skillId, {
+          prompt: command.trim(),
+          project_id: projectId,
+          save_as_file: shouldSave,
+        })
+        const warningCopy = output.warning ? `${output.warning}\n\n` : ''
+        const responseText = withVisiblePlan(
+          `${warningCopy}${output.title}\n\n${output.content}`,
+          classification,
+        )
+        const actions = [{
+          type: 'ai_skill_output',
+          data: {
+            skill_id: output.skill_id,
+            title: output.title,
+            format: output.format,
+            saved_file_id: output.saved_file_id ?? null,
+            external_action_executed: false,
+          },
+        }]
+        await persistCeoShortcutCommand(command.trim(), responseText, 'content_creation', actions, projectId)
+        return NextResponse.json({
+          ...orchestrationPayload(classification),
+          response: responseText,
+          intent: 'content_creation',
+          actions,
+          project_id: projectId,
+          ai_skill_output: output,
+          delegation: null,
+        })
+      }
+
       const result = await runCeoCommandAgent(command.trim())
 
       // Extract operator name from command

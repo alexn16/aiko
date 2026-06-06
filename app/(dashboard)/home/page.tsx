@@ -57,6 +57,15 @@ type CommandResult = {
   project_id?: string | null
   short_plan?: string[]
   suggested_chips?: Array<{ label: string; command?: string; href?: string }>
+  ai_skill_output?: {
+    skill_id: string
+    title: string
+    content: string
+    format: string
+    suggested_next_actions: string[]
+    warning?: string
+    saved_file_id?: string
+  }
   delegation?: {
     status: string
     message: string
@@ -146,6 +155,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<CommandResult | null>(null)
   const [liveLabel, setLiveLabel] = useState('Done')
+  const [savingDraft, setSavingDraft] = useState(false)
+  const [copyStatus, setCopyStatus] = useState('')
 
   const selectedProject = useMemo(
     () => projects.find(p => p.id === projectId) ?? projects[0] ?? null,
@@ -216,6 +227,10 @@ export default function HomePage() {
   async function runCommand(text?: string) {
     const baseCommand = (text ?? command).trim()
     if (!baseCommand) return
+    if (/^save (it|this)( as markdown| as a file| to files?)?\.?$/i.test(baseCommand) && result?.ai_skill_output) {
+      await saveDraftAsFile(result.ai_skill_output)
+      return
+    }
     const withProject = selectedProject && !hasExplicitProjectHint(baseCommand, projects)
       ? `${baseCommand} for ${selectedProject.name}.`
       : baseCommand
@@ -245,6 +260,51 @@ export default function HomePage() {
       setLiveLabel('Done')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function saveDraftAsFile(output: NonNullable<CommandResult['ai_skill_output']>) {
+    setSavingDraft(true)
+    try {
+      const filename = `${output.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ai-skill-output'}.md`
+      const content = `# ${output.title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${output.content}\n`
+      const res = await fetch('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: result?.project_id ?? selectedProject?.id ?? null,
+          filename,
+          title: output.title,
+          content,
+          content_type: 'markdown',
+          generated_by_role: 'copywriting',
+          description: `AI skill output from ${output.skill_id}`,
+          source_entity_type: 'ai_skill_output',
+          source_entity_id: output.skill_id,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Could not save draft.')
+      setResult(prev => prev ? {
+        ...prev,
+        response: `Saved ${output.title} as Markdown.`,
+        ai_skill_output: { ...output, saved_file_id: data.file?.id ?? output.saved_file_id },
+      } : prev)
+      await refresh()
+    } catch (err) {
+      setResult(prev => prev ? { ...prev, response: err instanceof Error ? err.message : 'Could not save draft.' } : prev)
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  async function copyDraft(content: string) {
+    try {
+      await navigator.clipboard.writeText(content)
+      setCopyStatus('Copied')
+      window.setTimeout(() => setCopyStatus(''), 1600)
+    } catch {
+      setCopyStatus('Copy failed')
     }
   }
 
@@ -492,8 +552,68 @@ export default function HomePage() {
               </div>
             )}
             <p style={{ color: '#0f172a', fontSize: 15, lineHeight: 1.7, marginTop: 0 }}>
-              {sanitizeMessage(result.response)}
+              {result.ai_skill_output
+                ? (result.ai_skill_output.warning ?? 'Draft created. Review it below.')
+                : sanitizeMessage(result.response)}
             </p>
+            {result.ai_skill_output && (
+              <div style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                padding: 14,
+                marginBottom: 14,
+                background: '#ffffff',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>Draft</div>
+                    <h3 style={{ margin: '4px 0 0', color: '#0f172a', fontSize: 18 }}>{result.ai_skill_output.title}</h3>
+                    <div style={{ ...mutedText, marginTop: 4 }}>{result.ai_skill_output.format.replace(/_/g, ' ')}</div>
+                  </div>
+                  {result.ai_skill_output.warning && (
+                    <span style={{ border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', borderRadius: 999, padding: '5px 8px', fontSize: 11, fontWeight: 800 }}>
+                      Draft only
+                    </span>
+                  )}
+                </div>
+                {result.ai_skill_output.warning && (
+                  <p style={{ margin: '0 0 10px', color: '#92400e', fontSize: 13, lineHeight: 1.5 }}>
+                    {result.ai_skill_output.warning}
+                  </p>
+                )}
+                <pre style={{
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'inherit',
+                  color: '#0f172a',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8,
+                  padding: 12,
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  maxHeight: 360,
+                  overflow: 'auto',
+                }}>
+                  {result.ai_skill_output.content}
+                </pre>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => saveDraftAsFile(result.ai_skill_output!)} disabled={savingDraft}>
+                    {savingDraft ? 'Saving...' : result.ai_skill_output.saved_file_id ? 'Saved' : 'Save as file'}
+                  </button>
+                  <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => copyDraft(result.ai_skill_output!.content)}>
+                    {copyStatus || 'Copy'}
+                  </button>
+                  <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Create another version of ${result.ai_skill_output!.title}${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
+                    Create another version
+                  </button>
+                  {result.ai_skill_output.saved_file_id && (
+                    <Link href="/files" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                      Open files
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
             {Array.isArray(result.suggested_chips) && result.suggested_chips.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                 {result.suggested_chips.map(chip => (

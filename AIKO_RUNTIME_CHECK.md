@@ -1095,3 +1095,30 @@ AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
 
 - The in-app browser's virtual clipboard was unavailable during later typed-command checks, so repeated UI text entry was validated through the same `/api/ceo/command` endpoint used by `/home` after the first browser-submitted command passed.
 - No unsafe action behavior changed. Browser work still pauses for login/CAPTCHA/security, and posting/sending/publishing remains approval-gated.
+
+---
+
+## Internal AI Content Skills — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Migration | Startup | ✅ Pass | Dev startup applied `044_ai_skills.sql`; `GET /api/ai-skills` returned 10 enabled content skills. |
+| LinkedIn draft | `/api/ceo/command` | ✅ Pass | `Create a LinkedIn post for AÏKO.` returned `intent=content_creation`, `ai_skill_output.skill_id=write_linkedin_post`, a visible short plan, and no delegation. |
+| Reddit draft | `/api/ai-skills/execute` | ✅ Pass | `Write a Reddit post about AÏKO.` returned `write_reddit_post`, draft content, draft-only warning, `created_web_operator_action=false`, and `external_action_executed=false`. |
+| Email improvement | `/api/ai-skills/execute` + DB count | ✅ Pass | `Improve this email...` returned `improve_email`; `web_operator_actions` count stayed unchanged. |
+| Save as Markdown | `/api/ai-skills/execute`, `/api/files`, `/files` | ✅ Pass | `Create 5 content ideas for ALB Parking` with `save_as_file=true` created `ALB Parking Content Ideas` as Markdown with `source_entity_type=ai_skill_output`; `/files` shows the `AI skill output` label. |
+| Skills catalog | `/skills` | ✅ Pass | Page shows AI Skills, Web Operator Skills, and Playbooks. |
+| Home UI | `/home` | ⚠ Partial | `/home` loads with the command center. The in-app browser could not type into the command box because its virtual clipboard hook was unavailable, so the draft-card behavior was validated through API responses, source tests, and the shared `/home` render path rather than a typed browser submission. |
+
+### Safety
+
+- AI Content Skills do not browse, create Web Operator actions, post, send, publish, message, or claim external completion.
+- Publishing/sending language returns a draft-only warning: `Draft created only. Publishing or sending requires approval.`

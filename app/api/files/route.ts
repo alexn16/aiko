@@ -29,7 +29,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { project_id, filename, content, content_type, title, description, generated_by_role } = body
+    const {
+      project_id,
+      filename,
+      content,
+      content_type,
+      title,
+      description,
+      generated_by_role,
+      source_entity_type,
+      source_entity_id,
+    } = body
 
     if (!filename || typeof filename !== 'string') {
       return NextResponse.json({ error: 'filename is required' }, { status: 400 })
@@ -48,6 +58,8 @@ export async function POST(request: NextRequest) {
       title:        title ?? null,
       description:  description ?? null,
       generated_by_role: generated_by_role ?? null,
+      source_entity_type: typeof source_entity_type === 'string' ? source_entity_type : null,
+      source_entity_id: typeof source_entity_id === 'string' ? source_entity_id : null,
     })
 
     return NextResponse.json({ file }, { status: 201 })

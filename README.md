@@ -1470,6 +1470,7 @@ All generated files from all sources are listed at `/files`. Each file shows its
 | `strategy_brief`      | Strategy brief      |
 | `decision_log`        | Decision log        |
 | `project_bundle`      | Project bundle      |
+| `ai_skill_output`     | AI skill output     |
 
 ## OpenClaw-style AI auth profiles
 
@@ -1495,6 +1496,14 @@ ChatGPT/Codex OAuth App requires these env vars before the Connect button is ena
 - `OPENAI_OAUTH_CLIENT_SECRET` only if required by the OAuth provider
 
 The `/connect-ai` page shows the current CEO brain, saved auth profiles, add-profile cards, Codex local detection, missing OAuth variables, Claude Code local detection, and API fallback availability without exposing secrets.
+
+## AI Skills for internal content drafts
+
+AÏKO has internal **AI Skills** for content work such as LinkedIn posts, Reddit posts, X/Twitter threads, email drafts, improved emails, landing page copy, blog outlines, summaries, rewrites, and content ideas.
+
+AI Skills are text-generation skills only. They do not browse, open Web Operator sessions, send messages, post, publish, or claim external completion. If the owner asks to post/send/publish, AÏKO creates a draft only and keeps execution behind the existing approval/resume model.
+
+The skill catalog is visible at `/skills`. Drafts can be saved as generated Markdown files with `source_entity_type = ai_skill_output`.
 
 ## Web Operator Skills for website workflows
 
