@@ -19,6 +19,7 @@ const NAV_GROUPS = [
     label: 'Work',
     items: [
       { href: '/start-campaign', label: 'Start Campaign' },
+      { href: '/tasks', label: 'Tasks' },
       { href: '/leads', label: 'Leads' },
       { href: '/approvals', label: 'Approvals' },
       { href: '/reports', label: 'Reports' },

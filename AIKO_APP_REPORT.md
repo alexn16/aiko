@@ -778,3 +778,23 @@ AI Skill strategy outputs now use skill-specific templates in `lib/ai-skills/out
 `POST /api/ai-skills/create-tasks` creates internal `agent_tasks` from AI skill next actions or structured plan items. It returns `created_web_operator_action=false` and `external_action_executed=false`, and it does not call Web Operator delegation. Malformed JSON now returns a clean `400` instead of logging a stack trace.
 
 Runtime validation confirmed the 7-day ALB Parking plan produced a 7-entry `day_by_day_plan`, AÏKO persona output included pains/channels/messaging angles, next-step output included `requires_web_operator`, risk analysis included mitigation and saved to Files, and task creation added 5 internal tasks while the latest Web Operator action ID stayed unchanged.
+
+### Simple Task Management — 2026-06-06
+
+AÏKO now has an owner-facing task layer on top of the existing `agent_tasks` table. `AIKO_TASKS_AUDIT.md` documents the existing schema, advanced agent task APIs, project-scoped behavior, and the new simple owner workflow.
+
+New routes:
+
+- `GET /api/tasks`
+- `PATCH /api/tasks/[id]`
+
+These routes map internal task statuses to owner-friendly labels: `planned` → `todo`, `completed` → `done`, plus `in_progress`, `blocked`, and `archived`. They join project names for display and sort blocked tasks before todo tasks.
+
+UI changes:
+
+- `/tasks` lists active tasks with project, owner-role, and status filters.
+- `/home` shows a compact “Next tasks” card with the top active tasks.
+- Project workspace `Tasks` now shows the simple task panel by default, with the advanced agent task tools hidden behind an Advanced toggle.
+- AI skill task creation now returns `tasks_url` and `project_tasks_url`, so `/home` can show “View tasks” and “Open project” after internal task creation.
+
+Safety remains unchanged. Task status updates only modify internal `agent_tasks`; they do not create Web Operator actions, approval items, browser sessions, sends, posts, publishes, messages, or resumes.

@@ -4938,3 +4938,66 @@ test('242. AI skill task creation does not create Web Operator actions', () => {
   assert.equal(route.includes('web_operator_actions'), false)
   assert.equal(route.includes('/api/web-operator'), false)
 })
+
+test('243. create-tasks returns owner task URLs', () => {
+  const route = fs.readFileSync('app/api/ai-skills/create-tasks/route.ts', 'utf8')
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(route.includes("tasks_url: '/tasks'"))
+  assert.ok(route.includes('project_tasks_url'))
+  assert.ok(home.includes('View tasks'))
+  assert.ok(home.includes('Open project'))
+})
+
+test('244. /tasks lists active owner tasks with filters', () => {
+  const page = fs.readFileSync('app/(dashboard)/tasks/page.tsx', 'utf8')
+  const panel = fs.readFileSync('components/tasks/SimpleTasksPanel.tsx', 'utf8')
+  assert.ok(page.includes('<SimpleTasksPanel />'))
+  assert.ok(panel.includes('All projects'))
+  assert.ok(panel.includes('All owners'))
+  assert.ok(panel.includes('statusOptions'))
+  assert.ok(panel.includes('/api/tasks?'))
+  assert.ok(panel.includes('ownerDescription'))
+  assert.ok(panel.includes('Internal task created from a plan.'))
+})
+
+test('245. PATCH task status changes internal task status only', () => {
+  const route = fs.readFileSync('app/api/tasks/[id]/route.ts', 'utf8')
+  const helper = fs.readFileSync('lib/tasks/owner-tasks.ts', 'utf8')
+  assert.ok(route.includes('updateOwnerTaskStatus'))
+  assert.ok(route.includes('created_web_operator_action: false'))
+  assert.ok(route.includes('approval_item_created: false'))
+  assert.ok(route.includes('external_action_executed: false'))
+  assert.equal(route.includes('delegateToWebOperator'), false)
+  assert.equal(helper.includes('web_operator_actions'), false)
+  assert.equal(helper.includes('approval_items'), false)
+})
+
+test('246. blocked tasks appear before todo on owner task summary', () => {
+  const helper = fs.readFileSync('lib/tasks/owner-tasks.ts', 'utf8')
+  const blockedIndex = helper.indexOf("WHEN t.status = 'blocked' THEN 0")
+  const plannedIndex = helper.indexOf("WHEN t.status IN ('planned', 'todo') THEN 3")
+  assert.ok(blockedIndex > -1)
+  assert.ok(plannedIndex > -1)
+  assert.ok(blockedIndex < plannedIndex)
+})
+
+test('247. project tasks are filtered by project_id', () => {
+  const route = fs.readFileSync('app/api/tasks/route.ts', 'utf8')
+  const panel = fs.readFileSync('components/tasks/SimpleTasksPanel.tsx', 'utf8')
+  const projectTabs = fs.readFileSync('components/projects/ProjectWorkspaceTabs.tsx', 'utf8')
+  assert.ok(route.includes("project_id: s.get('project_id')"))
+  assert.ok(panel.includes("params.set('project_id', projectId)"))
+  assert.ok(projectTabs.includes('<SimpleTasksPanel projectId={project.id} />'))
+})
+
+test('248. /home shows compact next tasks card', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('Next tasks'))
+  assert.ok(source.includes('Tasks created from plans will appear here.'))
+  assert.ok(source.includes("fetch('/api/tasks?active=true&limit=3')"))
+})
+
+test('249. sidebar exposes simple Tasks page', () => {
+  const sidebar = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  assert.ok(sidebar.includes("{ href: '/tasks', label: 'Tasks' }"))
+})

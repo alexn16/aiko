@@ -63,7 +63,15 @@ export async function POST(request: NextRequest) {
     const projectId = typeof body.project_id === 'string' ? body.project_id : null
     const items = candidateTaskItems(output).map(textFromTaskItem).filter(Boolean).slice(0, 10) as Array<{ title: string; description: string; owner_role?: string | null }>
     if (items.length === 0) {
-      return NextResponse.json({ tasks: [], message: 'No task-ready next actions were found.', created_web_operator_action: false, external_action_executed: false })
+      return NextResponse.json({
+        tasks: [],
+        tasks_created: 0,
+        tasks_url: '/tasks',
+        project_tasks_url: projectId ? `/projects/${projectId}` : null,
+        message: 'No task-ready next actions were found.',
+        created_web_operator_action: false,
+        external_action_executed: false,
+      })
     }
 
     const skillId = String(output.skill_id ?? 'ai_skill_output')
@@ -86,6 +94,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       tasks,
       tasks_created: tasks.length,
+      tasks_url: '/tasks',
+      project_tasks_url: projectId ? `/projects/${projectId}` : null,
       created_web_operator_action: false,
       external_action_executed: false,
     }, { status: 201 })

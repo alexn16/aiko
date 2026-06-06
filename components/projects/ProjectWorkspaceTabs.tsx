@@ -5,6 +5,7 @@ import { PMReportPanel } from './PMReportPanel'
 import { InternalCommsPanel } from '@/components/agents/InternalCommsPanel'
 import { TasksPanel } from '@/components/agents/TasksPanel'
 import { OutputsPanel } from '@/components/agents/OutputsPanel'
+import { SimpleTasksPanel } from '@/components/tasks/SimpleTasksPanel'
 import { ProjectApprovalsPanel } from '@/components/approvals/ProjectApprovalsPanel'
 import { ProjectCampaignsPanel } from '@/components/campaigns/ProjectCampaignsPanel'
 import { ProjectResearchPanel } from '@/components/tools/ProjectResearchPanel'
@@ -1722,7 +1723,15 @@ export function ProjectWorkspaceTabs({ project, memory, agents, leads, activity,
         {tab === 'tasks' && (
           <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px' }}>
             <div style={{ maxWidth: 760 }}>
-              <TasksPanel projectId={project.id} />
+              <SimpleTasksPanel projectId={project.id} />
+              <details style={{ marginTop: 18 }}>
+                <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
+                  Advanced agent task tools
+                </summary>
+                <div style={{ marginTop: 14 }}>
+                  <TasksPanel projectId={project.id} />
+                </div>
+              </details>
             </div>
           </div>
         )}

@@ -51,6 +51,15 @@ type GeneratedFile = {
   project_name?: string | null
 }
 
+type OwnerTask = {
+  id: string
+  project_id: string | null
+  project_name: string | null
+  owner_role: string
+  title: string
+  status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'archived'
+}
+
 type CommandResult = {
   response?: string
   intent?: string
@@ -73,6 +82,8 @@ type CommandResult = {
     web_research_questions?: string[]
     structured_data?: Record<string, unknown>
     tasks_created?: number
+    tasks_url?: string
+    project_tasks_url?: string | null
   }
   delegation?: {
     status: string
@@ -158,6 +169,7 @@ export default function HomePage() {
   const [actions, setActions] = useState<Action[]>([])
   const [approvalItems, setApprovalItems] = useState<ApprovalItem[]>([])
   const [files, setFiles] = useState<GeneratedFile[]>([])
+  const [tasks, setTasks] = useState<OwnerTask[]>([])
   const [pendingApprovals, setPendingApprovals] = useState(0)
   const [command, setCommand] = useState('')
   const [loading, setLoading] = useState(false)
@@ -194,12 +206,13 @@ export default function HomePage() {
   }
 
   async function refresh() {
-    const [projectRes, operatorRes, actionRes, approvalRes, fileRes] = await Promise.all([
+    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes] = await Promise.all([
       fetch('/api/projects'),
       fetch('/api/web-operators'),
       fetch('/api/web-operator/actions?limit=5'),
       fetch('/api/approval-items?limit=10'),
       fetch('/api/files?limit=1'),
+      fetch('/api/tasks?active=true&limit=3'),
     ])
     if (projectRes.ok) {
       const data = await projectRes.json()
@@ -224,6 +237,10 @@ export default function HomePage() {
     if (fileRes.ok) {
       const data = await fileRes.json()
       setFiles((data.files ?? []) as GeneratedFile[])
+    }
+    if (taskRes.ok) {
+      const data = await taskRes.json()
+      setTasks((data.tasks ?? []) as OwnerTask[])
     }
   }
 
@@ -359,8 +376,14 @@ export default function HomePage() {
       setResult(prev => prev ? {
         ...prev,
         response: `Created ${count} internal task${count === 1 ? '' : 's'}. No external action was executed.`,
-        ai_skill_output: { ...output, tasks_created: count },
+        ai_skill_output: {
+          ...output,
+          tasks_created: count,
+          tasks_url: data.tasks_url ?? '/tasks',
+          project_tasks_url: data.project_tasks_url ?? null,
+        },
       } : prev)
+      await refresh()
     } catch (err) {
       setResult(prev => prev ? { ...prev, response: err instanceof Error ? err.message : 'Could not create tasks.' } : prev)
     } finally {
@@ -468,6 +491,46 @@ export default function HomePage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>Next tasks</div>
+                <Link href="/tasks" style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none', fontWeight: 800 }}>
+                  View all tasks
+                </Link>
+              </div>
+              {tasks.length === 0 ? (
+                <p style={{ ...mutedText, margin: 0 }}>Tasks created from plans will appear here.</p>
+              ) : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {tasks.map(task => (
+                    <div key={task.id} style={{
+                      border: task.status === 'blocked' ? '1px solid #fecaca' : '1px solid #e2e8f0',
+                      background: task.status === 'blocked' ? '#fef2f2' : '#f8fafc',
+                      borderRadius: 8,
+                      padding: 10,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#0f172a', fontSize: 13, fontWeight: 900, lineHeight: 1.35 }}>{task.title}</div>
+                          <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
+                            {task.project_name ?? 'No project'} · {task.owner_role.replace(/_/g, ' ')}
+                          </div>
+                        </div>
+                        <span style={{
+                          flexShrink: 0,
+                          color: task.status === 'blocked' ? '#991b1b' : '#475569',
+                          fontSize: 11,
+                          fontWeight: 900,
+                        }}>
+                          {task.status === 'todo' ? 'To do' : task.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={cardStyle}>
@@ -733,6 +796,18 @@ export default function HomePage() {
                       {creatingTasks ? 'Creating...' : result.ai_skill_output.tasks_created ? `Tasks created (${result.ai_skill_output.tasks_created})` : 'Create tasks'}
                     </button>
                   )}
+                  {result.ai_skill_output.tasks_created ? (
+                    <>
+                      <Link href={result.ai_skill_output.tasks_url ?? '/tasks'} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                        View tasks
+                      </Link>
+                      {result.ai_skill_output.project_tasks_url && (
+                        <Link href={result.ai_skill_output.project_tasks_url} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                          Open project
+                        </Link>
+                      )}
+                    </>
+                  ) : null}
                   {result.ai_skill_output.needs_web_research && (
                     <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Kevin, research the open questions for ${result.ai_skill_output!.title}${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
                       Run Web Operator research

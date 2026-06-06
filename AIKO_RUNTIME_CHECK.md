@@ -1177,3 +1177,32 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 
 - The quality pass changed output structure and internal task creation only.
 - It did not add browser actions, external execution, publishing, posting, messaging, or Web Operator delegation.
+
+---
+
+## Simple Task Management — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Generate plan | `/api/ai-skills/execute` | ✅ Pass | `Plan the next 7 days for ALB Parking.` returned `create_7_day_plan` with 7 structured day entries. |
+| Create tasks | `/api/ai-skills/create-tasks` | ✅ Pass | Created 7 internal tasks and returned `/tasks` plus the project URL. |
+| List tasks | `/api/tasks`, `/tasks` | ✅ Pass | Active tasks list renders with filters, project names, owner roles, source labels, and status actions. |
+| Update task done | `PATCH /api/tasks/[id]` | ✅ Pass | Marked one task `done`; response confirmed `created_web_operator_action=false` and `approval_item_created=false`. |
+| Update task blocked | `PATCH /api/tasks/[id]` | ✅ Pass | Marked one task `blocked`; blocked tasks sort before todo tasks on the owner summary. |
+| Home task visibility | `/home` | ✅ Pass | “Next tasks” card renders top active tasks with “View all tasks.” |
+| Project task visibility | `/projects/[id]` Tasks tab | ✅ Pass | Project Tasks tab renders the simple task panel by default; advanced agent task tools remain behind a toggle. |
+| No raw metadata | `/tasks`, project Tasks tab | ✅ Pass after fix | JSON task descriptions from older strategy-plan tasks are hidden behind plain owner copy. |
+| No operator side effect | `/api/web-operator/actions` | ✅ Pass | Latest Web Operator action stayed `9188773a-e1d9-4777-96f5-a684fa38fb42`. |
+
+### Safety
+
+- Task creation and task status changes are internal only.
+- No Web Operator actions, approval items, browser sessions, sends, posts, publishes, messages, or resumes were created by task management.
