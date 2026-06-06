@@ -20,6 +20,12 @@ import {
 import { runMarketingResearchAutopilot } from '@/lib/web-operator/marketing-research-runner'
 import { classifyOwnerCommand, type OwnerCommandClassification, type OwnerCommandContext } from '@/lib/brain/orchestrator'
 import { formatDailyBriefForCEO, getDailyBrief } from '@/lib/daily-brief'
+import {
+  inferAgentTaskType,
+  inferAssignedAgentName,
+  isAgentAssignmentIntent,
+  runAgentTaskNow,
+} from '@/lib/agents/agent-runner'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
 
@@ -313,6 +319,50 @@ async function handleDailyBriefCommand(command: string, userId: string | null): 
   })
 }
 
+async function handleAgentAssignmentCommand(command: string): Promise<NextResponse | null> {
+  if (!isAgentAssignmentIntent(command)) return null
+
+  const agentName = inferAssignedAgentName(command)
+  const taskType = inferAgentTaskType(command)
+  const run = await runAgentTaskNow({
+    agentName,
+    role: taskType === 'repo_operational_audit' ? 'repo_auditor' : 'internal_agent',
+    taskType,
+    prompt: command,
+    projectId: null,
+  })
+
+  const response = run.status === 'done'
+    ? `${agentName} completed the ${run.title.toLowerCase()}. Open the report when you want the details.\n\n${run.output_summary}`
+    : `${agentName} was assigned, but the task is ${run.status}. ${run.output_summary}`
+  const actions = [{
+    type: 'agent_task_assigned',
+    data: {
+      task_id: run.task_id,
+      task_type: taskType,
+      assigned_agent_name: agentName,
+      status: run.status,
+      output_file_id: run.output_file_id,
+      external_action_executed: false,
+    },
+  }]
+  await persistCeoShortcutCommand(command, response, 'agent_assignment', actions, null)
+
+  return NextResponse.json({
+    response,
+    intent: 'agent_assignment',
+    actions,
+    project_id: null,
+    delegation: null,
+    agent_task: run,
+    recall_chips: [
+      { label: 'Open task', href: '/tasks' },
+      ...(run.output_file_id ? [{ label: 'Open report', href: `/files?file_id=${run.output_file_id}` }] : []),
+      { label: 'View agents', href: '/agents' },
+    ],
+  })
+}
+
 function selfImprovementHint(command: string): string {
   const lower = command.toLowerCase()
   for (const hint of ['whatsapp', 'reddit', 'facebook', 'linkedin', 'instagram', 'canva', 'gmail', 'email']) {
@@ -453,6 +503,9 @@ export async function POST(request: NextRequest) {
 
     const autopilotResponse = await handleProjectAutopilotMarketingCommand(command.trim(), classification)
     if (autopilotResponse) return autopilotResponse
+
+    const agentAssignmentResponse = await handleAgentAssignmentCommand(command.trim())
+    if (agentAssignmentResponse) return agentAssignmentResponse
 
     // Check that at least one provider is reachable before calling the agent.
     // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').

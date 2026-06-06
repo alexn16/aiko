@@ -15,6 +15,10 @@ export type OwnerTask = {
   priority: string
   task_type: string
   source: string
+  assigned_agent_name: string | null
+  assigned_agent_id: string | null
+  output_summary: string | null
+  output_file_id: string | null
   created_at: string
   updated_at: string
   completed_at: string | null
@@ -22,8 +26,8 @@ export type OwnerTask = {
 
 export function toOwnerTaskStatus(status: string): OwnerTaskStatus {
   if (status === 'completed' || status === 'done') return 'done'
-  if (status === 'in_progress') return 'in_progress'
-  if (status === 'blocked') return 'blocked'
+  if (status === 'in_progress' || status === 'working' || status === 'assigned') return 'in_progress'
+  if (status === 'blocked' || status === 'failed') return 'blocked'
   if (status === 'archived') return 'archived'
   return 'todo'
 }
@@ -46,6 +50,7 @@ export function sourceLabel(task: { assigned_by_role?: string | null; task_type?
 
 export function mapOwnerTask(row: Record<string, unknown>): OwnerTask {
   const rawStatus = String(row.status ?? 'planned')
+  const output = parseTaskOutput(row.output)
   return {
     id: String(row.id),
     project_id: row.project_id ? String(row.project_id) : null,
@@ -62,10 +67,31 @@ export function mapOwnerTask(row: Record<string, unknown>): OwnerTask {
       assigned_by_role: row.assigned_by_role ? String(row.assigned_by_role) : null,
       task_type: row.task_type ? String(row.task_type) : null,
     }),
+    assigned_agent_name: stringOrNull(output.assigned_agent_name),
+    assigned_agent_id: stringOrNull(output.assigned_agent_id ?? row.owner_agent_id),
+    output_summary: stringOrNull(output.output_summary),
+    output_file_id: stringOrNull(output.output_file_id),
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
     completed_at: row.completed_at ? String(row.completed_at) : null,
   }
+}
+
+function parseTaskOutput(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
 }
 
 export async function listOwnerTasks(filters: {

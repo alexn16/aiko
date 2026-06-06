@@ -822,3 +822,21 @@ The Daily Brief gathers sanitized state from setup/CEO brain, active project, wa
 `/home` now opens with a compact “Today” card showing the summary, top priorities, recommended next action, and links to tasks, approvals, operators, report generation, and start marketing. `/today` shows the expanded brief.
 
 CEO Chat now handles “What should I do today?”, “Give me today’s brief,” “What needs attention?”, and “What is blocking progress?” as a read-only `daily_brief` response. It does not delegate, create approvals, create Web Operator actions, or execute external work.
+
+### Agent Activation — 2026-06-06
+
+AÏKO now turns explicit CEO agent assignment commands into real internal work instead of prose-only assignment.
+
+`lib/agents/agent-runner.ts` creates and runs short internal agent tasks. Assignment commands such as “Assign Sven to inspect the repo” and “Start prompting yourself and the repo you are on” now create an `agent_tasks` row, store assigned-agent metadata in task output, mark the task assigned/working, run the internal task, generate a Markdown artifact, create an `agent_task_outputs` row, and mark the task completed or blocked.
+
+The first supported internal task type is `repo_operational_audit`. It reads a fixed safe set of local docs/source summaries, redacts common secret/token patterns, uses the configured brain when available, and falls back to a deterministic audit if the provider cannot respond. The generated report is stored as `AIKO_REPO_OPERATIONAL_AUDIT.md`.
+
+CEO Chat intercepts assignment intents before generic CEO prose, so it no longer says an agent was assigned unless a task was actually created and run or blocked. The response includes links to `/tasks`, `/files`, and `/agents`.
+
+UI updates:
+
+- `/tasks` shows assigned agent names, output summaries, and output links.
+- `/home` Next tasks shows assigned agent names and output links.
+- `/agents` shows assigned-agent work derived from task records, including named agents such as Sven even when they are not saved custom-agent specs.
+
+Safety remains unchanged. Agent assignment does not create Web Operator actions, browser sessions, approval items, sends, posts, publishes, messages, or external side effects.

@@ -23,6 +23,15 @@ interface CustomAgent {
   is_built_in?:     false
 }
 
+interface AgentWork {
+  agent_name: string
+  task_id: string
+  task_title: string
+  status: string
+  output_summary: string | null
+  output_file_id: string | null
+}
+
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   active:   { bg: '#dcfce7', color: '#166534' },
   draft:    { bg: '#fef9c3', color: '#92400e' },
@@ -40,6 +49,7 @@ const CONSTRAINT_LABELS: Record<string, string> = {
 export default function AgentsPage() {
   const [builtIn, setBuiltIn]  = useState<BuiltInAgent[]>([])
   const [custom, setCustom]    = useState<CustomAgent[]>([])
+  const [work, setWork]        = useState<AgentWork[]>([])
   const [loading, setLoading]  = useState(true)
   const [archiving, setArchiving]   = useState<string | null>(null)
   const [activating, setActivating] = useState<string | null>(null)
@@ -48,10 +58,31 @@ export default function AgentsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res  = await fetch('/api/custom-agents')
+      const [res, taskRes] = await Promise.all([
+        fetch('/api/custom-agents'),
+        fetch('/api/tasks?limit=100'),
+      ])
       const data = await res.json()
+      const taskData = taskRes.ok ? await taskRes.json() : { tasks: [] }
       setBuiltIn(data.built_in ?? [])
       setCustom(data.custom   ?? [])
+      setWork((taskData.tasks ?? [])
+        .filter((task: { assigned_agent_name?: string | null; output_summary?: string | null }) => task.assigned_agent_name)
+        .map((task: {
+          id: string
+          assigned_agent_name: string
+          title: string
+          status: string
+          output_summary?: string | null
+          output_file_id?: string | null
+        }) => ({
+          agent_name: task.assigned_agent_name,
+          task_id: task.id,
+          task_title: task.title,
+          status: task.status,
+          output_summary: task.output_summary ?? null,
+          output_file_id: task.output_file_id ?? null,
+        })))
     } finally {
       setLoading(false)
     }
@@ -87,6 +118,7 @@ export default function AgentsPage() {
   const activeCustom   = custom.filter(a => a.status === 'active')
   const draftCustom    = custom.filter(a => a.status === 'draft')
   const archivedCustom = custom.filter(a => a.status === 'archived')
+  const assignedWork = work
 
   return (
     <div style={{ padding: '40px 40px', maxWidth: 960 }} className="page-enter">
@@ -145,10 +177,18 @@ export default function AgentsPage() {
           <Section title="Built-in Agents" count={builtIn.length}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
               {builtIn.map(agent => (
-                <BuiltInCard key={agent.id} agent={agent} />
+                <BuiltInCard key={agent.id} agent={agent} work={work.find(item => item.agent_name.toLowerCase() === agent.name.toLowerCase()) ?? null} />
               ))}
             </div>
           </Section>
+
+          {assignedWork.length > 0 && (
+            <Section title="Assigned Agent Work" count={assignedWork.length}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {assignedWork.map(item => <AgentWorkCard key={item.task_id} work={item} />)}
+              </div>
+            </Section>
+          )}
 
           {/* Active custom agents */}
           {activeCustom.length > 0 && (
@@ -252,7 +292,8 @@ function Section({ title, count, children }: { title: string; count: number; chi
   )
 }
 
-function BuiltInCard({ agent }: { agent: BuiltInAgent }) {
+function BuiltInCard({ agent, work }: { agent: BuiltInAgent; work?: AgentWork | null }) {
+  const workStatus = work ? work.status.replace(/_/g, ' ') : 'idle'
   return (
     <div style={{
       background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: 12,
@@ -270,10 +311,10 @@ function BuiltInCard({ agent }: { agent: BuiltInAgent }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{agent.name}</div>
           <div style={{
             display: 'inline-block', fontSize: 9, fontWeight: 600,
-            background: '#eef2ff', color: '#4338ca',
+            background: work ? '#dcfce7' : '#eef2ff', color: work ? '#166534' : '#4338ca',
             borderRadius: 4, padding: '1px 6px', marginTop: 2,
           }}>
-            BUILT-IN
+            {work ? workStatus.toUpperCase() : 'BUILT-IN'}
           </div>
         </div>
       </div>
@@ -289,6 +330,53 @@ function BuiltInCard({ agent }: { agent: BuiltInAgent }) {
             {cap.replace(/_/g, ' ')}
           </span>
         ))}
+      </div>
+      {work && (
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{work.task_title}</div>
+          {work.output_summary && (
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, lineHeight: 1.5 }}>{work.output_summary}</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AgentWorkCard({ work }: { work: AgentWork }) {
+  return (
+    <div style={{
+      background: '#ffffff',
+      border: '1px solid #dbeafe',
+      borderRadius: 12,
+      padding: '14px 18px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{work.agent_name}</div>
+          <div style={{ fontSize: 12, color: '#334155', marginTop: 4 }}>{work.task_title}</div>
+          {work.output_summary && (
+            <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.5 }}>{work.output_summary}</div>
+          )}
+        </div>
+        <div style={{ flexShrink: 0, display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{
+            borderRadius: 999,
+            padding: '4px 8px',
+            fontSize: 10,
+            fontWeight: 800,
+            color: work.status === 'blocked' ? '#991b1b' : work.status === 'done' ? '#166534' : '#1d4ed8',
+            background: work.status === 'blocked' ? '#fee2e2' : work.status === 'done' ? '#dcfce7' : '#dbeafe',
+          }}>
+            {work.status.replace(/_/g, ' ')}
+          </span>
+          {work.output_file_id && (
+            <a href={`/files?file_id=${work.output_file_id}`} style={{ fontSize: 11, color: '#2563eb', fontWeight: 700, textDecoration: 'none' }}>
+              Open output
+            </a>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -10,6 +10,9 @@ type OwnerTask = {
   project_id: string | null
   project_name: string | null
   owner_role: string
+  assigned_agent_name: string | null
+  output_summary: string | null
+  output_file_id: string | null
   title: string
   description: string
   status: TaskStatus
@@ -24,6 +27,7 @@ type Props = {
 }
 
 const statusOptions: Array<{ value: string; label: string }> = [
+  { value: '', label: 'All' },
   { value: 'active', label: 'Active' },
   { value: 'todo', label: 'To do' },
   { value: 'in_progress', label: 'In progress' },
@@ -77,7 +81,7 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
   const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
   const [projectFilter, setProjectFilter] = useState(projectId ?? '')
   const [ownerFilter, setOwnerFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('active')
+  const [statusFilter, setStatusFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
 
@@ -195,7 +199,7 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
                       {task.title}
                     </div>
                     <div style={{ color: '#64748b', fontSize: 12, marginTop: 5, lineHeight: 1.5 }}>
-                      {task.project_name ?? 'No project'} · {formatRole(task.owner_role)} · {task.source} · {taskAge(task.created_at)}
+                      {task.project_name ?? 'No project'} · {task.assigned_agent_name ?? formatRole(task.owner_role)} · {task.source} · {taskAge(task.created_at)}
                     </div>
                   </div>
                   <span style={{
@@ -215,6 +219,11 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
                     {ownerDescription(task.description)}
                   </p>
                 )}
+                {!compact && task.output_summary && (
+                  <p style={{ margin: '10px 0 0', color: '#475569', fontSize: 13, lineHeight: 1.55 }}>
+                    <strong>Output:</strong> {task.output_summary}
+                  </p>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                   {task.status !== 'done' && (
                     <button style={buttonStyle} onClick={() => updateTask(task, 'done')}>Mark done</button>
@@ -227,6 +236,9 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
                   )}
                   {task.project_id && (
                     <Link href={`/projects/${task.project_id}`} style={{ ...buttonStyle, textDecoration: 'none' }}>Open project</Link>
+                  )}
+                  {task.output_file_id && (
+                    <Link href={`/files?file_id=${task.output_file_id}`} style={{ ...buttonStyle, textDecoration: 'none' }}>Open output</Link>
                   )}
                 </div>
               </div>

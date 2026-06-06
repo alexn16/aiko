@@ -1233,3 +1233,38 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 
 - Daily Brief is read-only guidance.
 - It does not create tasks, approvals, Web Operator actions, browser sessions, sends, posts, publishes, messages, or resumes.
+
+---
+
+## Agent Activation — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+Command tested in CEO flow:
+
+```text
+Start prompting yourself and the repo you are on. Assign Sven to audit how AÏKO works and what needs to improve next.
+```
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| CEO assignment | `/api/ceo/command` | ✅ Pass | Returned `intent=agent_assignment` and action type `agent_task_assigned`. CEO response said Sven completed the repo operational audit and linked task/report/agents. |
+| Task created | `/api/tasks` | ✅ Pass | Created `Repo operational audit` assigned to `Sven`, status `done`, with output summary and output file ID. |
+| Report generated | `/api/files` | ✅ Pass | Generated `AIKO_REPO_OPERATIONAL_AUDIT.md` with source `agent_task`. |
+| Tasks page | `/tasks` | ✅ Pass | Default task view shows Sven and `Open output`. |
+| Home task visibility | `/home` | ✅ Pass | “Next tasks” shows Sven and `Open output`. |
+| Agents page | `/agents` | ✅ Pass | Shows assigned-agent work with Sven and output link. |
+| No operator side effect | `/api/web-operator/actions` | ✅ Pass | Latest Web Operator action ID stayed unchanged during agent assignment. |
+| No approval side effect | `/api/approval-items` | ✅ Pass | Approval item count stayed unchanged during agent assignment. |
+
+### Safety
+
+- Agent assignment creates internal tasks and generated files only.
+- Repo audit reads safe local docs/source summaries and redacts common secret/token patterns.
+- No Web Operator action, browser action, approval item, send, post, publish, message, or external side effect is created.

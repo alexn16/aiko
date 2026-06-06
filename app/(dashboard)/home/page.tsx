@@ -56,6 +56,8 @@ type OwnerTask = {
   project_id: string | null
   project_name: string | null
   owner_role: string
+  assigned_agent_name: string | null
+  output_file_id: string | null
   title: string
   status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'archived'
 }
@@ -230,7 +232,7 @@ export default function HomePage() {
       fetch('/api/web-operator/actions?limit=5'),
       fetch('/api/approval-items?limit=10'),
       fetch('/api/files?limit=1'),
-      fetch('/api/tasks?active=true&limit=3'),
+      fetch('/api/tasks?limit=20'),
       fetch('/api/daily-brief'),
     ])
     if (projectRes.ok) {
@@ -259,7 +261,10 @@ export default function HomePage() {
     }
     if (taskRes.ok) {
       const data = await taskRes.json()
-      setTasks((data.tasks ?? []) as OwnerTask[])
+      const rows = (data.tasks ?? []) as OwnerTask[]
+      const assigned = rows.filter(task => task.assigned_agent_name).slice(0, 1)
+      const rest = rows.filter(task => !assigned.some(item => item.id === task.id))
+      setTasks([...assigned, ...rest].slice(0, 3))
     }
     if (briefRes.ok) {
       const data = await briefRes.json()
@@ -587,8 +592,13 @@ export default function HomePage() {
                         <div style={{ minWidth: 0 }}>
                           <div style={{ color: '#0f172a', fontSize: 13, fontWeight: 900, lineHeight: 1.35 }}>{task.title}</div>
                           <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
-                            {task.project_name ?? 'No project'} · {task.owner_role.replace(/_/g, ' ')}
+                            {task.project_name ?? 'No project'} · {(task.assigned_agent_name ?? task.owner_role).replace(/_/g, ' ')}
                           </div>
+                          {task.output_file_id && (
+                            <Link href={`/files?file_id=${task.output_file_id}`} style={{ display: 'inline-block', marginTop: 6, fontSize: 12, color: '#2563eb', fontWeight: 800, textDecoration: 'none' }}>
+                              Open output
+                            </Link>
+                          )}
                         </div>
                         <span style={{
                           flexShrink: 0,

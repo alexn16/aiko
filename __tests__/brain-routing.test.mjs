@@ -4994,7 +4994,7 @@ test('248. /home shows compact next tasks card', () => {
   const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
   assert.ok(source.includes('Next tasks'))
   assert.ok(source.includes('Tasks created from plans will appear here.'))
-  assert.ok(source.includes("fetch('/api/tasks?active=true&limit=3')"))
+  assert.ok(source.includes("fetch('/api/tasks?limit=20')"))
 })
 
 test('249. sidebar exposes simple Tasks page', () => {
@@ -5071,4 +5071,71 @@ test('255. daily brief does not create Web Operator actions or approvals', () =>
 test('256. sidebar exposes Today page', () => {
   const sidebar = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
   assert.ok(sidebar.includes("{ href: '/today', label: 'Today' }"))
+})
+
+test('257. CEO assignment commands route to real agent runner', () => {
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(route.includes('handleAgentAssignmentCommand'))
+  assert.ok(route.includes('runAgentTaskNow'))
+  assert.ok(route.includes("intent: 'agent_assignment'"))
+  assert.ok(route.includes("type: 'agent_task_assigned'"))
+})
+
+test('258. agent runner creates task assignment and working status', () => {
+  const runner = fs.readFileSync('lib/agents/agent-runner.ts', 'utf8')
+  assert.ok(runner.includes('INSERT INTO agent_tasks'))
+  assert.ok(runner.includes("status = 'assigned'") || runner.includes("'assigned'"))
+  assert.ok(runner.includes("status='working'"))
+  assert.ok(runner.includes('assigned_agent_name'))
+})
+
+test('259. repo operational audit produces generated output without external actions', () => {
+  const runner = fs.readFileSync('lib/agents/agent-runner.ts', 'utf8')
+  assert.ok(runner.includes('repo_operational_audit'))
+  assert.ok(runner.includes('AIKO_REPO_OPERATIONAL_AUDIT.md'))
+  assert.ok(runner.includes('createGeneratedFile'))
+  assert.ok(runner.includes('createTaskOutput'))
+  assert.equal(runner.includes('delegateToWebOperator'), false)
+  assert.equal(runner.includes('INSERT INTO web_operator_actions'), false)
+})
+
+test('260. generated repo audit redacts common secrets', () => {
+  const runner = fs.readFileSync('lib/agents/agent-runner.ts', 'utf8')
+  assert.ok(runner.includes('sanitizeAuditMarkdown'))
+  assert.ok(runner.includes('[redacted]'))
+  assert.ok(runner.includes('OPENAI_API_KEY=[redacted]'))
+  assert.ok(runner.includes('AUTH_SECRET=[redacted]'))
+})
+
+test('261. CEO assignment response includes task report and agents chips', () => {
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(route.includes("label: 'Open task'"))
+  assert.ok(route.includes("label: 'Open report'"))
+  assert.ok(route.includes("label: 'View agents'"))
+})
+
+test('262. fake assignment prose is guarded by task creation path', () => {
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  const handlerIndex = route.indexOf('handleAgentAssignmentCommand(command.trim())')
+  const genericIndex = route.indexOf('const result = await runCeoCommandAgent(command.trim())')
+  assert.ok(handlerIndex > -1)
+  assert.ok(genericIndex > -1)
+  assert.ok(handlerIndex < genericIndex, 'assignment handler must run before generic CEO prose')
+})
+
+test('263. tasks and home show assigned agent output links', () => {
+  const taskPanel = fs.readFileSync('components/tasks/SimpleTasksPanel.tsx', 'utf8')
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(taskPanel.includes('assigned_agent_name'))
+  assert.ok(taskPanel.includes('output_file_id'))
+  assert.ok(taskPanel.includes('Open output'))
+  assert.ok(home.includes('assigned_agent_name'))
+  assert.ok(home.includes('Open output'))
+})
+
+test('264. agents page shows assigned agent work from tasks', () => {
+  const agents = fs.readFileSync('app/(dashboard)/agents/page.tsx', 'utf8')
+  assert.ok(agents.includes('Assigned Agent Work'))
+  assert.ok(agents.includes("fetch('/api/tasks?limit=100')"))
+  assert.ok(agents.includes('AgentWorkCard'))
 })
