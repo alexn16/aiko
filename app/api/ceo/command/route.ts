@@ -160,6 +160,18 @@ function orchestrationPayload(classification: OwnerCommandClassification) {
   }
 }
 
+function shouldRunInternalAISkill(command: string, classification: OwnerCommandClassification): boolean {
+  if (classification.intent === 'content_creation') return true
+  if (classification.intent === 'marketing_strategy') return true
+  if (classification.intent === 'competitor_research' && !classification.should_delegate) return true
+  if (classification.intent === 'project_recall' && /\b(what should we do next|what is next|next step|recommend.+next)\b/i.test(command)) return true
+  return false
+}
+
+function isResearchAISkillOutput(output: { summary?: string; sections?: unknown[]; recommendations?: string[]; next_actions?: string[] }): boolean {
+  return Boolean(output.summary || output.sections?.length || output.recommendations?.length || output.next_actions?.length)
+}
+
 async function handleProjectAutopilotMarketingCommand(command: string, classification: OwnerCommandClassification): Promise<NextResponse | null> {
   if (classification.intent !== 'project_autopilot_marketing' && !isProjectAutopilotMarketingIntent(command)) return null
 
@@ -421,7 +433,7 @@ export async function POST(request: NextRequest) {
     // runCeoCommandAgent resolves its own provider via callAI(role:'ceo').
     const provider = await getProviderForRole('ceo', userId) ?? await getAnyConnectedProvider(userId)
     if (provider) {
-      if (classification.intent === 'content_creation') {
+      if (shouldRunInternalAISkill(command.trim(), classification)) {
         const { executeAISkill, recommendAISkillForPrompt } = await import('@/lib/ai-skills')
         const skillId = recommendAISkillForPrompt(command.trim())
         const projectId = classification.project_reference.id ?? null
@@ -432,8 +444,17 @@ export async function POST(request: NextRequest) {
           save_as_file: shouldSave,
         })
         const warningCopy = output.warning ? `${output.warning}\n\n` : ''
+        const isResearch = isResearchAISkillOutput(output)
+        const body = isResearch
+          ? [
+              output.summary,
+              output.recommendations?.length ? `Recommendations:\n${output.recommendations.map(item => `- ${item}`).join('\n')}` : null,
+              output.next_actions?.length ? `Next actions:\n${output.next_actions.map(item => `- ${item}`).join('\n')}` : null,
+              output.needs_web_research ? 'Fresh external facts still need Web Operator research.' : null,
+            ].filter(Boolean).join('\n\n')
+          : output.content
         const responseText = withVisiblePlan(
-          `${warningCopy}${output.title}\n\n${output.content}`,
+          `${warningCopy}${output.title}\n\n${body}`,
           classification,
         )
         const actions = [{
@@ -443,14 +464,15 @@ export async function POST(request: NextRequest) {
             title: output.title,
             format: output.format,
             saved_file_id: output.saved_file_id ?? null,
+            needs_web_research: output.needs_web_research ?? false,
             external_action_executed: false,
           },
         }]
-        await persistCeoShortcutCommand(command.trim(), responseText, 'content_creation', actions, projectId)
+        await persistCeoShortcutCommand(command.trim(), responseText, classification.intent, actions, projectId)
         return NextResponse.json({
           ...orchestrationPayload(classification),
           response: responseText,
-          intent: 'content_creation',
+          intent: classification.intent,
           actions,
           project_id: projectId,
           ai_skill_output: output,

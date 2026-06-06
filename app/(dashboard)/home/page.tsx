@@ -60,11 +60,17 @@ type CommandResult = {
   ai_skill_output?: {
     skill_id: string
     title: string
-    content: string
+    content?: string
     format: string
     suggested_next_actions: string[]
     warning?: string
     saved_file_id?: string
+    summary?: string
+    sections?: Array<{ title: string; content: string }>
+    recommendations?: string[]
+    next_actions?: string[]
+    needs_web_research?: boolean
+    web_research_questions?: string[]
   }
   delegation?: {
     status: string
@@ -267,7 +273,20 @@ export default function HomePage() {
     setSavingDraft(true)
     try {
       const filename = `${output.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'ai-skill-output'}.md`
-      const content = `# ${output.title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${output.content}\n`
+      const sections = output.sections?.length
+        ? `\n\n${output.sections.map(section => `## ${section.title}\n\n${section.content}`).join('\n\n')}`
+        : ''
+      const recommendations = output.recommendations?.length
+        ? `\n\n## Recommendations\n\n${output.recommendations.map(item => `- ${item}`).join('\n')}`
+        : ''
+      const nextActions = output.next_actions?.length
+        ? `\n\n## Next Actions\n\n${output.next_actions.map(item => `- ${item}`).join('\n')}`
+        : ''
+      const webResearch = typeof output.needs_web_research === 'boolean'
+        ? `\n\n## Web Research Needed\n\n${output.needs_web_research ? 'Yes' : 'No'}${output.web_research_questions?.length ? `\n\n${output.web_research_questions.map(item => `- ${item}`).join('\n')}` : ''}`
+        : ''
+      const body = output.content ?? output.summary ?? ''
+      const content = `# ${output.title}\n\n${output.warning ? `> ${output.warning}\n\n` : ''}${body}${sections}${recommendations}${nextActions}${webResearch}\n`
       const res = await fetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -306,6 +325,15 @@ export default function HomePage() {
     } catch {
       setCopyStatus('Copy failed')
     }
+  }
+
+  function copyAIOutput(output: NonNullable<CommandResult['ai_skill_output']>) {
+    const structured = [
+      output.summary,
+      output.recommendations?.length ? `Recommendations:\n${output.recommendations.map(item => `- ${item}`).join('\n')}` : null,
+      output.next_actions?.length ? `Next actions:\n${output.next_actions.map(item => `- ${item}`).join('\n')}` : null,
+    ].filter(Boolean).join('\n\n')
+    return copyDraft(output.content ?? structured)
   }
 
   const quicks = [
@@ -553,7 +581,9 @@ export default function HomePage() {
             )}
             <p style={{ color: '#0f172a', fontSize: 15, lineHeight: 1.7, marginTop: 0 }}>
               {result.ai_skill_output
-                ? (result.ai_skill_output.warning ?? 'Draft created. Review it below.')
+                ? result.ai_skill_output.summary
+                  ? (result.ai_skill_output.warning ?? 'Strategy created. Review it below.')
+                  : (result.ai_skill_output.warning ?? 'Draft created. Review it below.')
                 : sanitizeMessage(result.response)}
             </p>
             {result.ai_skill_output && (
@@ -566,13 +596,21 @@ export default function HomePage() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start', marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>Draft</div>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: '#334155' }}>{result.ai_skill_output.summary ? 'Strategy' : 'Draft'}</div>
                     <h3 style={{ margin: '4px 0 0', color: '#0f172a', fontSize: 18 }}>{result.ai_skill_output.title}</h3>
                     <div style={{ ...mutedText, marginTop: 4 }}>{result.ai_skill_output.format.replace(/_/g, ' ')}</div>
                   </div>
-                  {result.ai_skill_output.warning && (
-                    <span style={{ border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', borderRadius: 999, padding: '5px 8px', fontSize: 11, fontWeight: 800 }}>
-                      Draft only
+                  {(result.ai_skill_output.warning || typeof result.ai_skill_output.needs_web_research === 'boolean') && (
+                    <span style={{
+                      border: result.ai_skill_output.needs_web_research ? '1px solid #fde68a' : '1px solid #bfdbfe',
+                      background: result.ai_skill_output.needs_web_research ? '#fffbeb' : '#eff6ff',
+                      color: result.ai_skill_output.needs_web_research ? '#92400e' : '#1e40af',
+                      borderRadius: 999,
+                      padding: '5px 8px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                    }}>
+                      {result.ai_skill_output.needs_web_research ? 'Needs web research' : 'Draft only'}
                     </span>
                   )}
                 </div>
@@ -581,31 +619,67 @@ export default function HomePage() {
                     {result.ai_skill_output.warning}
                   </p>
                 )}
-                <pre style={{
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'inherit',
-                  color: '#0f172a',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  maxHeight: 360,
-                  overflow: 'auto',
-                }}>
-                  {result.ai_skill_output.content}
-                </pre>
+                {result.ai_skill_output.summary ? (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <div style={{ border: '1px solid #e2e8f0', background: '#f8fafc', borderRadius: 8, padding: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Summary</div>
+                      <p style={{ margin: 0, color: '#0f172a', fontSize: 14, lineHeight: 1.6 }}>{result.ai_skill_output.summary}</p>
+                    </div>
+                    {Array.isArray(result.ai_skill_output.recommendations) && result.ai_skill_output.recommendations.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Recommendations</div>
+                        <ul style={{ margin: 0, paddingLeft: 18, color: '#0f172a', fontSize: 14, lineHeight: 1.6 }}>
+                          {result.ai_skill_output.recommendations.map(item => <li key={item}>{item}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {Array.isArray(result.ai_skill_output.next_actions) && result.ai_skill_output.next_actions.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Next actions</div>
+                        <ul style={{ margin: 0, paddingLeft: 18, color: '#0f172a', fontSize: 14, lineHeight: 1.6 }}>
+                          {result.ai_skill_output.next_actions.map(item => <li key={item}>{item}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 6 }}>Needs web research?</div>
+                      <p style={{ margin: 0, color: result.ai_skill_output.needs_web_research ? '#92400e' : '#047857', fontSize: 13, fontWeight: 800 }}>
+                        {result.ai_skill_output.needs_web_research ? 'Yes. Use Kevin to verify fresh external facts before relying on them.' : 'No. This can stay internal for now.'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <pre style={{
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'inherit',
+                    color: '#0f172a',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    maxHeight: 360,
+                    overflow: 'auto',
+                  }}>
+                    {result.ai_skill_output.content}
+                  </pre>
+                )}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
                   <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => saveDraftAsFile(result.ai_skill_output!)} disabled={savingDraft}>
                     {savingDraft ? 'Saving...' : result.ai_skill_output.saved_file_id ? 'Saved' : 'Save as file'}
                   </button>
-                  <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => copyDraft(result.ai_skill_output!.content)}>
+                  <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => copyAIOutput(result.ai_skill_output!)}>
                     {copyStatus || 'Copy'}
                   </button>
                   <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Create another version of ${result.ai_skill_output!.title}${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
                     Create another version
                   </button>
+                  {result.ai_skill_output.needs_web_research && (
+                    <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Kevin, research the open questions for ${result.ai_skill_output!.title}${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
+                      Run Web Operator research
+                    </button>
+                  )}
                   {result.ai_skill_output.saved_file_id && (
                     <Link href="/files" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
                       Open files

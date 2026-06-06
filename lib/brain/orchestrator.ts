@@ -207,9 +207,9 @@ function planForIntent(intent: OwnerIntent, projectName: string | null, platform
     case 'competitor_research':
       return [
         `Use ${project} as the context.`,
-        'Identify likely competitors.',
-        'Research public pages only.',
-        'Summarize positioning and next steps.',
+        'Create a competitor research framework from known context.',
+        'Identify what still needs live web research.',
+        'Do not invent external facts.',
       ]
     case 'web_operator_task':
       return [
@@ -252,8 +252,9 @@ function planForIntent(intent: OwnerIntent, projectName: string | null, platform
     case 'marketing_strategy':
       return [
         `Use ${project} as the context.`,
-        'Create a short marketing strategy.',
-        'Check required capabilities before execution.',
+        'Create an internal strategy or plan.',
+        'Identify assumptions and research gaps.',
+        'Ask for Web Operator research only if fresh external facts are needed.',
       ]
     case 'operator_status':
       return [
@@ -308,6 +309,13 @@ export function classifyOwnerCommand(input: string, context: OwnerCommandContext
     confidence = 0.86
     recommendedFlow = 'create_project'
     shouldCreatePlan = true
+  } else if (/\b(plan|create)\b.*\b(next\s+)?7\s+days?\b|\b7[-\s]?day\b/.test(lower)) {
+    intent = 'marketing_strategy'
+    confidence = 0.9
+    recommendedFlow = 'ai_strategy_skill'
+    recommendedAgent = 'Marketing Strategy Agent'
+    safetyLevel = 'internal'
+    shouldCreatePlan = true
   } else if (/\b(what are we doing|what should we do next|what is next|next step|status for)\b/.test(lower)) {
     intent = 'project_recall'
     confidence = 0.88
@@ -329,13 +337,13 @@ export function classifyOwnerCommand(input: string, context: OwnerCommandContext
     safetyLevel = 'browser_safe'
     shouldDelegate = true
     shouldCreatePlan = true
-  } else if (/\b(competitor|competitors|competitive)\b/.test(lower) && /\b(research|find|analyze|analyse)\b/.test(lower)) {
+  } else if (/\b(competitor|competitors|competitive)\b/.test(lower) && /\b(research|find|analyze|analyse|plan|framework)\b/.test(lower)) {
     intent = 'competitor_research'
     confidence = 0.9
-    recommendedFlow = 'competitor_research'
-    recommendedAgent = 'Kevin'
-    safetyLevel = 'browser_safe'
-    shouldDelegate = true
+    recommendedFlow = 'ai_strategy_skill'
+    recommendedAgent = 'Marketing Strategy Agent'
+    safetyLevel = /\b(live|web|browser|online|google|search)\b/.test(lower) ? 'browser_safe' : 'internal'
+    shouldDelegate = safetyLevel === 'browser_safe'
     shouldCreatePlan = true
   } else if (/\b(create|write|draft|prepare)\b.*\b(post|content|copy|email|caption|newsletter)\b/.test(lower)) {
     intent = 'content_creation'
@@ -369,7 +377,7 @@ export function classifyOwnerCommand(input: string, context: OwnerCommandContext
   } else if (/\b(strategy|marketing plan|campaign plan)\b/.test(lower)) {
     intent = 'marketing_strategy'
     confidence = 0.82
-    recommendedFlow = 'marketing_strategy'
+    recommendedFlow = 'ai_strategy_skill'
     recommendedAgent = 'Marketing Strategy Agent'
     shouldCreatePlan = true
   } else if (/\b(create|add)\b.*\b(agent)\b/.test(lower)) {

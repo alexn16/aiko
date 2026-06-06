@@ -1122,3 +1122,31 @@ AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
 
 - AI Content Skills do not browse, create Web Operator actions, post, send, publish, message, or claim external completion.
 - Publishing/sending language returns a draft-only warning: `Draft created only. Publishing or sending requires approval.`
+
+---
+
+## Internal AI Research And Strategy Skills — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Skill registry | `/api/ai-skills` | ✅ Pass | Returned 29 enabled skills, including `research_strategy`, `productivity`, and `analysis` categories. |
+| 7-day plan | `/api/ai-skills/execute` | ✅ Pass | `Plan the next 7 days for ALB Parking.` recommended `create_7_day_plan`, returned recommendations and next actions, and set `created_web_operator_action=false` / `external_action_executed=false`. |
+| No operator side effect | `/api/web-operator/actions` | ✅ Pass | Latest Web Operator action ID stayed `9188773a-e1d9-4777-96f5-a684fa38fb42` before and after internal research skill execution. |
+| Customer persona | `/api/ai-skills/execute` | ✅ Pass | `Create a customer persona for AÏKO.` recommended `create_customer_persona` and returned structured planning output with Web Operator research questions when assumptions needed external validation. |
+| CEO next step | `/api/ceo/command` | ✅ Pass | `What should we do next for ALB Parking?` stayed `intent=project_recall`, executed `recommend_next_step`, returned `ai_skill_output`, and did not delegate to Kevin. |
+| Save as Markdown | `/api/ai-skills/execute`, `/files` | ✅ Pass | `What are the risks for ALB Parking? Save as markdown.` recommended `analyze_risks` and saved `ALB Parking Risk Analysis` with `source_entity_type=ai_skill_output`. |
+| Skills page | `/skills` | ✅ Pass | Shows AI Skills including `Create 7-Day Plan` and `Analyze Risks`, plus Web Operator Skills and Playbooks. |
+| Home UI | `/home` | ✅ Pass | Browser-submitted `Plan the next 7 days for ALB Parking.` rendered a Strategy card with summary, recommendations, next actions, `Needs web research?`, and `Run Web Operator research` only when the output flagged research gaps. |
+
+### Safety
+
+- AI Research and Strategy Skills do not browse, create Web Operator actions, post, send, publish, message, or claim fresh external facts were checked.
+- If fresh market data, live competitor data, statistics, or current web facts are needed, the output says Web Operator research is needed instead of inventing facts.

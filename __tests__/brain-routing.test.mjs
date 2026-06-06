@@ -4819,3 +4819,60 @@ test('226. AI skill output prompt forbids hidden reasoning and provider secrets'
   assert.ok(source.includes('tokens, secrets'))
   assert.ok(source.includes('Return only the final draft content'))
 })
+
+test('227. seven-day planning prompt recommends create_7_day_plan', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes("return 'create_7_day_plan'"))
+  assert.ok(source.includes('Create 7-Day Plan'))
+})
+
+test('228. customer persona prompt recommends create_customer_persona', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes("return 'create_customer_persona'"))
+  assert.ok(source.includes('Create Customer Persona'))
+})
+
+test('229. risk prompt recommends analyze_risks', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes("return 'analyze_risks'"))
+  assert.ok(source.includes('Analyze Risks'))
+})
+
+test('230. research skill executor does not create Web Operator actions', () => {
+  const source = fs.readFileSync('lib/ai-skills/research-executor.ts', 'utf8')
+  const route = fs.readFileSync('app/api/ai-skills/execute/route.ts', 'utf8')
+  assert.ok(source.includes('Do not browse websites'))
+  assert.ok(source.includes('create Web Operator actions'))
+  assert.ok(route.includes('created_web_operator_action: false'))
+})
+
+test('231. research skill output includes needs_web_research field', () => {
+  const source = fs.readFileSync('lib/ai-skills/research-executor.ts', 'utf8')
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('needs_web_research'))
+  assert.ok(source.includes('web_research_questions'))
+  assert.ok(home.includes('Needs web research?'))
+})
+
+test('232. external facts request says Web Operator research is needed', () => {
+  const source = fs.readFileSync('lib/ai-skills/research-executor.ts', 'utf8')
+  assert.ok(source.includes('Fresh external facts still need Web Operator research.'))
+  assert.ok(source.includes('If fresh facts, live competitor data, market statistics, or current web data are needed'))
+})
+
+test('233. strategy skill save_as_file creates Markdown AI skill output', () => {
+  const source = fs.readFileSync('lib/ai-skills.ts', 'utf8')
+  assert.ok(source.includes('## Recommendations'))
+  assert.ok(source.includes('## Next Actions'))
+  assert.ok(source.includes('## Web Research Needed'))
+  assert.ok(source.includes("source_entity_type: 'ai_skill_output'"))
+})
+
+test('234. /skills lists research and strategy AI skills', () => {
+  const migration = fs.readFileSync('lib/db/migrations/045_ai_research_strategy_skills.sql', 'utf8')
+  const page = fs.readFileSync('app/(dashboard)/skills/page.tsx', 'utf8')
+  assert.ok(migration.includes('create_marketing_strategy'))
+  assert.ok(migration.includes('create_7_day_plan'))
+  assert.ok(migration.includes('analyze_risks'))
+  assert.ok(page.includes('AI Skills'))
+})

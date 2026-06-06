@@ -756,3 +756,13 @@ AÏKO now has an internal AI Skills registry for text-generation work. The `ai_s
 `/skills` now shows AI Skills, Web Operator Skills, and Playbooks together. `/files` labels AI skill Markdown outputs as `AI skill output`.
 
 Safety remains explicit: AI Content Skills produce internal drafts only. If a prompt asks to post, send, publish, message, share, submit, or upload, AÏKO returns `Draft created only. Publishing or sending requires approval.` No Web Operator action or external side effect is created by the content executor.
+
+### Internal AI Research And Strategy Skills — 2026-06-06
+
+AÏKO now has internal AI Skills for strategy, planning, productivity, and analysis. New skills include marketing strategy, seven-day planning, customer personas, competitor research plans, market research briefs, positioning, offers, campaign briefs, strategy analysis, missing capability identification, task lists, project plans, checklists, meeting notes, decision summaries, project status summaries, risk analysis, next-step recommendations, and option comparisons.
+
+`lib/ai-skills/research-executor.ts` runs these through `callAI(role: 'ceo')` using saved project context only. Outputs include a summary, sections, recommendations, next actions, a `needs_web_research` flag, and Web Operator research questions when fresh facts would be required. It explicitly does not browse, create Web Operator actions, send, post, publish, or claim live facts were checked.
+
+The owner-command route now sends internal strategy requests such as `Plan the next 7 days`, `Create a customer persona`, `What are the risks?`, and `What should we do next?` to AI skill execution before generic delegation. `/home` renders structured outputs as a Strategy card with the web-research badge and Save/Copy controls. `Run Web Operator research` appears only as an explicit next action when the internal output says external research is still needed.
+
+Runtime validation confirmed `/api/ai-skills` returns 29 enabled skills, `Plan the next 7 days for ALB Parking` maps to `create_7_day_plan`, `What should we do next for ALB Parking?` maps to `recommend_next_step` with no delegation, and saved risk analysis appears in Files as an `AI skill output`. The latest Web Operator action ID did not change during internal research skill execution.
