@@ -5001,3 +5001,74 @@ test('249. sidebar exposes simple Tasks page', () => {
   const sidebar = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
   assert.ok(sidebar.includes("{ href: '/tasks', label: 'Tasks' }"))
 })
+
+test('250. daily brief priority order puts waiting user before approvals and tasks', () => {
+  const source = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  const waiting = source.indexOf('...waitingForUser')
+  const approvals = source.indexOf('...pendingApprovals')
+  const blocked = source.indexOf('...blockedTasks')
+  const next = source.indexOf('...nextTasks')
+  assert.ok(waiting > -1)
+  assert.ok(approvals > -1)
+  assert.ok(blocked > -1)
+  assert.ok(next > -1)
+  assert.ok(waiting < approvals)
+  assert.ok(approvals < blocked)
+  assert.ok(blocked < next)
+})
+
+test('251. daily brief response avoids secrets and raw payloads', () => {
+  const route = fs.readFileSync('app/api/daily-brief/route.ts', 'utf8')
+  const helper = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  assert.ok(route.includes('getDailyBrief'))
+  assert.equal(helper.includes('api_key'), false)
+  assert.equal(helper.includes('access_token'), false)
+  assert.equal(helper.includes('refresh_token'), false)
+  assert.equal(helper.includes('pending_action_payload'), false)
+  assert.equal(helper.includes('content FROM approval_items'), false)
+})
+
+test('252. /home Today card renders daily brief actions', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes("fetch('/api/daily-brief')"))
+  assert.ok(source.includes('Today'))
+  assert.ok(source.includes('Open tasks'))
+  assert.ok(source.includes('Open approvals'))
+  assert.ok(source.includes('Open operator'))
+  assert.ok(source.includes('Generate report'))
+  assert.ok(source.includes('Start marketing'))
+})
+
+test('253. /today page shows expanded daily brief sections', () => {
+  const source = fs.readFileSync('app/(dashboard)/today/page.tsx', 'utf8')
+  assert.ok(source.includes('Recommended next action'))
+  assert.ok(source.includes('Waiting for you'))
+  assert.ok(source.includes('Approvals'))
+  assert.ok(source.includes('Blocked tasks'))
+  assert.ok(source.includes('Next tasks'))
+  assert.ok(source.includes('Recent output'))
+})
+
+test('254. CEO today brief command is read-only', () => {
+  const source = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(source.includes('handleDailyBriefCommand'))
+  assert.ok(source.includes('formatDailyBriefForCEO'))
+  assert.ok(source.includes("intent: 'daily_brief'"))
+  assert.ok(source.includes('actions: []'))
+  assert.ok(source.includes('delegation: null'))
+})
+
+test('255. daily brief does not create Web Operator actions or approvals', () => {
+  const helper = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  const route = fs.readFileSync('app/api/daily-brief/route.ts', 'utf8')
+  assert.equal(helper.includes('INSERT INTO web_operator_actions'), false)
+  assert.equal(helper.includes('INSERT INTO approval_items'), false)
+  assert.equal(helper.includes('delegateToWebOperator'), false)
+  assert.equal(route.includes('delegateToWebOperator'), false)
+  assert.equal(route.includes('createApproval'), false)
+})
+
+test('256. sidebar exposes Today page', () => {
+  const sidebar = fs.readFileSync('components/layout/Sidebar.tsx', 'utf8')
+  assert.ok(sidebar.includes("{ href: '/today', label: 'Today' }"))
+})

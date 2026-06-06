@@ -16,7 +16,7 @@ AÏKO is a self-hosted, agent-based operating system for marketing execution. It
 
 ## Default interface: Home
 
-**Home is the primary AÏKO interface.** When setup is complete, `/` opens `/home`: a simple command box, active project selector, quick marketing buttons, live work card, and attention card. The advanced dashboard remains available at `/dashboard`.
+**Home is the primary AÏKO interface.** When setup is complete, `/` opens `/home`: a Today brief, simple command box, active project selector, quick marketing buttons, live work card, and attention card. The expanded Today view is available at `/today`; the advanced dashboard remains available at `/dashboard`.
 
 CEO Chat remains available at `/ceo`. AÏKO behaves like a ChatGPT-style CEO for an AI marketing company. You speak naturally to the CEO, and it coordinates projects, assigns Project Managers, builds project memory, and orchestrates agents — all through conversation.
 
@@ -98,6 +98,7 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 ## Product surfaces
 
 - `/home` — **Simple project command center**. Start marketing, find customers, watch Kevin's live work, and keep technical details hidden unless opened.
+- `/today` — Daily Brief. See what needs attention today: waiting operators, approvals, blocked tasks, next tasks, and recent output.
 - `/ceo` — CEO Chat. Speak to the CEO, create projects, coordinate the company.
 - `/connect-ai` — Connect and manage AI providers, assign roles.
 - `/dashboard` — MVP owner overview: brain/setup status, operating mode, projects, Web Operators, approvals, improvements, warnings, recent files/reports/decisions, and manual smoke-test checklist.
@@ -409,10 +410,14 @@ Every internal instruction, handoff, or approval request automatically creates a
 - `blocker` → blocked task for sender
 
 **UI surfaces:**
+- **Today (`/today`)** — owner-friendly daily priority list
+- **Tasks (`/tasks`)** — simple global task list and status controls
 - **Project workspace → Tasks tab** — project-scoped task list with action buttons
 - **Live Office** — global task view across all projects
 
 **API:**
+- `GET /api/tasks` — owner-facing task list (filter by project_id, owner_role, status)
+- `PATCH /api/tasks/[id]` — owner-facing status update; internal only
 - `GET /api/agent-tasks` — list tasks (filter by project_id, owner_role, status, task_type)
 - `POST /api/agent-tasks` — create task
 - `PATCH /api/agent-tasks/[id]` — update status, priority, output

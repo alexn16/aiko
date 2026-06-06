@@ -798,3 +798,27 @@ UI changes:
 - AI skill task creation now returns `tasks_url` and `project_tasks_url`, so `/home` can show “View tasks” and “Open project” after internal task creation.
 
 Safety remains unchanged. Task status updates only modify internal `agent_tasks`; they do not create Web Operator actions, approval items, browser sessions, sends, posts, publishes, messages, or resumes.
+
+### Daily Brief — 2026-06-06
+
+AÏKO now has a read-only Daily Brief layer for owner attention management.
+
+New helper/API/page:
+
+- `lib/daily-brief.ts`
+- `GET /api/daily-brief`
+- `/today`
+
+The Daily Brief gathers sanitized state from setup/CEO brain, active project, waiting Web Operators, pending approvals, blocked and next tasks, active improvement proposals, recent generated files, executive reports, and decisions. Priority order is:
+
+1. waiting-user operators
+2. pending approvals
+3. blocked tasks
+4. todo/in-progress tasks
+5. missing capability proposals
+6. recommended project step
+7. recent output/report
+
+`/home` now opens with a compact “Today” card showing the summary, top priorities, recommended next action, and links to tasks, approvals, operators, report generation, and start marketing. `/today` shows the expanded brief.
+
+CEO Chat now handles “What should I do today?”, “Give me today’s brief,” “What needs attention?”, and “What is blocking progress?” as a read-only `daily_brief` response. It does not delegate, create approvals, create Web Operator actions, or execute external work.

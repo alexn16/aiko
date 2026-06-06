@@ -1206,3 +1206,30 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 
 - Task creation and task status changes are internal only.
 - No Web Operator actions, approval items, browser sessions, sends, posts, publishes, messages, or resumes were created by task management.
+
+---
+
+## Daily Brief — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Daily brief API | `/api/daily-brief` | ✅ Pass | Returned date, greeting, CEO brain, active project, summary, priority items, waiting operators, pending approvals, blocked tasks, next tasks, recent outputs, and recommended next action. |
+| Priority order | `/api/daily-brief` | ✅ Pass | Current priority order was waiting operators first, then pending approval, then blocked task. |
+| Redaction | `/api/daily-brief` | ✅ Pass | Response did not expose API keys, access/refresh tokens, secrets, raw payloads, or technical operator payloads. |
+| Home Today card | `/home` | ✅ Pass | “Today” card rendered with summary, priority items, recommended next action, and links/actions. |
+| Today page | `/today` | ✅ Pass | Expanded daily brief rendered priority list, waiting operators, approvals, blocked tasks, next tasks, and recent output. |
+| CEO daily brief | `/api/ceo/command` | ✅ Pass | “What should I do today?” returned `intent=daily_brief`, no delegation, and no actions. |
+| No external side effect | `/api/web-operator/actions`, `/api/approval-items` | ✅ Pass | Latest Web Operator action stayed `9188773a-e1d9-4777-96f5-a684fa38fb42`; pending approval count stayed unchanged. |
+
+### Safety
+
+- Daily Brief is read-only guidance.
+- It does not create tasks, approvals, Web Operator actions, browser sessions, sends, posts, publishes, messages, or resumes.

@@ -19,6 +19,7 @@ import {
 } from '@/lib/strategy-execution-planner'
 import { runMarketingResearchAutopilot } from '@/lib/web-operator/marketing-research-runner'
 import { classifyOwnerCommand, type OwnerCommandClassification, type OwnerCommandContext } from '@/lib/brain/orchestrator'
+import { formatDailyBriefForCEO, getDailyBrief } from '@/lib/daily-brief'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
 
@@ -253,6 +254,10 @@ function isSelfImprovementTimelineIntent(command: string): boolean {
   return /\b(what improvements has a[ïi]ko proposed|status of (?:a[ïi]ko )?self-improvement|self-improvement status|which capabilities are missing|what was implemented recently|improvements has a[ïi]ko proposed|missing capabilities)\b/i.test(command)
 }
 
+function isDailyBriefIntent(command: string): boolean {
+  return /\b(what should i do today|today'?s brief|give me today'?s brief|what needs attention|what is blocking progress|what'?s blocking progress|daily brief)\b/i.test(command)
+}
+
 async function persistCeoShortcutCommand(
   command: string,
   response: string,
@@ -287,6 +292,23 @@ async function handleSelfImprovementTimelineCommand(command: string): Promise<Ne
     actions: [],
     project_id: null,
     improvement_timeline: data,
+    delegation: null,
+  })
+}
+
+async function handleDailyBriefCommand(command: string, userId: string | null): Promise<NextResponse | null> {
+  if (!isDailyBriefIntent(command)) return null
+
+  const brief = await getDailyBrief(userId)
+  const response = formatDailyBriefForCEO(brief)
+  await persistCeoShortcutCommand(command, response, 'daily_brief')
+
+  return NextResponse.json({
+    response,
+    intent: 'daily_brief',
+    actions: [],
+    project_id: brief.active_project?.id ?? null,
+    daily_brief: brief,
     delegation: null,
   })
 }
@@ -419,6 +441,9 @@ export async function POST(request: NextRequest) {
       typeof contextInput.selected_project_name === 'string' ? contextInput.selected_project_name : null,
     )
     const classification = classifyOwnerCommand(command.trim(), ownerContext)
+
+    const dailyBriefResponse = await handleDailyBriefCommand(command.trim(), userId)
+    if (dailyBriefResponse) return dailyBriefResponse
 
     const timelineResponse = await handleSelfImprovementTimelineCommand(command.trim())
     if (timelineResponse) return timelineResponse

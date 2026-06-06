@@ -60,6 +60,23 @@ type OwnerTask = {
   status: 'todo' | 'in_progress' | 'blocked' | 'done' | 'archived'
 }
 
+type DailyBrief = {
+  today_summary: string
+  priority_items: Array<{
+    type: string
+    title: string
+    description: string
+    href: string
+    action_label: string
+  }>
+  recommended_next_action: {
+    title: string
+    description: string
+    href: string
+    action_label: string
+  } | null
+}
+
 type CommandResult = {
   response?: string
   intent?: string
@@ -170,6 +187,7 @@ export default function HomePage() {
   const [approvalItems, setApprovalItems] = useState<ApprovalItem[]>([])
   const [files, setFiles] = useState<GeneratedFile[]>([])
   const [tasks, setTasks] = useState<OwnerTask[]>([])
+  const [dailyBrief, setDailyBrief] = useState<DailyBrief | null>(null)
   const [pendingApprovals, setPendingApprovals] = useState(0)
   const [command, setCommand] = useState('')
   const [loading, setLoading] = useState(false)
@@ -206,13 +224,14 @@ export default function HomePage() {
   }
 
   async function refresh() {
-    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes] = await Promise.all([
+    const [projectRes, operatorRes, actionRes, approvalRes, fileRes, taskRes, briefRes] = await Promise.all([
       fetch('/api/projects'),
       fetch('/api/web-operators'),
       fetch('/api/web-operator/actions?limit=5'),
       fetch('/api/approval-items?limit=10'),
       fetch('/api/files?limit=1'),
       fetch('/api/tasks?active=true&limit=3'),
+      fetch('/api/daily-brief'),
     ])
     if (projectRes.ok) {
       const data = await projectRes.json()
@@ -241,6 +260,10 @@ export default function HomePage() {
     if (taskRes.ok) {
       const data = await taskRes.json()
       setTasks((data.tasks ?? []) as OwnerTask[])
+    }
+    if (briefRes.ok) {
+      const data = await briefRes.json()
+      setDailyBrief(data as DailyBrief)
     }
   }
 
@@ -415,6 +438,55 @@ export default function HomePage() {
             Run the company from one place.
           </p>
         </div>
+
+        <section style={{ ...cardStyle, marginBottom: 16, borderColor: '#bfdbfe', background: '#f8fbff' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 900, color: '#1d4ed8', marginBottom: 4 }}>Today</div>
+              <h2 style={{ margin: 0, color: '#0f172a', fontSize: 22, letterSpacing: 0 }}>
+                {dailyBrief?.today_summary ?? 'Loading today’s brief...'}
+              </h2>
+            </div>
+            <Link href="/today" style={{ color: '#2563eb', fontSize: 12, fontWeight: 900, textDecoration: 'none' }}>
+              Open Today
+            </Link>
+          </div>
+          {dailyBrief?.priority_items?.length ? (
+            <div style={{ display: 'grid', gap: 8, marginBottom: 12 }}>
+              {dailyBrief.priority_items.slice(0, 3).map(item => (
+                <Link key={`${item.type}-${item.title}`} href={item.href} style={{
+                  display: 'block',
+                  border: '1px solid #dbeafe',
+                  borderRadius: 8,
+                  padding: 10,
+                  background: '#ffffff',
+                  textDecoration: 'none',
+                }}>
+                  <div style={{ color: '#0f172a', fontSize: 14, fontWeight: 900 }}>{item.title}</div>
+                  <div style={{ color: '#64748b', fontSize: 12, marginTop: 3 }}>{item.description}</div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p style={{ ...mutedText, margin: '0 0 12px' }}>Everything is clear. Choose what you want AÏKO to work on.</p>
+          )}
+          {dailyBrief?.recommended_next_action && (
+            <p style={{ margin: '0 0 12px', color: '#334155', fontSize: 13, lineHeight: 1.5 }}>
+              <b>Recommended:</b> {dailyBrief.recommended_next_action.title}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link href="/tasks" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open tasks</Link>
+            <Link href="/approvals" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open approvals</Link>
+            <Link href="/operators" style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>Open operator</Link>
+            <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Generate an executive report${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
+              Generate report
+            </button>
+            <button style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => runCommand(`Start marketing${selectedProject ? ` for ${selectedProject.name}` : ''}.`)} disabled={loading}>
+              Start marketing
+            </button>
+          </div>
+        </section>
 
         <section style={{ ...cardStyle, marginBottom: 16 }}>
           <textarea
