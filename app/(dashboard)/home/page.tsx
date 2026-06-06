@@ -17,6 +17,7 @@ type Operator = {
   current_url: string | null
   current_task: string | null
   waiting_reason: string | null
+  requires_user_input?: boolean
   latest_screenshot?: string | null
 }
 
@@ -155,9 +156,9 @@ const mutedText: React.CSSProperties = {
 
 function simpleStatus(op?: Operator | null, pendingApprovalCount = 0): { label: string; tone: string; message: string } {
   if (op?.status === 'working') return { label: 'Opening browser', tone: '#2563eb', message: op.current_task ?? 'Kevin is working.' }
-  if (op?.status === 'waiting_user') return { label: 'Needs your help', tone: '#d97706', message: 'Kevin needs your help. Complete this in the browser, then click Resume.' }
+  if (op?.status === 'waiting_user' || op?.status === 'user_controlling') return { label: 'Needs your help', tone: '#d97706', message: 'Kevin needs your help. Complete this in the browser, then click Resume.' }
   if (op?.status === 'waiting_approval' || pendingApprovalCount > 0) return { label: 'Needs approval', tone: '#d97706', message: 'Kevin needs approval before doing this.' }
-  if (op?.status === 'ready_to_resume') return { label: 'Needs your help', tone: '#059669', message: 'Kevin is ready. Click Resume to continue.' }
+  if (op?.status === 'ready_to_resume') return { label: 'Ready to resume', tone: '#059669', message: 'Kevin is ready to continue.' }
   return { label: 'Done', tone: '#059669', message: 'No active browser task right now.' }
 }
 
@@ -197,6 +198,8 @@ export default function HomePage() {
   const [liveLabel, setLiveLabel] = useState('Done')
   const [savingDraft, setSavingDraft] = useState(false)
   const [creatingTasks, setCreatingTasks] = useState(false)
+  const [resumingKevin, setResumingKevin] = useState(false)
+  const [resumeMessage, setResumeMessage] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
 
   const selectedProject = useMemo(
@@ -204,17 +207,23 @@ export default function HomePage() {
     [projects, projectId],
   )
   const activeOperator = useMemo(
-    () => operators.find(op => ['working', 'waiting_user', 'waiting_approval', 'ready_to_resume'].includes(op.status)) ?? operators[0] ?? null,
+    () => operators.find(op => ['working', 'waiting_user', 'user_controlling', 'waiting_approval', 'ready_to_resume'].includes(op.status)) ?? operators[0] ?? null,
     [operators],
   )
   const live = simpleStatus(activeOperator, pendingApprovals)
-  const waitingOperator = operators.find(op => op.status === 'waiting_user' || op.status === 'ready_to_resume') ?? null
+  const waitingOperator = operators.find(op => op.status === 'waiting_user' || op.status === 'user_controlling' || op.requires_user_input) ?? null
+  const readyOperator = operators.find(op => op.status === 'ready_to_resume') ?? null
   const pendingApproval = approvalItems.find(item => item.status === 'pending') ?? null
+  const missingCapability = dailyBrief?.priority_items.find(item => item.type === 'missing_capability') ?? null
   const attentionState = waitingOperator
     ? 'manual'
-    : pendingApproval
+    : readyOperator
+      ? 'ready'
+      : pendingApproval
       ? 'approval'
-      : 'clear'
+      : missingCapability
+        ? 'missing'
+        : 'clear'
 
   async function updateApproval(id: string, status: 'approved' | 'rejected') {
     await fetch(`/api/approval-items/${id}`, {
@@ -223,6 +232,21 @@ export default function HomePage() {
       body: JSON.stringify({ status }),
     })
     await refresh()
+  }
+
+  async function resumeKevin() {
+    setResumingKevin(true)
+    setResumeMessage('')
+    try {
+      const res = await fetch('/api/web-operator/resume-browser-work', { method: 'POST' })
+      const data = await res.json()
+      setResumeMessage(data.message ?? (res.ok ? 'Kevin can continue in the browser now.' : 'Kevin could not resume yet.'))
+      await refresh()
+    } catch {
+      setResumeMessage('Kevin could not resume yet.')
+    } finally {
+      setResumingKevin(false)
+    }
   }
 
   async function refresh() {
@@ -637,7 +661,15 @@ export default function HomePage() {
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Needs your attention</div>
                   <div style={{ color: attentionState === 'clear' ? '#059669' : '#d97706', fontSize: 22, fontWeight: 900, marginTop: 4 }}>
-                    {attentionState === 'manual' ? 'Kevin needs your help' : attentionState === 'approval' ? 'Approval needed' : 'All clear'}
+                    {attentionState === 'manual'
+                      ? 'Kevin needs your help'
+                      : attentionState === 'ready'
+                        ? 'Kevin is ready to continue'
+                        : attentionState === 'approval'
+                          ? 'Approval needed'
+                          : attentionState === 'missing'
+                            ? 'AÏKO cannot do this yet'
+                            : 'All clear'}
                   </div>
                 </div>
               </div>
@@ -646,8 +678,12 @@ export default function HomePage() {
                   ? 'AÏKO is thinking.'
                   : attentionState === 'manual'
                     ? 'Complete this in the browser, then click Resume.'
+                    : attentionState === 'ready'
+                      ? 'Kevin is ready to continue.'
                     : attentionState === 'approval'
                       ? 'Kevin needs approval before doing this.'
+                      : attentionState === 'missing'
+                        ? 'AÏKO cannot do this yet.'
                       : 'AÏKO is ready.'}
               </p>
               {attentionState === 'clear' && <p style={{ ...mutedText, margin: '-4px 0 0' }}>No approvals needed.</p>}
@@ -664,9 +700,19 @@ export default function HomePage() {
                     <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
                       Open browser
                     </Link>
-                    <Link href={`/operators/${waitingOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
-                      Resume
+                    <button onClick={resumeKevin} disabled={resumingKevin} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
+                      {resumingKevin ? 'Resuming...' : 'Resume Kevin'}
+                    </button>
+                  </>
+                )}
+                {attentionState === 'ready' && readyOperator?.id && (
+                  <>
+                    <Link href={`/operators/${readyOperator.id}`} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                      Open browser
                     </Link>
+                    <button onClick={resumeKevin} disabled={resumingKevin} style={{ ...buttonStyle, padding: '8px 10px', textAlign: 'center' }}>
+                      {resumingKevin ? 'Resuming...' : 'Resume Kevin'}
+                    </button>
                   </>
                 )}
                 {attentionState === 'approval' && pendingApproval && (
@@ -682,6 +728,11 @@ export default function HomePage() {
                     </button>
                   </>
                 )}
+                {attentionState === 'missing' && missingCapability && (
+                  <Link href={missingCapability.href || '/system'} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                    View proposal
+                  </Link>
+                )}
                 <details style={{ width: '100%', marginTop: 4 }}>
                   <summary style={{ cursor: 'pointer', color: '#64748b', fontSize: 12, fontWeight: 800 }}>
                     Advanced
@@ -696,6 +747,9 @@ export default function HomePage() {
                   </div>
                 </details>
               </div>
+              {resumeMessage && (
+                <p style={{ ...mutedText, margin: '10px 0 0' }}>{resumeMessage}</p>
+              )}
             </section>
 
             <section style={cardStyle}>

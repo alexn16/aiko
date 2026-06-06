@@ -5139,3 +5139,67 @@ test('264. agents page shows assigned agent work from tasks', () => {
   assert.ok(agents.includes("fetch('/api/tasks?limit=100')"))
   assert.ok(agents.includes('AgentWorkCard'))
 })
+
+test('265. manual unblock phrases classify as manual_takeover_completed', () => {
+  const orchestrator = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  assert.ok(orchestrator.includes("'manual_takeover_completed'"))
+  assert.ok(orchestrator.includes('browser is unblocked'))
+  assert.ok(orchestrator.includes('all is unblocked'))
+  assert.ok(orchestrator.includes('i logged in'))
+  assert.ok(orchestrator.includes('use the browser now'))
+})
+
+test('266. CEO manual unblock command calls resume service before generic AI response', () => {
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(route.includes('handleManualTakeoverCompletedCommand'))
+  assert.ok(route.includes('resumeAllSafeBrowserWork'))
+  assert.ok(route.includes("intent: 'manual_takeover_completed'"))
+  const handlerIndex = route.indexOf('handleManualTakeoverCompletedCommand(command.trim(), classification)')
+  const genericIndex = route.indexOf('const result = await runCeoCommandAgent(command.trim())')
+  assert.ok(handlerIndex > -1)
+  assert.ok(genericIndex > -1)
+  assert.ok(handlerIndex < genericIndex, 'manual unblock must run before generic CEO prose')
+})
+
+test('267. resume controller changes manual blockers to ready/resumed without enabling capabilities', () => {
+  const controller = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(controller.includes('findResolvableManualBlockers'))
+  assert.ok(controller.includes('markManualBlockerResolved'))
+  assert.ok(controller.includes('resumeReadyOperatorWork'))
+  assert.ok(controller.includes('waiting_user'))
+  assert.ok(controller.includes('user_controlling'))
+  assert.ok(controller.includes('ready_to_resume'))
+  assert.equal(controller.includes("status='validated_available'"), false)
+  assert.equal(controller.includes('UPDATE system_improvement_proposals'), false)
+})
+
+test('268. resume controller does not bypass approval or read only mode', () => {
+  const controller = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(controller.includes("canPerformAction('browse_web'"))
+  assert.ok(controller.includes('still_needs_approval_count'))
+  assert.ok(controller.includes('read_only_blocked'))
+  assert.ok(controller.includes('Anything that requires approval will still wait for approval'))
+})
+
+test('269. /home attention card calls real resume flow and avoids paused copy for browser blockers', () => {
+  const home = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(home.includes('/api/web-operator/resume-browser-work'))
+  assert.ok(home.includes('Resume Kevin'))
+  assert.ok(home.includes('Kevin is ready to continue'))
+  assert.ok(home.includes('AÏKO cannot do this yet'))
+  assert.equal(home.includes('Agents are paused. Resume to continue.'), false)
+})
+
+test('270. operator Resume clears manual blocker before resuming workflow', () => {
+  const route = fs.readFileSync('app/api/web-operators/[id]/route.ts', 'utf8')
+  assert.ok(route.includes("body.action === 'resume_workflow'"))
+  assert.ok(route.includes('markLoginCompleted(id)'))
+  assert.ok(route.includes('resumeOperatorWorkflow(id)'))
+})
+
+test('271. resume browser work API is read-safe and exposes clean summary', () => {
+  const route = fs.readFileSync('app/api/web-operator/resume-browser-work/route.ts', 'utf8')
+  assert.ok(route.includes('resumeAllSafeBrowserWork'))
+  assert.ok(route.includes('Kevin could not resume browser work right now.'))
+  assert.equal(route.includes('delegateToWebOperator'), false)
+})

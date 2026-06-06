@@ -20,6 +20,7 @@ import {
 import { runMarketingResearchAutopilot } from '@/lib/web-operator/marketing-research-runner'
 import { classifyOwnerCommand, type OwnerCommandClassification, type OwnerCommandContext } from '@/lib/brain/orchestrator'
 import { formatDailyBriefForCEO, getDailyBrief } from '@/lib/daily-brief'
+import { isManualTakeoverCompletedIntent, resumeAllSafeBrowserWork } from '@/lib/web-operator/resume-controller'
 import {
   inferAgentTaskType,
   inferAssignedAgentName,
@@ -319,6 +320,43 @@ async function handleDailyBriefCommand(command: string, userId: string | null): 
   })
 }
 
+async function handleManualTakeoverCompletedCommand(
+  command: string,
+  classification: OwnerCommandClassification,
+): Promise<NextResponse | null> {
+  if (classification.intent !== 'manual_takeover_completed' && !isManualTakeoverCompletedIntent(command)) return null
+
+  const summary = await resumeAllSafeBrowserWork()
+  const response = summary.message
+  const actions = [{
+    type: 'manual_takeover_completed',
+    data: {
+      resumed_count: summary.resumed_count,
+      resolved_count: summary.resolved_count,
+      still_needs_approval_count: summary.still_needs_approval_count,
+      still_blocked_missing_capability_count: summary.still_blocked_missing_capability_count,
+      read_only_blocked: summary.read_only_blocked,
+      external_action_executed: summary.resumed_count > 0,
+    },
+  }]
+  await persistCeoShortcutCommand(command, response, 'manual_takeover_completed', actions, null)
+
+  return NextResponse.json({
+    ...orchestrationPayload(classification),
+    response,
+    intent: 'manual_takeover_completed',
+    actions,
+    project_id: null,
+    delegation: null,
+    resume: summary,
+    recall_chips: [
+      { label: 'Open operator', href: '/operators' },
+      ...(summary.still_needs_approval_count > 0 ? [{ label: 'View approvals', href: '/approvals' }] : []),
+      ...(summary.still_blocked_missing_capability_count > 0 ? [{ label: 'View system', href: '/system' }] : []),
+    ],
+  })
+}
+
 async function handleAgentAssignmentCommand(command: string): Promise<NextResponse | null> {
   if (!isAgentAssignmentIntent(command)) return null
 
@@ -491,6 +529,9 @@ export async function POST(request: NextRequest) {
       typeof contextInput.selected_project_name === 'string' ? contextInput.selected_project_name : null,
     )
     const classification = classifyOwnerCommand(command.trim(), ownerContext)
+
+    const manualTakeoverResponse = await handleManualTakeoverCompletedCommand(command.trim(), classification)
+    if (manualTakeoverResponse) return manualTakeoverResponse
 
     const dailyBriefResponse = await handleDailyBriefCommand(command.trim(), userId)
     if (dailyBriefResponse) return dailyBriefResponse

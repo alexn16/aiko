@@ -1268,3 +1268,65 @@ Start prompting yourself and the repo you are on. Assign Sven to audit how AÏKO
 - Agent assignment creates internal tasks and generated files only.
 - Repo audit reads safe local docs/source summaries and redacts common secret/token patterns.
 - No Web Operator action, browser action, approval item, send, post, publish, message, or external side effect is created.
+
+---
+
+## Manual Browser Resume — 2026-06-06
+
+### Issue
+
+Owner phrases such as:
+
+```text
+in this browser all is unblocked you just have to use them
+```
+
+could produce CEO copy that treated the browser as available while `/home` or mode-gated actions still showed:
+
+```text
+Agents are paused. Resume to continue.
+```
+
+### Fix
+
+- Added explicit `manual_takeover_completed` command classification.
+- Added `/api/web-operator/resume-browser-work`.
+- Added `lib/web-operator/resume-controller.ts`.
+- `/home` “Resume Kevin” now calls the real resume flow.
+- `/operators/[id]` Resume clears manual blocker state before workflow resume.
+- Daily Brief includes `user_controlling` and keeps missing capabilities separate.
+
+### Expected runtime behavior
+
+| Scenario | Expected |
+|---|---|
+| Browser login/CAPTCHA/security completed | Kevin moves from `waiting_user` / `user_controlling` to `ready_to_resume` or resumes if safe. |
+| User says “all is unblocked” in CEO Chat | CEO calls resume flow and reports actual result. |
+| Pending approval remains | Approval card remains. No auto-send/post/publish. |
+| Missing native capability remains | Shown as missing capability, not “Agents paused.” |
+| Read Only mode active | Resume is blocked with Read Only copy. |
+
+### Local validation result
+
+With existing local operator state, `/api/web-operator/resume-browser-work` returned:
+
+- `intent=manual_takeover_completed`
+- `checked_count=2`
+- `resolved_count=1`
+- `resumed_count=0`
+- `read_only_blocked=false`
+
+CEO Chat command:
+
+```text
+in this browser all is unblocked you just have to use them
+```
+
+returned `intent=manual_takeover_completed` and used the resume service instead of a generic text-only response. The current LinkedIn browser page still showed a login blocker, so `/home` correctly continued showing “Kevin needs your help” with “Resume Kevin” and did not show “Agents are paused.”
+
+### Safety
+
+- No missing capability is marked available by resume.
+- Approval gates remain required.
+- Forbidden actions remain blocked.
+- Login/CAPTCHA/security are not bypassed.

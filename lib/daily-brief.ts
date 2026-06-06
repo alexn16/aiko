@@ -102,7 +102,7 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
     rowsQuery<{ id: string; name: string; status: string; current_task: string | null; waiting_reason: string | null }>(
       `SELECT id, name, status, current_task, waiting_reason
        FROM web_operators
-       WHERE status IN ('waiting_user', 'ready_to_resume')
+       WHERE status IN ('waiting_user', 'user_controlling', 'ready_to_resume')
        ORDER BY updated_at DESC
        LIMIT 5`,
     ),
@@ -157,8 +157,10 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
 
   const waitingForUser: BriefItem[] = waitingRows.map(row => ({
     type: 'waiting_user',
-    title: `${row.name} needs your help`,
-    description: 'Complete this in the browser, then click Resume.',
+    title: row.status === 'ready_to_resume' ? `${row.name} is ready to continue` : `${row.name} needs your help`,
+    description: row.status === 'ready_to_resume'
+      ? 'Click Resume to continue browser work.'
+      : 'Complete this in the browser, then click Resume.',
     href: `/operators/${row.id}`,
     action_label: 'Open operator',
   }))

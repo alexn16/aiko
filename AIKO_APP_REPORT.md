@@ -840,3 +840,18 @@ UI updates:
 - `/agents` shows assigned-agent work derived from task records, including named agents such as Sven even when they are not saved custom-agent specs.
 
 Safety remains unchanged. Agent assignment does not create Web Operator actions, browser sessions, approval items, sends, posts, publishes, messages, or external side effects.
+
+### Manual Browser Resume — 2026-06-06
+
+AÏKO now treats owner phrases such as “browser is unblocked,” “all is unblocked,” “I logged in,” “I solved it,” “continue,” “resume,” and “use the browser now” as a real `manual_takeover_completed` intent.
+
+`lib/web-operator/resume-controller.ts` separates browser blockers from missing native capabilities and approvals. It clears resolvable Web Operator manual states (`waiting_user`, `user_controlling`, `ready_to_resume`), clears a true global pause when the owner asks to resume, and resumes Kevin’s pending browser workflow only when operating mode permits. Read Only mode, approval gates, forbidden actions, and missing capabilities remain blocked.
+
+`/home` now distinguishes:
+
+- “Kevin needs your help”
+- “Kevin is ready to continue”
+- “Approval needed”
+- “AÏKO cannot do this yet”
+
+The `/home` “Resume Kevin” button calls `/api/web-operator/resume-browser-work`. `/operators/[id]` Resume now clears manual blocker state before calling workflow resume. CEO Chat no longer replies with text-only “I’ll treat the browser as available” for unblock commands; it reports what state was actually changed.

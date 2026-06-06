@@ -38,7 +38,11 @@ export async function PATCH(
       return NextResponse.json(result)
     }
     if (body.action === 'resume_workflow') {
-      const { resumeOperatorWorkflow } = await import('@/lib/web-operator/operators')
+      const { getWebOperator, markLoginCompleted, resumeOperatorWorkflow } = await import('@/lib/web-operator/operators')
+      const operator = await getWebOperator(id)
+      if (operator && (operator.status === 'waiting_user' || operator.status === 'user_controlling' || operator.requires_user_input)) {
+        await markLoginCompleted(id)
+      }
       const result = await resumeOperatorWorkflow(id)
       return NextResponse.json(result)
     }

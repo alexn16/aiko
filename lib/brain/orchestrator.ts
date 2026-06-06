@@ -12,6 +12,7 @@ export type OwnerIntent =
   | 'file_generation'
   | 'approval_review'
   | 'operator_status'
+  | 'manual_takeover_completed'
   | 'self_improvement_status'
   | 'create_custom_agent'
   | 'unknown'
@@ -175,6 +176,13 @@ function chipsForIntent(intent: OwnerIntent, projectName: string | null): Sugges
       { label: 'Generate report', command: `Generate an executive report${suffix}.` },
     ]
   }
+  if (intent === 'manual_takeover_completed') {
+    return [
+      { label: 'Open operator', href: '/operators' },
+      { label: 'View approvals', href: '/approvals' },
+      { label: 'Open tasks', href: '/tasks' },
+    ]
+  }
   return common
 }
 
@@ -261,6 +269,12 @@ function planForIntent(intent: OwnerIntent, projectName: string | null, platform
         'Check Kevin’s current browser state.',
         'Summarize whether help or approval is needed.',
       ]
+    case 'manual_takeover_completed':
+      return [
+        'Mark the browser session ready.',
+        'Resume Kevin’s pending browser work if it is safe.',
+        'Keep approvals and missing capabilities separate.',
+      ]
     case 'approval_review':
       return [
         'Find pending approvals.',
@@ -289,7 +303,14 @@ export function classifyOwnerCommand(input: string, context: OwnerCommandContext
   let shouldCreatePlan = false
   let shouldCreateFile = false
 
-  if (/\b(what improvements has aiko proposed|status of (?:aiko )?self improvement|self improvement status|which capabilities are missing|what was implemented recently|missing capabilities)\b/.test(lower)) {
+  if (/\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|continue|resume|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/.test(lower)) {
+    intent = 'manual_takeover_completed'
+    confidence = 0.94
+    recommendedFlow = 'resume_browser_work'
+    recommendedAgent = 'Kevin'
+    safetyLevel = 'browser_safe'
+    shouldDelegate = false
+  } else if (/\b(what improvements has aiko proposed|status of (?:aiko )?self improvement|self improvement status|which capabilities are missing|what was implemented recently|missing capabilities)\b/.test(lower)) {
     intent = 'self_improvement_status'
     confidence = 0.92
     recommendedFlow = 'self_improvement_timeline'
