@@ -734,3 +734,13 @@ The main shell now uses grouped navigation instead of a dense flat sidebar. Prim
 `/home` is now the default owner operating screen: a large command box, current project with next action, Needs your attention, Live work, quick actions, recent output, and one short safety line. The old status metrics and raw diagnostic payloads moved into a collapsed Advanced dashboard section with links to Dashboard and System.
 
 Main-page copy was shortened on Dashboard, Setup, Connect AI, Operators, and Approvals. Empty states now tell the owner what to expect: create the first project, use the default operator, no approvals needed, Kevin is idle, and generated reports/exports will appear in Files.
+
+### Brain Command Orchestrator — 2026-06-06
+
+AÏKO now has a lightweight owner-command orchestrator in `lib/brain/orchestrator.ts`. It classifies natural commands into intents such as project autopilot marketing, lead research, content creation, competitor research, Web Operator task, report generation, project recall, approval review, operator status, and self-improvement status.
+
+The CEO command route now classifies first, resolves explicit project references before selected/latest project fallback, and returns `short_plan` plus `suggested_chips` for owner surfaces. `/home` sends selected-project context, shows the plan as a simple card, renders suggested chips, and keeps orchestration metadata hidden inside Advanced details.
+
+Runtime validation covered `Promote AÏKO`, `Start marketing for ALB Parking`, `Create a LinkedIn post for AÏKO`, `Open Canva`, `Generate a report for ALB Parking`, and `What should we do next?`. A runtime issue where `/home` appended the selected project to commands that already named another project was fixed, so `ALB Parking` now resolves explicitly instead of becoming `ALB Parking for Codex Validation Demo`.
+
+Safety remains unchanged: the orchestrator recommends flows and shows a short visible plan, but does not bypass login/CAPTCHA/security, does not auto-send/post/publish, and does not execute risky actions without the existing approval/resume gates.

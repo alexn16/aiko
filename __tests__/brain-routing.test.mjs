@@ -4692,3 +4692,71 @@ test('209. sidebar keeps advanced routes accessible', () => {
     assert.ok(source.includes(`href: '${href}'`), `${href} should remain linked`)
   }
 })
+
+test('210. owner command orchestrator classifies promote AÏKO as autopilot marketing', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  assert.ok(source.includes("intent = 'project_autopilot_marketing'"))
+  assert.ok(source.includes('promote'))
+  assert.ok(source.includes("return 'AÏKO'"))
+})
+
+test('211. owner command orchestrator resolves explicit project names before latest project fallback', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(source.includes('compactName(project.name) === wanted'))
+  assert.ok(source.includes("source: 'explicit'"))
+  assert.ok(route.includes('classification.project_reference'))
+  assert.ok(route.indexOf('classification.project_reference') < route.indexOf('fallbackProject'))
+})
+
+test('212. LinkedIn post command maps to content creation without automatic posting', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  assert.ok(source.includes("intent = 'content_creation'"))
+  assert.ok(source.includes('Content Agent'))
+  assert.ok(source.includes('Ask approval before posting or publishing.'))
+})
+
+test('213. Open Canva command routes to canva_design and canva playbook', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  const route = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(source.includes("skill: 'canva_design'"))
+  assert.ok(source.includes("playbook: 'canva_instagram_draft'"))
+  assert.ok(route.includes("classification.intent === 'web_operator_task'"))
+})
+
+test('214. Generate report command routes to report generation', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  assert.ok(source.includes("intent = 'report_generation'"))
+  assert.ok(source.includes("recommendedFlow = 'executive_report'"))
+  assert.ok(source.includes('Generate a concise executive report.'))
+})
+
+test('215. What should we do next routes to project recall next step', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  assert.ok(source.includes('what should we do next'))
+  assert.ok(source.includes("intent = 'project_recall'"))
+  assert.ok(source.includes("recommendedFlow = 'next_step'"))
+})
+
+test('216. visible short plans avoid internal JSON and hidden reasoning wording', () => {
+  const source = fs.readFileSync('lib/brain/orchestrator.ts', 'utf8')
+  assert.ok(source.includes('short_plan: planForIntent'))
+  assert.equal(source.includes('chain-of-thought'), false)
+  assert.equal(source.includes('internal JSON'), false)
+  assert.equal(source.includes('JSON.stringify'), false)
+})
+
+test('217. home command result renders suggested chips and selected project context', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('suggested_chips'))
+  assert.ok(source.includes('selected_project_id'))
+  assert.ok(source.includes('selected_project_name'))
+  assert.ok(source.includes('Plan'))
+})
+
+test('218. home command keeps explicit project names instead of appending selected project', () => {
+  const source = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(source.includes('hasExplicitProjectHint'))
+  assert.ok(source.includes('\\bfor\\s+[^.?!]+'))
+  assert.ok(source.includes('projects.some(project'))
+})

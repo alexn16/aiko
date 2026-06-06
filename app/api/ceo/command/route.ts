@@ -18,6 +18,7 @@ import {
   type StrategyExecutionPlan,
 } from '@/lib/strategy-execution-planner'
 import { runMarketingResearchAutopilot } from '@/lib/web-operator/marketing-research-runner'
+import { classifyOwnerCommand, type OwnerCommandClassification, type OwnerCommandContext } from '@/lib/brain/orchestrator'
 
 // ── Delegation helpers ─────────────────────────────────────────────────────────
 
@@ -98,15 +99,79 @@ async function getLatestActiveProject() {
   return res.rows[0] ?? null
 }
 
-async function handleProjectAutopilotMarketingCommand(command: string): Promise<NextResponse | null> {
-  if (!isProjectAutopilotMarketingIntent(command)) return null
+async function getActiveProjectById(projectId: string | null | undefined) {
+  if (!projectId) return null
+  const res = await db.query(
+    `SELECT id, name, goal, target_market, value_prop
+     FROM projects
+     WHERE id=$1 AND active=true
+     LIMIT 1`,
+    [projectId],
+  )
+  return res.rows[0] ?? null
+}
 
-  const projectNameHint = extractAutopilotProjectName(command)
-  const project = projectNameHint && projectNameHint !== 'AÏKO'
-    ? await findProjectByNameOrAlias(projectNameHint)
-    : projectNameHint === 'AÏKO'
-      ? (await findProjectByNameOrAlias('AÏKO') ?? null)
+async function getOwnerCommandContext(selectedProjectId?: string | null, selectedProjectName?: string | null): Promise<OwnerCommandContext> {
+  const res = await db.query(
+    `SELECT id, name, active
+     FROM projects
+     WHERE active=true
+     ORDER BY created_at DESC
+     LIMIT 40`
+  )
+  const projects = res.rows.map(row => ({
+    id: String(row.id),
+    name: String(row.name),
+    active: Boolean(row.active),
+  }))
+  const latest = projects[0] ?? null
+  const selected = selectedProjectId
+    ? projects.find(project => project.id === selectedProjectId)
+    : selectedProjectName
+      ? projects.find(project => project.name.toLowerCase() === selectedProjectName.toLowerCase())
       : null
+
+  return {
+    selected_project_id: selected?.id ?? selectedProjectId ?? null,
+    selected_project_name: selected?.name ?? selectedProjectName ?? null,
+    latest_project_id: latest?.id ?? null,
+    latest_project_name: latest?.name ?? null,
+    projects,
+  }
+}
+
+function visiblePlanCopy(classification: OwnerCommandClassification): string {
+  if (!classification.short_plan.length || classification.intent === 'chat' || classification.intent === 'unknown') return ''
+  const steps = classification.short_plan.map((step, index) => `${index + 1}. ${step}`).join('\n')
+  return `I’ll do this:\n${steps}`
+}
+
+function withVisiblePlan(response: string, classification: OwnerCommandClassification): string {
+  const plan = visiblePlanCopy(classification)
+  if (!plan || response.includes('I’ll do this:')) return response
+  return `${plan}\n\n${response}`
+}
+
+function orchestrationPayload(classification: OwnerCommandClassification) {
+  return {
+    orchestration: classification,
+    short_plan: classification.short_plan,
+    suggested_chips: classification.suggested_chips,
+  }
+}
+
+async function handleProjectAutopilotMarketingCommand(command: string, classification: OwnerCommandClassification): Promise<NextResponse | null> {
+  if (classification.intent !== 'project_autopilot_marketing' && !isProjectAutopilotMarketingIntent(command)) return null
+
+  const classifiedProject = classification.project_reference
+  const projectNameHint = classifiedProject.name ?? extractAutopilotProjectName(command)
+  const project = classifiedProject.id
+    ? await getActiveProjectById(classifiedProject.id)
+    : projectNameHint && projectNameHint !== 'AÏKO'
+      ? await findProjectByNameOrAlias(projectNameHint)
+      : projectNameHint === 'AÏKO'
+        ? (await findProjectByNameOrAlias('AÏKO') ?? null)
+        : null
   const fallbackProject = project ? null : await getLatestActiveProject()
   const resolved = project ?? (projectNameHint === 'AÏKO' ? null : fallbackProject)
   const projectName = projectNameHint === 'AÏKO' ? 'AÏKO' : String(resolved?.name ?? projectNameHint ?? 'this project')
@@ -125,7 +190,10 @@ async function handleProjectAutopilotMarketingCommand(command: string): Promise<
   const opportunityCopy = autopilot.opportunities.length > 0
     ? ` Found: ${autopilot.opportunities.slice(0, 3).map(o => o.title).join('; ')}.`
     : ''
-  const response = `I’ll start by researching where ${projectName} can find customers. ${planCopy} Kevin will open the browser and report back. If login or CAPTCHA appears, he’ll pause for you. ${autopilot.summary}${opportunityCopy} Next: ${autopilot.recommended_next_action}`
+  const response = withVisiblePlan(
+    `I’ll start by researching where ${projectName} can find customers. ${planCopy} Kevin will open the browser and report back. If login or CAPTCHA appears, he’ll pause for you. ${autopilot.summary}${opportunityCopy} Next: ${autopilot.recommended_next_action}`,
+    classification,
+  )
 
   const actions = [{
     type: 'project_autopilot_marketing',
@@ -142,6 +210,7 @@ async function handleProjectAutopilotMarketingCommand(command: string): Promise<
   await persistCeoShortcutCommand(command, response, 'project_autopilot_marketing', actions, resolved?.id ?? null)
 
   return NextResponse.json({
+    ...orchestrationPayload(classification),
     response,
     intent: 'project_autopilot_marketing',
     actions,
@@ -327,10 +396,17 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id ?? null
 
-    const { command } = await request.json()
+    const body = await request.json()
+    const command = body?.command
     if (!command?.trim()) {
       return NextResponse.json({ error: 'No command provided' }, { status: 400 })
     }
+    const contextInput = body?.context && typeof body.context === 'object' ? body.context : {}
+    const ownerContext = await getOwnerCommandContext(
+      typeof contextInput.selected_project_id === 'string' ? contextInput.selected_project_id : null,
+      typeof contextInput.selected_project_name === 'string' ? contextInput.selected_project_name : null,
+    )
+    const classification = classifyOwnerCommand(command.trim(), ownerContext)
 
     const timelineResponse = await handleSelfImprovementTimelineCommand(command.trim())
     if (timelineResponse) return timelineResponse
@@ -338,7 +414,7 @@ export async function POST(request: NextRequest) {
     const lifecycleResponse = await handleSelfImprovementLifecycleCommand(command.trim())
     if (lifecycleResponse) return lifecycleResponse
 
-    const autopilotResponse = await handleProjectAutopilotMarketingCommand(command.trim())
+    const autopilotResponse = await handleProjectAutopilotMarketingCommand(command.trim(), classification)
     if (autopilotResponse) return autopilotResponse
 
     // Check that at least one provider is reachable before calling the agent.
@@ -476,16 +552,18 @@ export async function POST(request: NextRequest) {
         } catch { /* non-fatal */ }
       }
 
-      const recommendedSkill = operatorName
+      const shouldRouteImplicitOperatorTask = classification.intent === 'web_operator_task'
+      const recommendedSkill = operatorName || shouldRouteImplicitOperatorTask
         ? await getRecommendedSkillForInstruction(command.trim())
         : null
-      const unknownWebsite = operatorName && !recommendedSkill
+      const unknownWebsite = (operatorName || shouldRouteImplicitOperatorTask) && !recommendedSkill
         ? inferUnknownWebsiteFromInstruction(command.trim())
         : null
       const requestedUrl = extractFirstUrl(command.trim())
       const directSiteTarget = recommendedSkill
         ? getDirectSiteTargetFromInstruction(command.trim(), recommendedSkill.skill_id)
         : null
+      const operatorLabel = operatorName ?? 'Kevin'
 
       if (unknownWebsite) {
         await createSystemImprovementProposal({
@@ -508,7 +586,7 @@ export async function POST(request: NextRequest) {
         }).catch(() => {})
         delegationResult = {
           status: 'blocked',
-          message: `AÏKO does not have a Web Operator skill for ${unknownWebsite} yet. I created a System Improvement Proposal instead of asking ${operatorName} to automate an unknown website blindly.`,
+          message: `AÏKO does not have a Web Operator skill for ${unknownWebsite} yet. I created a System Improvement Proposal instead of asking ${operatorLabel} to automate an unknown website blindly.`,
         }
       }
 
@@ -539,13 +617,13 @@ export async function POST(request: NextRequest) {
           actionType: 'open_url',
           targetUrl: directSiteTarget.url,
           payload: directSiteTarget.query ? { query: directSiteTarget.query } : undefined,
-          instruction: `${operatorName}, open ${siteName} directly in the browser session. Manual login/takeover may be required. Continue only safe browser actions; do not post, message, join, publish, share, or download final assets without approval.`,
+          instruction: `${operatorLabel}, open ${siteName} directly in the browser session. Manual login/takeover may be required. Continue only safe browser actions; do not post, message, join, publish, share, or download final assets without approval.`,
           reason: `${siteName} Web Operator skill requested`,
           skillId: recommendedSkill.skill_id,
         }).catch(() => null)
       }
 
-      if (!delegationResult && isOpenGmail && operatorName) {
+      if (!delegationResult && isOpenGmail && (operatorName || shouldRouteImplicitOperatorTask)) {
         delegationResult = await delegateOpenGmail({
           projectId: result.project_id ?? undefined,
           requestedByRole: 'CEO',
@@ -559,7 +637,7 @@ export async function POST(request: NextRequest) {
           actionType: 'create_email_draft',
           targetUrl: 'https://mail.google.com/',
           payload: { body: command.trim() },
-          instruction: `${operatorName}, open Gmail directly and prepare the requested draft. Do not send without approval.`,
+          instruction: `${operatorLabel}, open Gmail directly and prepare the requested draft. Do not send without approval.`,
           reason: 'Gmail draft preparation',
           skillId: 'gmail_workflow',
         }).catch(() => null)
@@ -754,6 +832,7 @@ export async function POST(request: NextRequest) {
           responseText = base + separator + `I recommend ${opName} as the first Web Operator for this campaign.`
         }
       }
+      responseText = withVisiblePlan(responseText, classification)
 
       // For project recall: attach quick-navigation chips
       let recallChips: Array<{ label: string; href: string }> | null = null
@@ -778,6 +857,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         ...result,
+        ...orchestrationPayload(classification),
         response:            responseText,
         capability_gap:      capabilityGap,
         actions:             strategyExecution ? [{

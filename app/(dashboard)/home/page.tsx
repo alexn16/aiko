@@ -55,6 +55,8 @@ type CommandResult = {
   response?: string
   intent?: string
   project_id?: string | null
+  short_plan?: string[]
+  suggested_chips?: Array<{ label: string; command?: string; href?: string }>
   delegation?: {
     status: string
     message: string
@@ -114,6 +116,8 @@ function simpleStatus(op?: Operator | null, pendingApprovalCount = 0): { label: 
 
 function sanitizeMessage(message: string | undefined): string {
   if (!message) return ''
+  const withoutPlan = message.replace(/^I’ll do this:\n(?:\d+\.\s.*\n?)+\n*/i, '')
+  message = withoutPlan.trim() || message
   if (/captcha|login|security|two.?factor|manual_takeover/i.test(message)) {
     return 'Kevin needs your help. Complete this in the browser, then click Resume.'
   }
@@ -122,6 +126,12 @@ function sanitizeMessage(message: string | undefined): string {
     return 'Kevin hit a browser problem. View details if you want the technical reason.'
   }
   return message
+}
+
+function hasExplicitProjectHint(text: string, projects: Project[]): boolean {
+  if (/\bfor\s+[^.?!]+/i.test(text)) return true
+  if (/\ba[ïi]ko\b/i.test(text)) return true
+  return projects.some(project => new RegExp(project.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(text))
 }
 
 export default function HomePage() {
@@ -206,7 +216,7 @@ export default function HomePage() {
   async function runCommand(text?: string) {
     const baseCommand = (text ?? command).trim()
     if (!baseCommand) return
-    const withProject = selectedProject && !new RegExp(selectedProject.name, 'i').test(baseCommand)
+    const withProject = selectedProject && !hasExplicitProjectHint(baseCommand, projects)
       ? `${baseCommand} for ${selectedProject.name}.`
       : baseCommand
     setLoading(true)
@@ -218,7 +228,13 @@ export default function HomePage() {
       const res = await fetch('/api/ceo/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: withProject }),
+        body: JSON.stringify({
+          command: withProject,
+          context: {
+            selected_project_id: selectedProject?.id ?? null,
+            selected_project_name: selectedProject?.name ?? null,
+          },
+        }),
       })
       const data = await res.json()
       setResult(data)
@@ -457,9 +473,42 @@ export default function HomePage() {
             <div style={{ fontSize: 12, fontWeight: 900, color: '#334155', marginBottom: 8 }}>
               Result
             </div>
+            {Array.isArray(result.short_plan) && result.short_plan.length > 0 && (
+              <div style={{
+                border: '1px solid #dbeafe',
+                background: '#eff6ff',
+                borderRadius: 8,
+                padding: 12,
+                marginBottom: 14,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#1e40af', marginBottom: 8 }}>
+                  Plan
+                </div>
+                <ol style={{ margin: 0, paddingLeft: 18, color: '#1e293b', fontSize: 13, lineHeight: 1.6 }}>
+                  {result.short_plan.map(step => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
             <p style={{ color: '#0f172a', fontSize: 15, lineHeight: 1.7, marginTop: 0 }}>
               {sanitizeMessage(result.response)}
             </p>
+            {Array.isArray(result.suggested_chips) && result.suggested_chips.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                {result.suggested_chips.map(chip => (
+                  chip.href ? (
+                    <Link key={`${chip.label}-${chip.href}`} href={chip.href} style={{ ...buttonStyle, textDecoration: 'none', padding: '8px 10px' }}>
+                      {chip.label}
+                    </Link>
+                  ) : (
+                    <button key={`${chip.label}-${chip.command}`} style={{ ...buttonStyle, padding: '8px 10px' }} onClick={() => chip.command && runCommand(chip.command)} disabled={loading || !chip.command}>
+                      {chip.label}
+                    </button>
+                  )
+                ))}
+              </div>
+            )}
             {result.autopilot && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <div>

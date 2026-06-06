@@ -1068,3 +1068,30 @@ AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
 | Connect AI | `/connect-ai` | ✅ Pass | Main copy is shorter and provider truth remains explicit: Codex Local, OAuth App, API keys, Claude, and Ollama are still separate. |
 | Navigation | Sidebar | ✅ Pass | Primary, Work, and System groups are visible. Advanced routes remain linked and are collapsed by default unless the active page is advanced. |
 | Safety | UI/API | ✅ Pass | Safety copy remains visible: AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without the user. No execution or provider-state behavior changed. |
+
+---
+
+## Brain Command Routing — 2026-06-06
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| Home command UI | `/home` | ✅ Pass | `/home` renders the command box, current project, attention card, live work, result Plan card, and suggested chips with Advanced details collapsed. |
+| Promote AÏKO | `/home`, `/api/ceo/command` | ✅ Pass | Classified as `project_autopilot_marketing`, project reference `AÏKO`, visible short plan returned, no noisy technical details in default result text. |
+| Start marketing for ALB Parking | `/home`, `/api/ceo/command` | ✅ Pass | Classified as `project_autopilot_marketing`, resolved explicit project `ALB Parking`, and kept browser research behind existing Web Operator safety. |
+| Create LinkedIn post for AÏKO | `/home`, `/api/ceo/command` | ✅ Pass | Classified as `content_creation`, mapped LinkedIn capability hints, returned draft-only plan, and kept posting approval-gated. |
+| Open Canva | `/home`, `/api/ceo/command` | ✅ Pass | Classified as `web_operator_task`, mapped `canva_design` / `canva_instagram_draft`, and kept publishing/sharing/downloading approval-gated. |
+| Generate report for ALB Parking | `/home`, `/api/ceo/command` | ✅ Pass after fix | Runtime found `/home` appended the selected project to explicit commands, producing `ALB Parking for Codex Validation Demo`. Fixed with explicit project-hint detection; API now resolves `ALB Parking` cleanly. |
+| What should we do next? | `/home`, `/api/ceo/command` | ✅ Pass | Uses selected project context and classifies as `project_recall` / `next_step` with a short visible plan. |
+
+### Notes
+
+- The in-app browser's virtual clipboard was unavailable during later typed-command checks, so repeated UI text entry was validated through the same `/api/ceo/command` endpoint used by `/home` after the first browser-submitted command passed.
+- No unsafe action behavior changed. Browser work still pauses for login/CAPTCHA/security, and posting/sending/publishing remains approval-gated.
