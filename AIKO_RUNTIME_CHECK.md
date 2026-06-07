@@ -1769,3 +1769,47 @@ Ollama as CEO brain (usable)
 - `/tasks` shows no Web Operator internal tasks by default
 - Source labels are human-readable
 - Titles ≤70 chars, no raw prefixes at render time
+
+---
+
+## Real Marketing Session — v0.2.1 — 2026-06-07
+
+### Session objective
+Run a genuine owner morning session: get a brief, work on ALB Parking, create content, check operator state.
+
+### What worked
+- `"Create a 7 day plan for ALB Parking."` → correct project (ALB Parking), skill ran, output created
+- `"Create a LinkedIn post for AÏKO and save it."` → AI Skill, file saved, no browser
+- CEO responses include safety plan upfront ("I won't post without approval")
+- `/files` shows recent files in reverse chronological order — easy to find work
+- `/api/health` returns version 0.2.1 with brain.usable and brain.owner_message
+- `"Kevin, open Canva"` → Chrome opened, paused at login with friendly message
+- Source labels on tasks are now clean: "AI plan", "Strategy plan", "Work cycle"
+
+### Top 3 blockers to daily use
+
+#### Blocker 1: Daily brief is not actionable
+**Evidence:** `today_summary` = "3 items need attention before work flows smoothly." — no project names, no concrete next step, wrong time-of-day greeting ("Good evening" in afternoon). `recommended_next_action` = "Kevin needs your help" — not useful without context. `priority_items` include raw stored task titles (`"Item approved: Web Operator: Kevin..."`) that the render-time normalizer doesn't clean (the brief API sends raw values, normalization only runs in the UI component).
+
+**Impact:** Owner opens AÏKO every morning and can't make a single decision from the brief. Has to manually navigate to /tasks or /operators to understand state.
+
+**Fix direction:** Daily brief should mention the active project by name, show one concrete next action ("Define target audience for ALB Parking"), clean priority_item titles using `normalizeTaskTitle`, and use wall-clock time correctly.
+
+#### Blocker 2: Project context is fragile — only "for X" and "on X" patterns work
+**Evidence:** `"Write a short email to introduce ALB Parking to potential business clients."` → created a Codex Validation Demo email (wrong project). `extractProjectNameFromCommand` regex only matches `for X` or `on X` before the project name. "introduce ALB Parking" has no trigger word before the project name, so it fell back to the most recently active project (Codex Validation Demo).
+
+**Impact:** Owner says the project name but AÏKO creates content for the wrong one. Silent wrong behavior is worse than an error — the owner may not notice until they look at the file name.
+
+**Fix direction:** `extractProjectNameFromCommand` should also recognize patterns like "about X", "regarding X", "introduce X", "for X's", and any known project name appearing in the command. Running all project names as a substring search against the command is safer than relying on the "for/on" trigger.
+
+#### Blocker 3: Stale operator waiting states pollute /home permanently
+**Evidence:** Both Kevin and Default operator have been in `waiting_user` status since earlier sessions (Jun 07). `/home` permanently shows amber attention ("Kevin needs your help") even when the owner is starting a fresh day and has no intention of resuming that browser session. There is no "Dismiss" or "Clear session" button.
+
+**Impact:** The amber attention banner is always on. Over time it becomes noise that the owner ignores — which means they also miss real waiting states. The home page loses its signal value.
+
+**Fix direction:** Add a "Clear session" / "Dismiss" action on `/home` for `waiting_user` states older than a configurable threshold (e.g. 2 hours), or add a "Start fresh" button that resets operator state to `idle`. Stale `waiting_user` should at least show a "from N hours ago" timestamp.
+
+### What felt confusing
+- The /home command input adds "for [project]" suffix automatically but only when a project is selected in the UI project picker — which is collapsed by default. The owner doesn't know they need to set that picker.
+- "Good evening" time-of-day greeting was wrong.
+- The CEO response plan format ("I'll do this: 1. ... 2. ...") on every response feels mechanical after a few uses.
