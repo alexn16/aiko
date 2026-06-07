@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.2] - 2026-06-07
+
+### Fixed
+
+- Daily brief now returns actionable, project-aware priorities. `today_summary` shows the specific first waiting operator message or first blocked task (with project name), not a generic count.
+- Daily brief greeting changed from time-of-day text ("Good evening") to "Today".
+- Daily brief task titles now use `normalizeTaskTitle` — raw "Item approved: Web Operator: ..." titles no longer appear.
+- Compound prefix stripping fixed: "Item approved: Web Operator: Kevin, ..." now fully normalises to "Kevin, ..." (the normalizer loops until stable, handling stacked prefixes).
+- Project names embedded anywhere in a CEO command are now resolved correctly. "Write an email to introduce ALB Parking..." → project = ALB Parking (not last-used project). The resolver scans all active project names for the longest case-insensitive substring match.
+- Stale browser blockers can be cleared from `/home` without executing or completing any action. `clear_stale_blocker` resets the operator to idle.
+- `/home` attention states now surface stale blockers separately from fresh ones. Fresh waiting states still show "Kevin needs your help in Chrome."
+
+### Safety
+
+- Clearing stale blockers does not execute actions.
+- Clearing stale blockers does not mark actions as completed.
+- Project resolution never silently picks the wrong project when a project name is explicitly mentioned.
+- Web Operator safety rules unchanged.
+
 ## [0.2.1] - 2026-06-07
 
 ### Fixed

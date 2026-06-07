@@ -15,11 +15,17 @@ const STRIP_PREFIXES = [
 ]
 
 function stripPrefixes(s: string): string {
+  // Loop until stable so compound prefixes like "Item approved: Web Operator: ..." are fully stripped.
   let result = s.trim()
-  for (const re of STRIP_PREFIXES) {
-    result = result.replace(re, '')
+  let changed = true
+  while (changed) {
+    const before = result
+    for (const re of STRIP_PREFIXES) {
+      result = result.replace(re, '').trim()
+    }
+    changed = result !== before
   }
-  return result.trim()
+  return result
 }
 
 // ── Action phrase normalisation ────────────────────────────────────────────────
