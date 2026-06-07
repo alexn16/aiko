@@ -161,11 +161,23 @@ npm run doctor
 npm run dev
 ```
 
-For local validation with visible browser sessions:
+For local owner use with your normal Chrome browser:
 
 ```bash
-WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+WEB_OPERATOR_BROWSER_MODE=system_chrome WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 ```
+
+Or with Playwright's persistent profile (logins survive between sessions):
+
+```bash
+WEB_OPERATOR_BROWSER_MODE=persistent WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+**Recommended local setup for system_chrome:**
+1. Open Chrome → add a new profile named "AÏKO"
+2. Log into Canva, Gmail, LinkedIn once manually
+3. Set `WEB_OPERATOR_BROWSER_MODE=system_chrome` and `WEB_OPERATOR_CHROME_PROFILE_DIRECTORY=AÏKO` in `.env.local`
+4. Kevin will reuse those logins instead of asking every time
 
 Open `http://localhost:3001/dashboard` for the owner overview. The dashboard is read-only: it reports setup, safety, counts, warnings, recent records, and quick links without running external actions.
 

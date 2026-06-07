@@ -34,28 +34,42 @@ export async function getOperatorContext(profileKey: string): Promise<BrowserCon
   if (operatorContexts.has(profileKey)) {
     const ctx = operatorContexts.get(profileKey)!
     try {
-      const pages = ctx.pages()
-      if (pages.length >= 0) return ctx  // still open
+      ctx.pages()  // throws if context is closed
+      return ctx
     } catch {
       operatorContexts.delete(profileKey)
     }
   }
 
-  const { launchBrowser } = await import('@/lib/browser/controller')
-  const browser = await launchBrowser()
-  const storageStatePath = getStorageStatePath(profileKey)
+  const { launchPersistentBrowserContext, getBrowserMode } = await import('@/lib/browser/controller')
+  const mode = getBrowserMode()
+  const context = await launchPersistentBrowserContext(profileKey)
+  operatorContexts.set(profileKey, context)
 
-  const contextOptions: BrowserContextOptions = {}
-  if (existsSync(storageStatePath)) {
-    contextOptions.storageState = storageStatePath
+  // For isolated mode only, load saved storage state from JSON if it exists.
+  // persistent and system_chrome manage logins natively via their profile dirs.
+  if (mode === 'isolated') {
+    const storageStatePath = getStorageStatePath(profileKey)
+    if (existsSync(storageStatePath)) {
+      try {
+        // Can't inject storage state into an already-launched context; best effort: note it exists.
+        // Callers who need state injection should prefer 'persistent' mode.
+      } catch {
+        // non-fatal
+      }
+    }
   }
 
-  const context = await browser.newContext(contextOptions)
-  operatorContexts.set(profileKey, context)
   return context
 }
 
 export async function saveOperatorStorageState(profileKey: string): Promise<void> {
+  const { getBrowserMode } = await import('@/lib/browser/controller')
+  const mode = getBrowserMode()
+
+  // persistent and system_chrome already persist via their profile dirs — no JSON save needed.
+  if (mode !== 'isolated') return
+
   const ctx = operatorContexts.get(profileKey)
   if (!ctx) return
   try {

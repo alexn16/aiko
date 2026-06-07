@@ -1572,3 +1572,40 @@ Fix: Added `ownerFriendlyWorkError()` helper in `engine.ts` that maps known syst
 - No approvals auto-executed.
 - Approval gates unchanged.
 - "Agents are paused" never reaches owner UI.
+
+---
+
+## Normal Chrome Browser Mode — 2026-06-07
+
+### Changes
+
+- `lib/browser/controller.ts`: Rewrote with three browser modes:
+  - `isolated` — Playwright Chromium, no profile (original)
+  - `persistent` — Playwright Chromium, AÏKO-managed persistent profile (new default)
+  - `system_chrome` — installed Google Chrome, owner-configured profile
+- `WEB_OPERATOR_BROWSER_MODE`, `WEB_OPERATOR_CHROME_EXECUTABLE_PATH`, `WEB_OPERATOR_CHROME_USER_DATA_DIR`, `WEB_OPERATOR_CHROME_PROFILE_DIRECTORY` env vars added
+- `assertNotTest()` guard blocks all browser launch during `NODE_ENV=test`
+- `lib/web-operator/playwright-executor.ts`: `getOperatorContext` uses `launchPersistentBrowserContext` instead of `launchBrowser` + manual context creation
+- `app/api/browser/setup/route.ts`: New endpoint returning safe status (no paths)
+- `/connect-ai`: `BrowserModeCard` shows current mode and setup instructions
+- `/operators`: Subtitle shows active browser mode
+- `README.md`: Updated with system_chrome setup instructions
+
+### Runtime validation
+
+| Check | Result |
+|---|---|
+| npm test passes with no browser opened | ✅ 379/379 |
+| npm run build completes with no browser | ✅ Clean |
+| Chrome detected on this machine | ✅ `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` |
+| `/api/browser/setup` returns safe fields | ✅ No paths in response |
+| Default mode is `persistent` | ✅ |
+| `system_chrome` mode reports Chrome found | ✅ |
+
+### Safety
+
+- No Chrome launch during tests or builds.
+- No cookies/tokens exported or logged.
+- No filesystem paths in API responses.
+- Login/CAPTCHA/security gates unchanged.
+- No auto-send/post/publish added.

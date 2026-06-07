@@ -79,6 +79,7 @@ export default function OperatorsPage() {
   const [operators, setOperators] = useState<WebOperator[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [browserMode, setBrowserMode] = useState<string>('persistent')
 
   // Create form
   const [newName, setNewName] = useState('')
@@ -88,10 +89,18 @@ export default function OperatorsPage() {
 
   const loadOperators = useCallback(async () => {
     try {
-      const res = await fetch('/api/web-operators')
-      if (!res.ok) return
-      const data = await res.json()
-      setOperators(data.operators ?? [])
+      const [opRes, browserRes] = await Promise.all([
+        fetch('/api/web-operators'),
+        fetch('/api/browser/setup').catch(() => null),
+      ])
+      if (opRes.ok) {
+        const data = await opRes.json()
+        setOperators(data.operators ?? [])
+      }
+      if (browserRes?.ok) {
+        const b = await browserRes.json()
+        setBrowserMode(b.mode ?? 'persistent')
+      }
     } catch {
       // non-fatal
     } finally {
@@ -188,7 +197,11 @@ export default function OperatorsPage() {
   }
 
   return (
-    <PageShell title="Operators" subtitle="Supervised browser work." maxWidth={960}>
+    <PageShell
+      title="Operators"
+      subtitle={`Supervised browser work. Browser: ${browserMode === 'system_chrome' ? 'Normal Chrome' : browserMode === 'persistent' ? 'AÏKO profile' : 'Isolated'}`}
+      maxWidth={960}
+    >
 
       {/* Operator grid */}
       {loading ? (

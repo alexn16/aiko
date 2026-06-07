@@ -118,21 +118,24 @@ export default function ConnectAIPage() {
   const [roles, setRoles] = useState<RoleInfo>({})
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
   const [brainHealth, setBrainHealth] = useState<{ usable: boolean; runtime_available: boolean; status: string; owner_message: string; fix_action: string } | null>(null)
+  const [browserSetup, setBrowserSetup] = useState<{ mode: string; chrome_found: boolean; ready: boolean; owner_message: string; setup_instructions: string } | null>(null)
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [providersRes, rolesRes, diagRes, provDiagRes] = await Promise.all([
+    const [providersRes, rolesRes, diagRes, provDiagRes, browserRes] = await Promise.all([
       fetch('/api/providers').then(r => r.json()),
       fetch('/api/providers/roles').then(r => r.json()),
       fetch('/api/auth-profiles/diagnostics').then(r => r.json()).catch(() => null),
       fetch('/api/providers/diagnostics').then(r => r.json()).catch(() => null),
+      fetch('/api/browser/setup').then(r => r.json()).catch(() => null),
     ])
     setProfiles(providersRes.providers ?? [])
     setRoles(rolesRes.roles ?? {})
     setDiagnostics(diagRes ?? null)
     if (provDiagRes?.brain_health) setBrainHealth(provDiagRes.brain_health)
+    if (browserRes) setBrowserSetup(browserRes)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -233,6 +236,8 @@ export default function ConnectAIPage() {
       {message && <Notice ok={['passed', 'assigned', 'deleted', 'imported', 'refreshed'].some(token => message.includes(token))} text={message} />}
 
       <CurrentBrain profile={ceoProfile} diagnostics={diagnostics} brainHealth={brainHealth} onTest={testProfile} />
+
+      <BrowserModeCard setup={browserSetup} />
 
       <section style={{ marginTop: 22 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
@@ -598,5 +603,40 @@ function SetupDrawer({ entry, diagnostics, onClose, onSaved }: { entry: Provider
         <button onClick={save} disabled={saving} style={{ width: '100%', border: 'none', borderRadius: 10, padding: '11px 14px', background: saving ? '#e2e8f0' : '#0f172a', color: saving ? '#94a3b8' : '#fff', fontWeight: 800 }}>{saving ? 'Saving and testing…' : 'Save and test profile'}</button>
       </div>
     </div>
+  )
+}
+
+function BrowserModeCard({ setup }: { setup: { mode: string; chrome_found: boolean; ready: boolean; owner_message: string; setup_instructions: string } | null }) {
+  const modeLabel =
+    setup?.mode === 'system_chrome' ? 'Normal Chrome' :
+    setup?.mode === 'persistent' ? 'AÏKO profile' :
+    setup?.mode === 'isolated' ? 'Isolated' : 'Loading...'
+
+  const tone: 'green' | 'amber' | 'gray' =
+    setup?.mode === 'system_chrome' && setup.chrome_found ? 'green' :
+    setup?.mode === 'persistent' ? 'green' :
+    setup?.mode === 'system_chrome' && !setup?.chrome_found ? 'amber' :
+    'gray'
+
+  return (
+    <section data-testid="browser-mode-card" style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: 18, marginTop: 18, background: '#fff' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Browser for Kevin</div>
+        <span style={{
+          fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 9px',
+          background: tone === 'green' ? '#dcfce7' : tone === 'amber' ? '#fef3c7' : '#f1f5f9',
+          color: tone === 'green' ? '#166534' : tone === 'amber' ? '#92400e' : '#475569',
+          border: `1px solid ${tone === 'green' ? '#86efac' : tone === 'amber' ? '#fde68a' : '#e2e8f0'}`,
+        }}>{modeLabel}</span>
+      </div>
+      <p style={{ margin: '0 0 10px', color: '#475569', fontSize: 13, lineHeight: 1.5 }}>
+        {setup?.owner_message ?? 'Loading browser status...'}
+      </p>
+      {setup?.setup_instructions && (
+        <p style={{ margin: 0, color: '#64748b', fontSize: 12, lineHeight: 1.5 }}>
+          {setup.setup_instructions}
+        </p>
+      )}
+    </section>
   )
 }

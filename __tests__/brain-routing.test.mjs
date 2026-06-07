@@ -5670,3 +5670,81 @@ test('319. resume summary includes still_waiting_user_count', () => {
   const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
   assert.ok(src.includes('still_waiting_user_count'), 'still_waiting_user_count missing from summary')
 })
+
+// ── Browser mode / Chrome runtime tests (2026-06-07) ─────────────────────────
+
+test('320. browser controller exports required functions', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  assert.ok(src.includes('export function getBrowserMode'), 'getBrowserMode missing')
+  assert.ok(src.includes('export function detectChromeExecutable'), 'detectChromeExecutable missing')
+  assert.ok(src.includes('export function getChromeSetupStatus'), 'getChromeSetupStatus missing')
+  assert.ok(src.includes('export async function launchPersistentBrowserContext'), 'launchPersistentBrowserContext missing')
+})
+
+test('321. system_chrome mode blocked in test environment', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  assert.ok(src.includes("process.env.NODE_ENV === 'test'"), 'test guard missing')
+  assert.ok(src.includes('System browser launch'), 'guard error message missing')
+  assert.ok(src.includes('assertNotTest'), 'assertNotTest not called in launch functions')
+  // Verify it's called in both launch functions
+  const launchBrowserIdx = src.indexOf('export async function launchBrowser')
+  const assertIdx = src.indexOf('assertNotTest', launchBrowserIdx)
+  assert.ok(assertIdx > launchBrowserIdx && assertIdx < launchBrowserIdx + 300, 'assertNotTest not in launchBrowser')
+})
+
+test('322. three browser modes are supported', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  assert.ok(src.includes("'isolated'"), 'isolated mode missing')
+  assert.ok(src.includes("'persistent'"), 'persistent mode missing')
+  assert.ok(src.includes("'system_chrome'"), 'system_chrome mode missing')
+})
+
+test('323. WEB_OPERATOR_BROWSER_MODE env var controls mode', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  assert.ok(src.includes('WEB_OPERATOR_BROWSER_MODE'), 'env var not referenced')
+  assert.ok(src.includes('WEB_OPERATOR_CHROME_EXECUTABLE_PATH'), 'Chrome exe env var missing')
+  assert.ok(src.includes('WEB_OPERATOR_CHROME_USER_DATA_DIR'), 'Chrome user data env var missing')
+  assert.ok(src.includes('WEB_OPERATOR_CHROME_PROFILE_DIRECTORY'), 'Chrome profile dir env var missing')
+})
+
+test('324. Chrome profile locked error returns owner-friendly message', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  assert.ok(src.includes('Chrome profile is already in use'), 'locked profile message missing')
+  assert.ok(src.includes('dedicated AÏKO Chrome profile'), 'setup suggestion missing')
+  assert.ok(src.includes('/lock|already running|single instance/i'), 'lock detection pattern missing')
+})
+
+test('325. system_chrome uses launchPersistentContext not chromium.launch', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  const systemIdx = src.indexOf("if (mode === 'system_chrome')")
+  const persistentIdx = src.indexOf('launchPersistentContext', systemIdx)
+  assert.ok(persistentIdx > systemIdx, 'system_chrome should use launchPersistentContext')
+})
+
+test('326. getChromeSetupStatus returns safe fields only', () => {
+  const src = fs.readFileSync('app/api/browser/setup/route.ts', 'utf8')
+  assert.ok(src.includes('chrome_found'), 'chrome_found in response')
+  assert.ok(src.includes('owner_message'), 'owner_message in response')
+  assert.ok(!src.includes('chrome_executable:'), 'full path must not be returned in response')
+  assert.ok(!src.includes('chrome_user_data_dir:'), 'data dir must not be returned in response')
+})
+
+test('327. playwright-executor uses launchPersistentBrowserContext', () => {
+  const src = fs.readFileSync('lib/web-operator/playwright-executor.ts', 'utf8')
+  assert.ok(src.includes('launchPersistentBrowserContext'), 'persistent context launch missing')
+  const getCtxFn = src.slice(src.indexOf('export async function getOperatorContext'), src.indexOf('export async function saveOperatorStorageState')); assert.ok(getCtxFn.includes('launchPersistentBrowserContext'), 'getOperatorContext must use launchPersistentBrowserContext')
+})
+
+test('328. /connect-ai page shows BrowserModeCard', () => {
+  const src = fs.readFileSync('app/(dashboard)/connect-ai/page.tsx', 'utf8')
+  assert.ok(src.includes('BrowserModeCard'), 'BrowserModeCard component missing')
+  assert.ok(src.includes('browser-mode-card'), 'browser-mode-card testid missing')
+  assert.ok(src.includes('Normal Chrome'), 'Normal Chrome label missing')
+})
+
+test('329. /operators page shows browser mode in subtitle', () => {
+  const src = fs.readFileSync('app/(dashboard)/operators/page.tsx', 'utf8')
+  assert.ok(src.includes('Normal Chrome'), 'Normal Chrome label missing from operators')
+  assert.ok(src.includes('browserMode'), 'browserMode state missing')
+  assert.ok(src.includes('/api/browser/setup'), 'setup API call missing from operators')
+})

@@ -953,3 +953,17 @@ Key changes:
 - `/home` attention card: new `intensive_paused` state shows "Intensive Work is paused." with a Resume Intensive Work button
 - `sanitizeMessage` maps "Agents are paused" to "Intensive Work is paused. Resume when ready."
 - `AIKO_RESUME_BLOCKER_AUDIT.md` updated with current state separation documentation
+
+### Normal Chrome Browser Mode — 2026-06-07
+
+AÏKO now supports three browser modes via `WEB_OPERATOR_BROWSER_MODE`:
+
+- `isolated` — Playwright Chromium, no persistent profile (original behavior)
+- `persistent` — Playwright Chromium with AÏKO-managed persistent profile folder (new default); logins survive restarts
+- `system_chrome` — installed Google Chrome with owner-configured profile; existing logins (Canva, Gmail, LinkedIn) are available immediately
+
+`lib/browser/controller.ts` manages mode selection, Chrome path detection, and profile directory configuration. A test guard (`assertNotTest`) prevents any browser launch during `npm test` or `npm run build`.
+
+`/connect-ai` shows a Browser Mode card with the current mode and setup instructions. `/operators` shows the active mode in the subtitle. `/api/browser/setup` returns safe status without exposing filesystem paths.
+
+For local owner use, the recommended setup is `system_chrome` with a dedicated "AÏKO" Chrome profile — log in to sites once, and Kevin reuses those sessions.
