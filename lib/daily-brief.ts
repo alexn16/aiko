@@ -1,6 +1,9 @@
 import { db } from '@/lib/db/client'
 import { getSetupState } from '@/lib/setup-state'
 import { listOwnerTasks, type OwnerTask } from '@/lib/tasks/owner-tasks'
+import { normalizeTaskTitle } from '@/lib/tasks/task-title-normalizer'
+
+const STALE_BLOCKER_HOURS = Number(process.env.STALE_BLOCKER_HOURS ?? 8)
 
 type BriefItem = {
   type: string
@@ -9,6 +12,8 @@ type BriefItem = {
   href: string
   action_label: string
   project_name?: string | null
+  is_stale?: boolean
+  operator_id?: string | null
 }
 
 type BriefOutput = {
@@ -54,18 +59,18 @@ async function rowsQuery<T = Record<string, unknown>>(sql: string, params: unkno
   }
 }
 
-function greetingFor(date = new Date()) {
-  const hour = date.getHours()
-  if (hour < 12) return 'Good morning.'
-  if (hour < 18) return 'Good afternoon.'
-  return 'Good evening.'
+function greetingFor(): string {
+  return 'Today'
 }
 
 function taskItem(task: OwnerTask): BriefItem {
+  const cleanedTitle = normalizeTaskTitle(task.title, { status: task.status })
+  const projectPart = task.project_name ? `${task.project_name} · ` : ''
+  const rolePart = task.owner_role.replace(/_/g, ' ')
   return {
     type: task.status === 'blocked' ? 'blocked_task' : 'task',
-    title: task.title,
-    description: `${task.project_name ?? 'No project'} · ${task.owner_role.replace(/_/g, ' ')}`,
+    title: cleanedTitle,
+    description: `${projectPart}${rolePart}`,
     href: task.project_id ? `/projects/${task.project_id}` : '/tasks',
     action_label: task.status === 'blocked' ? 'Open blocked task' : 'Open task',
     project_name: task.project_name,
@@ -99,8 +104,8 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
        ORDER BY updated_at DESC, created_at DESC
        LIMIT 1`,
     ),
-    rowsQuery<{ id: string; name: string; status: string; current_task: string | null; waiting_reason: string | null }>(
-      `SELECT id, name, status, current_task, waiting_reason
+    rowsQuery<{ id: string; name: string; status: string; current_task: string | null; waiting_reason: string | null; updated_at: string }>(
+      `SELECT id, name, status, current_task, waiting_reason, updated_at
        FROM web_operators
        WHERE status IN ('waiting_user', 'user_controlling', 'ready_to_resume')
        ORDER BY updated_at DESC
@@ -155,15 +160,37 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
       }
     : null
 
-  const waitingForUser: BriefItem[] = waitingRows.map(row => ({
-    type: 'waiting_user',
-    title: row.status === 'ready_to_resume' ? `${row.name} is ready to continue` : `${row.name} needs your help`,
-    description: row.status === 'ready_to_resume'
-      ? 'Click Resume to continue browser work.'
-      : 'Complete this in the browser, then click Resume.',
-    href: `/operators/${row.id}`,
-    action_label: 'Open operator',
-  }))
+  const waitingForUser: BriefItem[] = waitingRows.map(row => {
+    const updatedAt = (row as Record<string, unknown>).updated_at
+    const ageHours = updatedAt ? (Date.now() - new Date(String(updatedAt)).getTime()) / 3600000 : 0
+    const isStale = ageHours > STALE_BLOCKER_HOURS
+    const isReady = row.status === 'ready_to_resume'
+    const title = isStale
+      ? `Old browser blocker (${row.name})`
+      : isReady
+        ? `${row.name} is ready to continue`
+        : `${row.name} needs your help in Chrome`
+    const description = isStale
+      ? `${row.name} has been waiting for ${Math.round(ageHours)} hours. Resume it or clear the stale blocker.`
+      : isReady
+        ? 'Click Resume to continue browser work.'
+        : row.waiting_reason === 'login_required'
+          ? 'Log in to Chrome, then click Resume.'
+          : row.waiting_reason === 'captcha_detected'
+            ? 'Complete the CAPTCHA in Chrome, then click Resume.'
+            : row.waiting_reason === 'security_checkpoint'
+              ? 'Complete the security check in Chrome, then click Resume.'
+              : 'Complete this in Chrome, then click Resume.'
+    return {
+      type: isStale ? 'stale_blocker' : 'waiting_user',
+      title,
+      description,
+      href: `/operators/${row.id}`,
+      action_label: isStale ? 'Clear or resume' : 'Open operator',
+      is_stale: isStale,
+      operator_id: String(row.id),
+    }
+  })
 
   const pendingApprovals: BriefItem[] = approvals.map(row => ({
     type: 'pending_approval',
@@ -214,12 +241,17 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5)
 
+  const staleCount = waitingForUser.filter(w => w.is_stale).length
+  const freshWaiting = waitingForUser.filter(w => !w.is_stale)
+
+  // Fresh blockers first, then approvals, then tasks; stale blockers go to the back
   const priorityItems = [
-    ...waitingForUser,
+    ...freshWaiting,
     ...pendingApprovals,
     ...blockedTasks,
     ...nextTasks,
     ...improvementItems,
+    ...waitingForUser.filter(w => w.is_stale),
   ].slice(0, 8)
 
   const recommendedNextAction = priorityItems[0] ?? (
@@ -240,14 +272,28 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
           action_label: 'Start',
         }
   )
-
-  const issueCount = waitingForUser.length + pendingApprovals.length + blockedTasks.length
+  const issueCount = freshWaiting.length + pendingApprovals.length + blockedTasks.length
   const taskCount = nextTasks.length
-  const todaySummary = issueCount > 0
-    ? `${issueCount} item${issueCount === 1 ? '' : 's'} need attention before work flows smoothly.`
-    : taskCount > 0
-      ? `${taskCount} internal task${taskCount === 1 ? '' : 's'} are ready to work on.`
-      : 'Everything is clear. Choose what you want AÏKO to work on.'
+  const projectLabel = activeProject ? ` for ${activeProject.name}` : ''
+
+  let todaySummary: string
+  if (freshWaiting.length > 0) {
+    const firstOp = freshWaiting[0]
+    todaySummary = `${firstOp.title}${projectLabel ? ' · ' + (activeProject?.name ?? '') : ''}. ${firstOp.description}`
+  } else if (pendingApprovals.length > 0) {
+    todaySummary = `Approval needed${projectLabel}. Review before Kevin can continue.`
+  } else if (blockedTasks.length > 0) {
+    const bt = blockedTasks[0]
+    todaySummary = `${bt.title}${bt.project_name ? ` (${bt.project_name})` : ''} is blocked. Resolve it to move forward.`
+  } else if (staleCount > 0) {
+    todaySummary = `${staleCount} old browser blocker${staleCount === 1 ? '' : 's'} need clearing. Clear them so Kevin is ready for new work.`
+  } else if (taskCount > 0) {
+    todaySummary = `${taskCount} task${taskCount === 1 ? '' : 's'} ready to work on${projectLabel}.`
+  } else if (activeProject) {
+    todaySummary = `${activeProject.name} is your active project. Ask CEO Chat what to work on next.`
+  } else {
+    todaySummary = 'Everything is clear. Choose what you want AÏKO to work on.'
+  }
 
   const ceoProfile = setup.ceo_profile as { provider?: string | null; display_name?: string | null; auth_method?: string | null; model?: string | null } | null
 
@@ -275,14 +321,17 @@ export async function getDailyBrief(userId?: string | null): Promise<DailyBrief>
 export function formatDailyBriefForCEO(brief: DailyBrief): string {
   const topItems = brief.priority_items.slice(0, 5)
   const itemText = topItems.length
-    ? topItems.map((item, index) => `${index + 1}. ${item.title}: ${item.description}`).join('\n')
+    ? topItems.map((item, index) => {
+        const proj = item.project_name ? ` [${item.project_name}]` : ''
+        return `${index + 1}. ${item.title}${proj}: ${item.description}`
+      }).join('\n')
     : 'No urgent items need attention.'
   const next = brief.recommended_next_action
-    ? `${brief.recommended_next_action.title}: ${brief.recommended_next_action.description}`
+    ? `${brief.recommended_next_action.title}${brief.recommended_next_action.project_name ? ` [${brief.recommended_next_action.project_name}]` : ''}: ${brief.recommended_next_action.description}`
     : 'Choose what you want AÏKO to work on.'
 
   return [
-    `${brief.greeting} ${brief.today_summary}`,
+    `${brief.today_summary}`,
     '',
     'Priority items:',
     itemText,

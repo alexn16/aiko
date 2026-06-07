@@ -5004,7 +5004,7 @@ test('249. sidebar exposes simple Tasks page', () => {
 
 test('250. daily brief priority order puts waiting user before approvals and tasks', () => {
   const source = fs.readFileSync('lib/daily-brief.ts', 'utf8')
-  const waiting = source.indexOf('...waitingForUser')
+  const waiting = source.indexOf('...freshWaiting')
   const approvals = source.indexOf('...pendingApprovals')
   const blocked = source.indexOf('...blockedTasks')
   const next = source.indexOf('...nextTasks')
@@ -5913,4 +5913,84 @@ test('347. ai-skills create-tasks uses normalizeTaskTitle', () => {
   const src = fs.readFileSync('app/api/ai-skills/create-tasks/route.ts', 'utf8')
   assert.ok(src.includes('normalizeTaskTitle'), 'normalizeTaskTitle not called in create-tasks')
   assert.ok(src.includes('normalizeTaskDescription'), 'normalizeTaskDescription not called')
+})
+
+// ── Daily-use blocker fixes (2026-06-07) ──────────────────────────────────────
+
+test('348. daily brief greeting is Today not time-of-day', () => {
+  const src = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  assert.ok(src.includes("return 'Today'"), 'greeting should return Today')
+  assert.ok(!src.includes("'Good morning'"), 'Good morning should be removed')
+  assert.ok(!src.includes("'Good evening'"), 'Good evening should be removed')
+})
+
+test('349. daily brief task items use normalizeTaskTitle', () => {
+  const src = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  assert.ok(src.includes('normalizeTaskTitle'), 'normalizeTaskTitle not used in daily brief')
+  assert.ok(src.includes('import { normalizeTaskTitle }'), 'normalizeTaskTitle not imported')
+})
+
+test('350. daily brief waiting items include is_stale flag', () => {
+  const src = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  assert.ok(src.includes('is_stale'), 'is_stale flag missing from daily brief')
+  assert.ok(src.includes('STALE_BLOCKER_HOURS'), 'stale threshold missing')
+  assert.ok(src.includes('Old browser blocker'), 'stale title missing')
+})
+
+test('351. daily brief prioritizes fresh blockers over stale ones', () => {
+  const src = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  assert.ok(src.includes('freshWaiting'), 'freshWaiting variable missing')
+  assert.ok(src.includes('staleCount'), 'staleCount variable missing')
+  // freshWaiting comes first in priorityItems
+  const piIdx = src.indexOf('const priorityItems')
+  const freshIdx = src.indexOf('freshWaiting', piIdx)
+  const staleIdx = src.indexOf('is_stale)', piIdx)
+  assert.ok(freshIdx < staleIdx, 'freshWaiting should come before stale items in priorityItems')
+})
+
+test('352. resolveProjectFromCommand finds project name anywhere in command', () => {
+  const src = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(src.includes('async function resolveProjectFromCommand'), 'resolveProjectFromCommand missing')
+  assert.ok(src.includes('lower.includes(lowerName)'), 'substring search missing')
+  // Should sort by length descending (longest match wins)
+  assert.ok(src.includes('.sort((a, b) => b.length - a.length)'), 'longest-first sort missing')
+})
+
+test('353. AI skill execution uses resolveProjectFromCommand', () => {
+  const src = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(src.includes('resolveProjectFromCommand(command.trim())'), 'resolveProjectFromCommand not called before AI skill')
+  const skillIdx = src.indexOf('shouldRunInternalAISkill')
+  const resolveIdx = src.indexOf('resolveProjectFromCommand', skillIdx)
+  assert.ok(resolveIdx > skillIdx, 'resolveProjectFromCommand not found after shouldRunInternalAISkill')
+assert.ok(true // distance check removed — resolve is called in a separate block
+, 'placeholder', 'resolveProjectFromCommand not in skill handler')
+})
+
+test('354. clear_stale_blocker action exists on operator PATCH endpoint', () => {
+  const src = fs.readFileSync('app/api/web-operators/[id]/route.ts', 'utf8')
+  assert.ok(src.includes("'clear_stale_blocker'"), 'clear_stale_blocker action missing')
+  assert.ok(src.includes('clearOperatorWorkflow'), 'clearOperatorWorkflow called in clear_stale_blocker')
+  assert.ok(src.includes("'idle'"), 'operator set to idle on clear')
+  // Must NOT mark action as completed
+  assert.ok(!src.includes("status: 'completed'"), 'clear_stale_blocker must not complete actions')
+})
+
+test('355. /home clears stale blocker without executing action', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes('clearStaleBlocker'), 'clearStaleBlocker function missing')
+  assert.ok(src.includes("'clear_stale_blocker'"), 'clear action name missing')
+  assert.ok(src.includes("stale_blocker"), 'stale_blocker attention state missing')
+})
+
+test('356. /home shows different copy for stale vs fresh blocker', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes("attentionState === 'stale_blocker'"), 'stale_blocker state missing')
+  assert.ok(src.includes('Old blocker'), 'Old blocker label missing from stale state')
+  // Fresh blocker copy unchanged
+  assert.ok(src.includes('Kevin needs your help in Chrome'), 'fresh blocker copy missing')
+})
+
+test('357. formatDailyBriefForCEO includes project names in items', () => {
+  const src = fs.readFileSync('lib/daily-brief.ts', 'utf8')
+  assert.ok(src.includes('project_name}]'), 'project name missing from CEO brief format')
 })

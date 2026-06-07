@@ -1004,3 +1004,13 @@ Owner-facing task titles and source labels are now consistently clean.
 Applied at task creation time in `ai-skills/create-tasks` and via `cleanTaskTitle` in `createTaskFromAgentMessage`. Applied at render time via `displayTitle` in `SimpleTasksPanel` and `cleanDisplayTitle` in `/home` Next Tasks for any legacy stored tasks.
 
 Source label improvements: `ai_skill` → "AI plan", `strategy_execution_planner` → "Strategy plan", `intensive_work` → "Work cycle", `Web Operator` roles → "Web research", `project_map` → "Strategy plan".
+
+### Daily-Use Blocker Fixes — 2026-06-07
+
+Fixed the top 3 blockers that prevented AÏKO from being useful every day:
+
+**1. Daily brief is now actionable.** Greeting changed from time-of-day ("Good evening") to "Today". `today_summary` now shows the first waiting operator message with Chrome-specific instructions, or the first blocked task with project name. Priority items use `normalizeTaskTitle` — no more raw "Item approved: Web Operator:" titles. Project names appear in every item description. Stale browser blockers are deprioritized to the bottom of the list.
+
+**2. Project resolution scans all project names.** `resolveProjectFromCommand` fetches all active projects and does case-insensitive substring search — "introduce ALB Parking to..." now correctly resolves to ALB Parking instead of silently using the last-active project. Longest match wins. Falls back to trigger-word pattern ("for X", "on X") then latest project only if nothing matches.
+
+**3. Stale operator waiting states can be cleared.** `clear_stale_blocker` action on `PATCH /api/web-operators/[id]` resets the operator to idle, clears pending workflow and waiting reason, writes a note. Does not mark any action as completed. Does not execute anything. `/home` attention card shows "Old blocker" state with Resume/Clear/Open operator buttons for stale blocking states (threshold configurable via `STALE_BLOCKER_HOURS`, default 8h).

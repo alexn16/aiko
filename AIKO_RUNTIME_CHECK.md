@@ -1813,3 +1813,24 @@ Run a genuine owner morning session: get a brief, work on ALB Parking, create co
 - The /home command input adds "for [project]" suffix automatically but only when a project is selected in the UI project picker — which is collapsed by default. The owner doesn't know they need to set that picker.
 - "Good evening" time-of-day greeting was wrong.
 - The CEO response plan format ("I'll do this: 1. ... 2. ...") on every response feels mechanical after a few uses.
+
+---
+
+## Daily-Use Blocker Fixes — 2026-06-07
+
+### Validation
+
+| Blocker | Fix | Result |
+|---|---|---|
+| Daily brief greeting wrong | Changed to "Today" | ✅ `greeting: Today` |
+| today_summary generic count | Now uses first waiting operator message | ✅ "Kevin needs your help in Chrome. Log in to Chrome..." |
+| priority_items had raw titles | Uses `normalizeTaskTitle` | ✅ No `Item approved: Web Operator:` in output |
+| priority_items missing project names | Added `project_name` to item format | ✅ `[ALB Parking]` visible on blocked tasks |
+| "introduce ALB Parking" → wrong project | `resolveProjectFromCommand` scans all project names | ✅ `project_id: 4b283048` (ALB Parking), file saved as `alb-parking-email-draft.md` |
+| Stale waiting operator pollutes /home | `clear_stale_blocker` action added | ✅ Kevin → idle after clear, no action executed |
+| /home shows stale as "Kevin needs your help" | `stale_blocker` attention state | ✅ Old blockers shown separately after STALE_BLOCKER_HOURS |
+
+### Safety
+- `clear_stale_blocker` sets operator to idle, clears workflow, does NOT mark action completed, does NOT execute anything.
+- Fresh waiting operators (< 8 hours) still show "Kevin needs your help in Chrome."
+- Project resolution only reads project names — no silent fallback to wrong project on explicit name mention.

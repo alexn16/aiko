@@ -76,6 +76,8 @@ type DailyBrief = {
     description: string
     href: string
     action_label: string
+    is_stale?: boolean
+    operator_id?: string | null
   }>
   recommended_next_action: {
     title: string
@@ -262,9 +264,12 @@ export default function HomePage() {
   const missingCapability = dailyBrief?.priority_items.find(item => item.type === 'missing_capability') ?? null
   const intensiveWorkPaused = !!(intensiveWork?.state.paused_reason && !intensiveWork?.state.enabled)
   const profileLockedOperator = operators.find(op => op.waiting_reason === 'profile_locked') ?? null
+  const staleBlockerItem = dailyBrief?.priority_items.find(item => item.is_stale && item.operator_id) ?? null
   const attentionState = profileLockedOperator
     ? 'profile_locked'
-    : waitingOperator
+    : staleBlockerItem && !waitingOperator
+      ? 'stale_blocker'
+      : waitingOperator
       ? 'manual'
       : readyOperator
         ? 'ready'
@@ -283,6 +288,19 @@ export default function HomePage() {
       body: JSON.stringify({ status }),
     })
     await refresh()
+  }
+
+  async function clearStaleBlocker(operatorId: string) {
+    try {
+      await fetch(`/api/web-operators/${operatorId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clear_stale_blocker' }),
+      })
+      await refresh()
+    } catch {
+      // non-fatal
+    }
   }
 
   async function resumeKevin() {
@@ -590,7 +608,9 @@ export default function HomePage() {
           ? 'Paused'
           : attentionState === 'profile_locked'
             ? 'Chrome locked'
-            : 'Needs attention'
+            : attentionState === 'stale_blocker'
+              ? 'Old blocker'
+              : 'Needs attention'
 
   return (
     <PageShell
@@ -697,8 +717,10 @@ export default function HomePage() {
             <p style={{ margin: 0, color: '#111827', fontSize: 15, lineHeight: 1.55 }}>
               {attentionState === 'profile_locked'
                 ? 'Chrome profile is already open.'
-                : attentionState === 'manual'
-                  ? 'Kevin needs your help in Chrome. Complete this, then click Resume.'
+                : attentionState === 'stale_blocker'
+                  ? (staleBlockerItem?.description ?? 'Old browser blocker. Resume it or clear it to start fresh.')
+                  : attentionState === 'manual'
+                    ? 'Kevin needs your help in Chrome. Complete this, then click Resume.'
                   : attentionState === 'ready'
                     ? 'Kevin is ready to continue.'
                     : attentionState === 'approval'
@@ -716,6 +738,13 @@ export default function HomePage() {
                 <>
                   <PrimaryAction href="/connect-ai" variant="secondary">Open setup</PrimaryAction>
                   <PrimaryAction href="/operators" variant="secondary">Use AÏKO profile</PrimaryAction>
+                </>
+              )}
+              {attentionState === 'stale_blocker' && staleBlockerItem?.operator_id && (
+                <>
+                  <PrimaryAction href={`/operators/${staleBlockerItem.operator_id}`} variant="secondary">Open operator</PrimaryAction>
+                  <PrimaryAction onClick={resumeKevin} disabled={resumingKevin} variant="secondary">{resumingKevin ? 'Resuming...' : 'Resume'}</PrimaryAction>
+                  <PrimaryAction onClick={() => clearStaleBlocker(staleBlockerItem.operator_id!)} variant="secondary">Clear blocker</PrimaryAction>
                 </>
               )}
               {(attentionState === 'manual' || attentionState === 'ready') && (waitingOperator?.id || readyOperator?.id) && (

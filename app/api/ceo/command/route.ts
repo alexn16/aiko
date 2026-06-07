@@ -108,15 +108,44 @@ function intensiveLevelFromCommand(command: string): IntensiveWorkLevel {
 }
 
 function extractProjectNameFromCommand(command: string): string | null {
-  const match = command.match(/\b(?:for|on)\s+([^,.!?]+?)(?:[,.!?]|\s+until\b|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
-  if (!match) return null
-  return match[1].trim().replace(/\s+/g, ' ')
+  // Trigger-word patterns: "for X", "on X"
+  const triggerMatch = command.match(/\b(?:for|on)\s+([^,.!?]+?)(?:[,.!?]|\s+until\b|\s+the best\b|\s+use\b|\s+can\b|\s+create\b|$)/i)
+  if (triggerMatch) return triggerMatch[1].trim().replace(/\s+/g, ' ')
+  return null
 }
 
-function extractAutopilotProjectName(command: string): string | null {
+/**
+ * Scan command text for any known project name (case/accent-insensitive).
+ * Returns the longest matching project name, or null.
+ * Falls back to extractProjectNameFromCommand if no projects are loaded.
+ */
+async function resolveProjectFromCommand(command: string): Promise<string | null> {
+  // First try the trigger-word pattern (fast, no DB)
+  const triggerName = extractProjectNameFromCommand(command)
+
+  // Then scan all project names for a direct mention
+  try {
+    const res = await db.query(`SELECT name FROM projects WHERE active=true ORDER BY created_at DESC`)
+    const names: string[] = res.rows.map((r: Record<string, unknown>) => String(r.name))
+    // Sort longest-first so "Codex Validation Demo" beats "Codex"
+    names.sort((a, b) => b.length - a.length)
+    const lower = command.toLowerCase()
+    for (const name of names) {
+      const lowerName = name.toLowerCase()
+      if (lower.includes(lowerName)) return name
+    }
+  } catch {
+    // DB unavailable — fall back to trigger pattern only
+  }
+
+  return triggerName
+}
+
+async function extractAutopilotProjectName(command: string): Promise<string | null> {
   if (/\bpromote\s+a[ïi]ko\b/i.test(command)) return 'AÏKO'
-  const forName = extractProjectNameFromCommand(command)
-  if (forName) return forName
+  // Full resolver: exact project name anywhere in command wins
+  const resolved = await resolveProjectFromCommand(command)
+  if (resolved) return resolved
   const promoteMatch = command.match(/\bpromote\s+([^,.!?]+?)(?:$|[,.!?])/i)
   if (promoteMatch && !/^(this project)$/i.test(promoteMatch[1].trim())) {
     return promoteMatch[1].trim().replace(/\s+/g, ' ')
@@ -212,7 +241,7 @@ async function handleProjectAutopilotMarketingCommand(command: string, classific
   if (classification.intent !== 'project_autopilot_marketing' && !isProjectAutopilotMarketingIntent(command)) return null
 
   const classifiedProject = classification.project_reference
-  const projectNameHint = classifiedProject.name ?? extractAutopilotProjectName(command)
+  const projectNameHint = classifiedProject.name ?? await extractAutopilotProjectName(command)
   const project = classifiedProject.id
     ? await getActiveProjectById(classifiedProject.id)
     : projectNameHint && projectNameHint !== 'AÏKO'
@@ -413,7 +442,7 @@ async function handleIntensiveWorkCommand(command: string): Promise<NextResponse
   if (!isStartIntensiveWorkIntent(command)) return null
 
   const level = intensiveLevelFromCommand(command)
-  const projectName = extractProjectNameFromCommand(command)
+  const projectName = await resolveProjectFromCommand(command)
   const project = projectName ? await findProjectByNameOrAlias(projectName) : await getLatestActiveProject()
   const state = await setIntensiveWorkState({ enabled: true, level, paused_reason: null })
   const queued = project?.id
@@ -684,7 +713,10 @@ export async function POST(request: NextRequest) {
       if (shouldRunInternalAISkill(command.trim(), classification)) {
         const { executeAISkill, recommendAISkillForPrompt } = await import('@/lib/ai-skills')
         const skillId = recommendAISkillForPrompt(command.trim())
-        const projectId = classification.project_reference.id ?? null
+        // Prefer a project explicitly named in the command over the UI-selected project
+        const explicitProjectName = await resolveProjectFromCommand(command.trim())
+        const explicitProject = explicitProjectName ? await findProjectByNameOrAlias(explicitProjectName) : null
+        const projectId = explicitProject?.id ?? classification.project_reference.id ?? null
         const shouldSave = /\b(save|export|markdown|file)\b/i.test(command.trim())
         const output = await executeAISkill(skillId, {
           prompt: command.trim(),

@@ -61,6 +61,19 @@ export async function PATCH(
       await markUserControlling(id)
       return NextResponse.json({ success: true })
     }
+    if (body.action === 'clear_stale_blocker') {
+      // Clears a stale waiting-user blocker so the owner can start fresh.
+      // Does NOT mark any action as completed. Does NOT execute anything.
+      const { updateOperatorStatus, updateOperatorMemory, clearOperatorWorkflow } = await import('@/lib/web-operator/operators')
+      await updateOperatorMemory(id, {
+        requires_user_input: false,
+        waiting_reason: null,
+        memory_summary: 'Stale browser blocker cleared by owner.',
+      })
+      await clearOperatorWorkflow(id)
+      await updateOperatorStatus(id, 'idle', { current_task: 'Cleared stale blocker.' })
+      return NextResponse.json({ success: true, message: 'Stale browser blocker cleared. Kevin is now idle.' })
+    }
 
     const { status, project_id, current_task } = body as {
       status?: string
