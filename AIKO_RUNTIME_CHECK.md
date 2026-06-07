@@ -1660,3 +1660,22 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 - No approval auto-executed.
 - No send/post/publish/message.
 - No raw stack traces in any API response.
+
+---
+
+## Chrome Owner Workflow Polish — 2026-06-07
+
+### Validation
+
+| Check | Result |
+|---|---|
+| `/api/browser/setup` no filesystem paths | ✅ No home path, no /Library/, no data dir, no executable |
+| Operators show `waiting_reason` (login_required, security_checkpoint) | ✅ |
+| 386/386 tests pass | ✅ |
+| Build clean | ✅ |
+
+### Changes
+- `/connect-ai` BrowserModeCard: Chrome found/profile status indicators, collapsible 4-step setup guide, profile lock warning
+- `/operators` per-card: "Browser: Normal Chrome" in footer, Chrome-specific notice copy per `waiting_reason`
+- `/home` attention card: new `profile_locked` state, Chrome-specific manual copy, "Open setup" + "Use AÏKO profile" buttons
+- `AIKO_OWNER_OPERATING_MANUAL.md`: "Choosing a Browser for Kevin" section with setup guide and profile lock advice

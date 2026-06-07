@@ -71,3 +71,33 @@ WEB_OPERATOR_CHROME_PROFILE_DIRECTORY=      # override profile dir name (e.g. "A
 - No exporting cookies or tokens
 - No auto-send/post/publish
 - No Chrome launch during npm test or npm run build
+
+---
+
+## Chrome Owner Workflow Polish — 2026-06-07
+
+### UI improvements
+
+**`/connect-ai` BrowserModeCard:**
+- Shows Chrome found/not found, profile directory, ready status with check/warning icons
+- "Show setup steps" toggle reveals a 4-step numbered guide
+- "If Chrome is already open" warning inline (no Advanced needed)
+- Full filesystem paths never shown (only mode label, found status, profile name)
+
+**`/operators` per-card browser status:**
+- "Browser: Normal Chrome · [project name]" shown on each card
+- `operatorNotice` distinguishes profile_locked, login_required, captcha_detected, security_checkpoint with Chrome-specific copy
+
+**`/home` attention card:**
+- New `profile_locked` attention state takes priority over `manual`
+- Shows "Chrome profile is already open." with "Open setup" and "Use AÏKO profile" buttons
+- `manual` state shows "Kevin needs your help in Chrome." (Chrome-specific copy)
+
+### Operator page copy improvements
+
+| Waiting reason | Message |
+|---|---|
+| `profile_locked` | "Chrome profile is already open. Close Chrome or use a dedicated AÏKO Chrome profile." |
+| `login_required` | "Kevin needs your help. Log in to Chrome, then click Resume." |
+| `captcha_detected` | "Kevin needs your help. Complete the CAPTCHA in Chrome, then click Resume." |
+| `security_checkpoint` | "Kevin needs your help. Complete the security check in Chrome, then click Resume." |

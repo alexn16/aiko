@@ -242,17 +242,20 @@ export default function HomePage() {
   const pendingApproval = approvalItems.find(item => item.status === 'pending') ?? null
   const missingCapability = dailyBrief?.priority_items.find(item => item.type === 'missing_capability') ?? null
   const intensiveWorkPaused = !!(intensiveWork?.state.paused_reason && !intensiveWork?.state.enabled)
-  const attentionState = waitingOperator
-    ? 'manual'
-    : readyOperator
-      ? 'ready'
-      : pendingApproval
-      ? 'approval'
-      : missingCapability
-        ? 'missing'
-        : intensiveWorkPaused
-          ? 'intensive_paused'
-          : 'clear'
+  const profileLockedOperator = operators.find(op => op.waiting_reason === 'profile_locked') ?? null
+  const attentionState = profileLockedOperator
+    ? 'profile_locked'
+    : waitingOperator
+      ? 'manual'
+      : readyOperator
+        ? 'ready'
+        : pendingApproval
+          ? 'approval'
+          : missingCapability
+            ? 'missing'
+            : intensiveWorkPaused
+              ? 'intensive_paused'
+              : 'clear'
 
   async function updateApproval(id: string, status: 'approved' | 'rejected') {
     await fetch(`/api/approval-items/${id}`, {
@@ -566,7 +569,9 @@ export default function HomePage() {
         ? 'Blocked'
         : attentionState === 'intensive_paused'
           ? 'Paused'
-          : 'Needs attention'
+          : attentionState === 'profile_locked'
+            ? 'Chrome locked'
+            : 'Needs attention'
 
   return (
     <PageShell
@@ -671,21 +676,29 @@ export default function HomePage() {
               <span style={{ color: '#6b7280', fontSize: 13 }}>{activeOperator?.name ?? 'Kevin'}</span>
             </div>
             <p style={{ margin: 0, color: '#111827', fontSize: 15, lineHeight: 1.55 }}>
-              {attentionState === 'manual'
-                ? 'Kevin needs your help. Complete this in the browser, then click Resume.'
-                : attentionState === 'ready'
-                  ? 'Kevin is ready to continue.'
-                  : attentionState === 'approval'
-                    ? 'Kevin needs approval before doing this.'
-                    : attentionState === 'missing'
-                      ? 'AÏKO cannot do this yet.'
-                      : attentionState === 'intensive_paused'
-                        ? 'Intensive Work is paused.'
-                        : activeOperator?.status === 'working'
-                          ? (activeOperator.current_task ?? 'Kevin is working.')
-                          : 'Kevin is idle.'}
+              {attentionState === 'profile_locked'
+                ? 'Chrome profile is already open.'
+                : attentionState === 'manual'
+                  ? 'Kevin needs your help in Chrome. Complete this, then click Resume.'
+                  : attentionState === 'ready'
+                    ? 'Kevin is ready to continue.'
+                    : attentionState === 'approval'
+                      ? 'Kevin needs approval before doing this.'
+                      : attentionState === 'missing'
+                        ? 'AÏKO cannot do this yet.'
+                        : attentionState === 'intensive_paused'
+                          ? 'Intensive Work is paused.'
+                          : activeOperator?.status === 'working'
+                            ? (activeOperator.current_task ?? 'Kevin is working.')
+                            : 'Kevin is idle.'}
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
+              {attentionState === 'profile_locked' && (
+                <>
+                  <PrimaryAction href="/connect-ai" variant="secondary">Open setup</PrimaryAction>
+                  <PrimaryAction href="/operators" variant="secondary">Use AÏKO profile</PrimaryAction>
+                </>
+              )}
               {(attentionState === 'manual' || attentionState === 'ready') && (waitingOperator?.id || readyOperator?.id) && (
                 <>
                   <PrimaryAction href={`/operators/${(waitingOperator ?? readyOperator)!.id}`} variant="secondary">Open browser</PrimaryAction>

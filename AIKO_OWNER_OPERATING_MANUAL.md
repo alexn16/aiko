@@ -99,6 +99,34 @@ Plan the next 7 days of marketing work for [project]. Include daily tasks, owner
 
 Then verify the result in the project workspace. Check whether a Project Manager is assigned, whether the launch checklist has progressed, whether leads exist, and whether any Web Operator action is waiting for manual takeover.
 
+## Choosing a Browser for Kevin
+
+AÏKO supports three browser modes:
+
+| Mode | Browser | Logins |
+|---|---|---|
+| `persistent` (default) | Playwright Chromium | Persist in AÏKO-managed profile |
+| `system_chrome` | Your installed Google Chrome | Use an existing Chrome profile |
+| `isolated` | Playwright Chromium | No login persistence |
+
+### Recommended: Normal Chrome setup
+
+1. Open Google Chrome and create a new profile named **AÏKO**.
+2. In that profile, log into Canva, Gmail, LinkedIn, or any site Kevin should use.
+3. Add to `.env.local`:
+   ```
+   WEB_OPERATOR_BROWSER_MODE=system_chrome
+   WEB_OPERATOR_HEADLESS=false
+   WEB_OPERATOR_CHROME_PROFILE_DIRECTORY=AÏKO
+   ```
+4. Restart AÏKO.
+
+Kevin will reuse those logins instead of asking every time.
+
+### Profile lock
+
+If you see "Chrome profile is already open": close the Chrome window using the AÏKO profile, or switch back to `persistent` mode (`WEB_OPERATOR_BROWSER_MODE=persistent`).
+
 ## Supervising Web Operators
 
 Open `/operators` for the fleet view or `/operators/[id]` for an active operator.
@@ -109,10 +137,10 @@ Web Operators use:
 - Playbook step tracking for transparent progress.
 - Manual takeover for login, CAPTCHA, QR, 2FA, and security checkpoints.
 
-For visible local validation, start the app with:
+For visible local validation with Normal Chrome:
 
 ```bash
-WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+WEB_OPERATOR_BROWSER_MODE=system_chrome WEB_OPERATOR_HEADLESS=false AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 ```
 
 On the operator detail page, check:

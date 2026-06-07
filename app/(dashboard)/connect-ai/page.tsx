@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { AdvancedDisclosure } from '@/components/ui/AdvancedDisclosure'
@@ -606,21 +606,34 @@ function SetupDrawer({ entry, diagnostics, onClose, onSaved }: { entry: Provider
   )
 }
 
-function BrowserModeCard({ setup }: { setup: { mode: string; chrome_found: boolean; ready: boolean; owner_message: string; setup_instructions: string } | null }) {
+function BrowserModeCard({ setup }: { setup: { mode: string; chrome_found: boolean; chrome_profile_directory?: string; ready: boolean; owner_message: string; setup_instructions: string } | null }) {
+  const [showSetup, setShowSetup] = React.useState(false)
+  const mode = setup?.mode ?? 'loading'
   const modeLabel =
-    setup?.mode === 'system_chrome' ? 'Normal Chrome' :
-    setup?.mode === 'persistent' ? 'AÏKO profile' :
-    setup?.mode === 'isolated' ? 'Isolated' : 'Loading...'
+    mode === 'system_chrome' ? 'Normal Chrome' :
+    mode === 'persistent' ? 'AÏKO profile' :
+    mode === 'isolated' ? 'Isolated' : 'Loading...'
+
+  const isSystemChrome = mode === 'system_chrome'
+  const chromeFound = setup?.chrome_found ?? false
+  const profileSet = setup?.chrome_profile_directory && setup.chrome_profile_directory !== 'Default'
+  const ready = setup?.ready ?? false
 
   const tone: 'green' | 'amber' | 'gray' =
-    setup?.mode === 'system_chrome' && setup.chrome_found ? 'green' :
-    setup?.mode === 'persistent' ? 'green' :
-    setup?.mode === 'system_chrome' && !setup?.chrome_found ? 'amber' :
+    mode === 'system_chrome' && chromeFound ? 'green' :
+    mode === 'persistent' ? 'green' :
+    mode === 'system_chrome' && !chromeFound ? 'amber' :
     'gray'
 
+  const statusRows: Array<{ label: string; value: string; ok: boolean }> = isSystemChrome ? [
+    { label: 'Chrome', value: chromeFound ? 'Found' : 'Not found', ok: chromeFound },
+    { label: 'Profile', value: profileSet ? `${setup?.chrome_profile_directory}` : 'Using Default (recommended: create an AÏKO profile)', ok: true },
+    { label: 'Ready', value: ready ? 'Yes' : 'Needs setup', ok: ready },
+  ] : []
+
   return (
-    <section data-testid="browser-mode-card" style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: 18, marginTop: 18, background: '#fff' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+    <section data-testid="browser-mode-card" style={{ border: '1px solid #e2e8f0', borderRadius: 14, padding: 20, marginTop: 18, background: '#fff' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Browser for Kevin</div>
         <span style={{
           fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 9px',
@@ -629,10 +642,52 @@ function BrowserModeCard({ setup }: { setup: { mode: string; chrome_found: boole
           border: `1px solid ${tone === 'green' ? '#86efac' : tone === 'amber' ? '#fde68a' : '#e2e8f0'}`,
         }}>{modeLabel}</span>
       </div>
-      <p style={{ margin: '0 0 10px', color: '#475569', fontSize: 13, lineHeight: 1.5 }}>
+
+      <p style={{ margin: '0 0 12px', color: '#374151', fontSize: 13, lineHeight: 1.55 }}>
         {setup?.owner_message ?? 'Loading browser status...'}
       </p>
-      {setup?.setup_instructions && (
+
+      {statusRows.length > 0 && (
+        <div style={{ display: 'grid', gap: 4, marginBottom: 14 }}>
+          {statusRows.map(row => (
+            <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+              <span style={{ color: row.ok ? '#059669' : '#d97706', fontWeight: 900, minWidth: 12 }}>{row.ok ? '✓' : '!'}</span>
+              <span style={{ color: '#64748b', minWidth: 60 }}>{row.label}:</span>
+              <span style={{ color: '#374151' }}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isSystemChrome && !profileSet && (
+        <div style={{ marginBottom: 14 }}>
+          <button
+            onClick={() => setShowSetup(s => !s)}
+            style={{ fontSize: 12, color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}
+          >
+            {showSetup ? 'Hide setup steps' : 'Show setup steps'}
+          </button>
+          {showSetup && (
+            <ol data-testid="chrome-setup-steps" style={{ margin: '10px 0 0', paddingLeft: 18, color: '#374151', fontSize: 12, lineHeight: 1.7 }}>
+              <li>Open Google Chrome and create a new profile named <strong>AÏKO</strong>.</li>
+              <li>In that profile, log into Canva, Gmail, LinkedIn, or any site Kevin should use.</li>
+              <li>Add to <code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: 3 }}>.env.local</code>:<br />
+                <code style={{ background: '#f1f5f9', padding: '4px 6px', borderRadius: 3, display: 'inline-block', marginTop: 4 }}>WEB_OPERATOR_BROWSER_MODE=system_chrome</code><br />
+                <code style={{ background: '#f1f5f9', padding: '4px 6px', borderRadius: 3, display: 'inline-block', marginTop: 2 }}>WEB_OPERATOR_CHROME_PROFILE_DIRECTORY=AÏKO</code>
+              </li>
+              <li>Restart AÏKO (<code style={{ background: '#f1f5f9', padding: '1px 4px', borderRadius: 3 }}>npm run dev</code>).</li>
+            </ol>
+          )}
+        </div>
+      )}
+
+      {isSystemChrome && (
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+          <strong style={{ color: '#374151' }}>If Chrome is already open:</strong> Close that Chrome window or create a separate AÏKO Chrome profile to avoid profile lock conflicts.
+        </div>
+      )}
+
+      {!isSystemChrome && setup?.setup_instructions && (
         <p style={{ margin: 0, color: '#64748b', fontSize: 12, lineHeight: 1.5 }}>
           {setup.setup_instructions}
         </p>

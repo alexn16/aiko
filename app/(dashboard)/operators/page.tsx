@@ -61,18 +61,33 @@ interface Project { id: string; name: string }
 
 function operatorNotice(op: WebOperator): { title: string; text: string } | null {
   if (op.status === 'waiting_approval') {
+    return { title: 'Approval needed', text: 'Kevin needs approval before doing this.' }
+  }
+  if (op.waiting_reason === 'profile_locked') {
     return {
-      title: 'Approval needed',
-      text: 'Kevin needs approval before doing this.',
+      title: 'Chrome profile is already open',
+      text: 'Close Chrome or use a dedicated AÏKO Chrome profile.',
     }
   }
   if (op.status === 'waiting_user' || op.status === 'ready_to_resume' || op.requires_user_input) {
-    return {
-      title: 'Kevin needs your help',
-      text: 'Complete this in the browser, then click Resume.',
-    }
+    const isLogin = op.waiting_reason === 'login_required'
+    const isCaptcha = op.waiting_reason === 'captcha_detected'
+    const isSecurity = op.waiting_reason === 'security_checkpoint'
+    const text =
+      isLogin ? 'Kevin needs your help. Log in to Chrome, then click Resume.' :
+      isCaptcha ? 'Kevin needs your help. Complete the CAPTCHA in Chrome, then click Resume.' :
+      isSecurity ? 'Kevin needs your help. Complete the security check in Chrome, then click Resume.' :
+      'Kevin needs your help in Chrome. Complete this, then click Resume.'
+    return { title: 'Kevin needs your help', text }
   }
   return null
+}
+
+function browserStatusLabel(mode: string): string {
+  if (mode === 'system_chrome') return 'Normal Chrome'
+  if (mode === 'persistent') return 'AÏKO profile'
+  if (mode === 'isolated') return 'Isolated'
+  return 'Unknown'
 }
 
 export default function OperatorsPage() {
@@ -254,7 +269,9 @@ export default function OperatorsPage() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginTop: 14 }}>
                 <PrimaryAction href={`/operators/${op.id}`}>Open</PrimaryAction>
-                <span style={{ fontSize: 12, color: '#9ca3af' }}>{op.project_name ?? 'No project'}</span>
+                <span style={{ fontSize: 11, color: '#9ca3af' }}>
+                  Browser: {browserStatusLabel(browserMode)} · {op.project_name ?? 'No project'}
+                </span>
               </div>
 
               <AdvancedDisclosure>

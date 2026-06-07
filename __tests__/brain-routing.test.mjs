@@ -5748,3 +5748,64 @@ test('329. /operators page shows browser mode in subtitle', () => {
   assert.ok(src.includes('browserMode'), 'browserMode state missing')
   assert.ok(src.includes('/api/browser/setup'), 'setup API call missing from operators')
 })
+
+// ── Chrome owner workflow polish tests (2026-06-07) ──────────────────────────
+
+test('330. connect-ai browser card hides full filesystem paths', () => {
+  const src = fs.readFileSync('app/(dashboard)/connect-ai/page.tsx', 'utf8')
+  // The API response (from /api/browser/setup) must not include raw paths
+  // The card only shows chrome_profile_directory (profile name, not full path)
+  assert.ok(src.includes('chrome_profile_directory'), 'profile directory shown')
+  // Full paths like /Library/ or /home/ must not appear in the rendered card JSX
+  const cardFn = src.slice(src.indexOf('function BrowserModeCard'))
+  assert.ok(!cardFn.includes('/Library/'), 'macOS Library path in card')
+  assert.ok(!cardFn.includes('/home/'), 'Linux home path in card')
+  assert.ok(!cardFn.includes('chrome_user_data_dir'), 'data dir exposed in card')
+})
+
+test('331. browser setup endpoint does not return raw userDataDir', () => {
+  const src = fs.readFileSync('app/api/browser/setup/route.ts', 'utf8')
+  // The response must not include chrome_user_data_dir or chrome_executable
+  assert.ok(!src.includes('chrome_executable:'), 'executable path must not be in response')
+  assert.ok(!src.includes('chrome_user_data_dir:'), 'data dir must not be in response')
+})
+
+test('332. profile_locked maps to owner-friendly copy on operators page', () => {
+  const src = fs.readFileSync('app/(dashboard)/operators/page.tsx', 'utf8')
+  assert.ok(src.includes("waiting_reason === 'profile_locked'"), 'profile_locked check missing')
+  assert.ok(src.includes('Chrome profile is already open'), 'friendly profile lock message missing')
+  assert.ok(src.includes('dedicated AÏKO Chrome profile'), 'AÏKO profile suggestion missing')
+})
+
+test('333. home shows profile_locked attention state', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes("attentionState === 'profile_locked'"), 'profile_locked attention state missing')
+  assert.ok(src.includes('Chrome profile is already open.'), 'profile lock message missing from home')
+  assert.ok(src.includes('Open setup'), 'setup button missing from profile_locked state')
+})
+
+test('334. operators page shows browser mode status per card', () => {
+  const src = fs.readFileSync('app/(dashboard)/operators/page.tsx', 'utf8')
+  assert.ok(src.includes('browserStatusLabel'), 'browserStatusLabel function missing')
+  assert.ok(src.includes("Normal Chrome"), 'Normal Chrome label missing in operator card')
+  assert.ok(src.includes("AÏKO profile"), 'AÏKO profile label missing')
+})
+
+test('335. connect-ai shows Chrome setup steps', () => {
+  const src = fs.readFileSync('app/(dashboard)/connect-ai/page.tsx', 'utf8')
+  assert.ok(src.includes('chrome-setup-steps'), 'setup steps testid missing')
+  assert.ok(src.includes('WEB_OPERATOR_BROWSER_MODE=system_chrome'), 'env var instruction missing')
+  assert.ok(src.includes('WEB_OPERATOR_CHROME_PROFILE_DIRECTORY'), 'profile dir instruction missing')
+  assert.ok(src.includes('Show setup steps'), 'toggle button missing')
+})
+
+test('336. no browser opens during tests (assertNotTest guard)', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  // Both launch functions must have the test guard
+  const launchBrowserIdx = src.indexOf('export async function launchBrowser')
+  const launchPersistentIdx = src.indexOf('export async function launchPersistentBrowserContext')
+  const assertInLaunchBrowser = src.indexOf('assertNotTest', launchBrowserIdx) < launchPersistentIdx
+  const assertInPersistent = src.indexOf('assertNotTest', launchPersistentIdx) > launchPersistentIdx
+  assert.ok(assertInLaunchBrowser, 'assertNotTest missing from launchBrowser')
+  assert.ok(assertInPersistent, 'assertNotTest missing from launchPersistentBrowserContext')
+})
