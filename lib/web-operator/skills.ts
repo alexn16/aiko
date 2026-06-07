@@ -257,7 +257,8 @@ export function inferUnknownWebsiteFromInstruction(text: string): string | null 
   const match = withoutUrls.match(/(?:work on|research on|use|open|browse)\s+([A-Z][\w.-]{2,}|[a-z][\w.-]+\.[a-z]{2,})/i)
   if (!match) return null
   const candidate = match[1].replace(/[.,!?;:]$/, '')
-  const known = ['canva', 'facebook', 'linkedin', 'gmail', 'instagram', 'google', 'web', 'and', 'or', 'the', 'a', 'an']
+  const known = ['canva', 'facebook', 'linkedin', 'gmail', 'instagram', 'google', 'web', 'and', 'or', 'the', 'a', 'an',
+    'relevant', 'useful', 'popular', 'good', 'best', 'top', 'some', 'any', 'multiple', 'various', 'different', 'new']
   if (known.includes(candidate.toLowerCase())) return null
   return candidate
 }
