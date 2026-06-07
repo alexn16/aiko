@@ -180,6 +180,25 @@ function simpleStatus(op?: Operator | null, pendingApprovalCount = 0): { label: 
   return { label: 'Done', tone: '#059669', message: 'No active browser task right now.' }
 }
 
+function cleanDisplayTitle(title: string, status?: string): string {
+  if (!title) return 'Task'
+  let s = title
+    .replace(/^(Blocked|Completed|Failed|Search|Task|AI Skill|Web Operator|Open URL|Open url|Browse):\s*/i, '')
+    .replace(/^Item approved?:\s*/i, '')
+    .replace(/^Web Operator:\s*/i, '')
+    .replace(/https?:\/\/([^\s/]+)[^\s]*/g, '$1')
+    .replace(/[,.]?\s*[Ii]nternally\.?(\s+[Nn]o external[^.]*\.?)?$/, '')
+    .replace(/\s+in\s+(?:their|the)\s+(?:dedicated\s+)?browser\s+session\.?$/i, '')
+    .trim()
+  if (status === 'blocked' && (s.length > 70 || /^(search|open|browse|http)/i.test(s))) return 'Resolve blocker'
+  if (!s) return 'Task'
+  s = s.charAt(0).toUpperCase() + s.slice(1)
+  if (s.length <= 70) return s
+  const cut = s.slice(0, 70)
+  const sp = cut.lastIndexOf(' ')
+  return (sp > 40 ? cut.slice(0, sp) : cut) + '…'
+}
+
 function sanitizeMessage(message: string | undefined): string {
   if (!message) return ''
   const withoutPlan = message.replace(/^I'll do this:\n(?:\d+\.\s.*\n?)+\n*/i, '')
@@ -731,7 +750,7 @@ export default function HomePage() {
               <div style={{ display: 'grid', gap: 12 }}>
                 {tasks.slice(0, 3).map(task => (
                   <div key={task.id} style={{ display: 'grid', gap: 4 }}>
-                    <div style={{ color: '#111827', fontSize: 14, fontWeight: 720, lineHeight: 1.35 }}>{task.title}</div>
+                    <div style={{ color: '#111827', fontSize: 14, fontWeight: 720, lineHeight: 1.35 }}>{cleanDisplayTitle(task.title, task.status)}</div>
                     <div style={{ color: '#6b7280', fontSize: 12 }}>
                       {task.project_name ?? 'No project'} · {(task.assigned_agent_name ?? task.owner_role).replace(/_/g, ' ')}
                     </div>

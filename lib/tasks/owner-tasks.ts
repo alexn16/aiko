@@ -42,10 +42,8 @@ export function toAgentTaskStatus(status: string): string {
 }
 
 export function sourceLabel(task: { assigned_by_role?: string | null; task_type?: string | null }): string {
-  if (task.assigned_by_role === 'ai_skill') return 'AI skill'
-  if (task.assigned_by_role === 'strategy_execution_planner') return 'Strategy plan'
-  if (task.task_type?.includes('strategy')) return 'Strategy plan'
-  return task.assigned_by_role?.replace(/_/g, ' ') || 'Manual'
+  const { normalizeSourceLabel } = require('./task-title-normalizer') as typeof import('./task-title-normalizer')
+  return normalizeSourceLabel(task.assigned_by_role, task.task_type)
 }
 
 export function mapOwnerTask(row: Record<string, unknown>): OwnerTask {

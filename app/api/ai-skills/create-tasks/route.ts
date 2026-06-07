@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAgentTask } from '@/lib/agents/tasks'
+import { normalizeTaskTitle, normalizeTaskDescription } from '@/lib/tasks/task-title-normalizer'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,8 +83,8 @@ export async function POST(request: NextRequest) {
         project_id: projectId ?? undefined,
         owner_role,
         assigned_by_role: 'ai_skill',
-        title: item.title.slice(0, 140),
-        description: `${item.description}\n\nSource: ${skillId}. Internal task only; no external action was executed.`,
+        title: normalizeTaskTitle(item.title, { task_type: /research|validate/i.test(item.description) ? 'research' : 'strategy' }),
+        description: normalizeTaskDescription(item.description),
         status: 'planned',
         priority: 'normal',
         task_type: /research|validate|web operator/i.test(item.description) ? 'research' : 'strategy',

@@ -994,3 +994,13 @@ Full owner workflow validated end-to-end with Normal Chrome mode.
 - "Kevin, open Canva" → Chrome opens, pauses at checkpoint with friendly message ✅
 - `/tasks` shows only planning/strategy/agent tasks ✅
 - `/files` shows saved drafts at the top ✅
+
+### Task Title Polish — 2026-06-07
+
+Owner-facing task titles and source labels are now consistently clean.
+
+`lib/tasks/task-title-normalizer.ts` provides `normalizeTaskTitle` (≤70 chars, strips technical prefixes, maps raw prompts to action titles), `normalizeTaskDescription` (strips stack traces, paths, IDs, keeps first 2 sentences), and `normalizeSourceLabel` (maps role/type pairs to human labels like "AI plan", "Strategy plan", "Work cycle").
+
+Applied at task creation time in `ai-skills/create-tasks` and via `cleanTaskTitle` in `createTaskFromAgentMessage`. Applied at render time via `displayTitle` in `SimpleTasksPanel` and `cleanDisplayTitle` in `/home` Next Tasks for any legacy stored tasks.
+
+Source label improvements: `ai_skill` → "AI plan", `strategy_execution_planner` → "Strategy plan", `intensive_work` → "Work cycle", `Web Operator` roles → "Web research", `project_map` → "Strategy plan".

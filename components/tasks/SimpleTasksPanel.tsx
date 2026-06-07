@@ -70,6 +70,26 @@ function formatRole(role: string) {
   return role.replace(/_/g, ' ')
 }
 
+/** Render-time title normalizer — keeps UI clean even for older tasks. */
+function displayTitle(title: string, status?: string): string {
+  if (!title) return 'Task'
+  let s = title
+    .replace(/^(Blocked|Completed|Failed|Search|Task|AI Skill|Web Operator|Open URL|Open url|Browse):\s*/i, '')
+    .replace(/^Item approved?:\s*/i, '')
+    .replace(/^Web Operator:\s*/i, '')
+    .replace(/https?:\/\/([^\s/]+)[^\s]*/g, '$1')
+    .replace(/[,.]?\s*[Ii]nternally\.?(\s+[Nn]o external[^.]*\.?)?$/, '')
+    .replace(/\s+in\s+(?:their|the)\s+(?:dedicated\s+)?browser\s+session\.?$/i, '')
+    .trim()
+  if (status === 'blocked' && (s.length > 70 || /^(search|open|browse|http)/i.test(s))) return 'Resolve blocker'
+  if (!s) return 'Task'
+  s = s.charAt(0).toUpperCase() + s.slice(1)
+  if (s.length <= 70) return s
+  const cut = s.slice(0, 70)
+  const sp = cut.lastIndexOf(' ')
+  return (sp > 40 ? cut.slice(0, sp) : cut) + '…'
+}
+
 function taskAge(iso: string) {
   const diff = Date.now() - new Date(iso).getTime()
   const hours = Math.max(0, Math.round(diff / 36e5))
@@ -228,7 +248,7 @@ export function SimpleTasksPanel({ projectId, compact = false }: Props) {
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 16, alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ color: '#0f172a', fontSize: compact ? 14 : 15, fontWeight: 900, lineHeight: 1.35 }}>
-                      {task.title}
+                      {displayTitle(task.title, task.status)}
                     </div>
                     <div style={{ color: '#64748b', fontSize: 12, marginTop: 5, lineHeight: 1.5 }}>
                       {task.project_name ?? 'No project'} · {task.assigned_agent_name ?? formatRole(task.owner_role)}

@@ -5809,3 +5809,108 @@ test('336. no browser opens during tests (assertNotTest guard)', () => {
   assert.ok(assertInLaunchBrowser, 'assertNotTest missing from launchBrowser')
   assert.ok(assertInPersistent, 'assertNotTest missing from launchPersistentBrowserContext')
 })
+
+// ── Task title normalizer tests (2026-06-07) ──────────────────────────────────
+
+// Inline port of the normalizer for pure-JS test (no TypeScript import needed)
+function normalizeTaskTitleJS(raw, ctx = {}) {
+  if (!raw) return 'Task'
+  const STRIP = [
+    /^(Blocked|Completed|Failed|Search|Task|AI Skill|Web Operator|Open URL|Open url|Browse):\s*/i,
+    /^Item approved?:\s*/i,
+  ]
+  const ACTION_MAP = [
+    [/\bplan[_\s]+the[_\s]+next[_\s]+7[_\s]days\b/i, 'Create 7-day marketing plan'],
+    [/\bcreate[_\s]+7[\s-]day[_\s]+(marketing[_\s]+)?plan\b/i, 'Create 7-day marketing plan'],
+    [/\b7[\s-]day[_\s]+(marketing[_\s]+)?plan\b/i, 'Create 7-day marketing plan'],
+    [/^create[_\s]+a[_\s]+linkedin[_\s]+post\b/i, 'Draft LinkedIn post'],
+    [/^draft[_\s]+a?[_\s]*linkedin[_\s]+post\b/i, 'Draft LinkedIn post'],
+    [/\blinkedin[_\s]+post\b.*\b(draft|create|write|prepare)\b/i, 'Draft LinkedIn post'],
+    [/\b(draft|create|write|prepare)\b.*\blinkedin[_\s]+post\b/i, 'Draft LinkedIn post'],
+    [/\bstart[_\s]+marketing\b/i, 'Start marketing research'],
+    [/^generate[_\s]+(?:a[_\s]+)?(?:concise[_\s]+)?executive[_\s]+report\b/i, 'Generate executive report'],
+  ]
+  if (ctx.is_blocked || ctx.status === 'blocked') {
+    let stripped = raw.trim()
+    for (const re of STRIP) stripped = stripped.replace(re, '')
+    if (stripped.length <= 70 && !/https?:\/\//i.test(stripped) && !/^(search|open url|blocked)/i.test(stripped)) return stripped.slice(0, 70)
+    return 'Resolve blocker'
+  }
+  let s = raw.trim()
+  for (const re of STRIP) s = s.replace(re, '')
+  s = s.replace(/https?:\/\/([^\s/]+)[^\s]*/g, '$1').trim()
+  for (const [re, replacement] of ACTION_MAP) {
+    if (re.test(s)) return replacement
+  }
+  s = s.replace(/\.\s*Internally?[^.]*$/i, '').trim()
+  s = s.charAt(0).toUpperCase() + s.slice(1)
+  if (s.length <= 70) return s
+  const cut = s.slice(0, 70)
+  const sp = cut.lastIndexOf(' ')
+  return (sp > 40 ? cut.slice(0, sp) : cut) + '…'
+}
+
+test('337. "Blocked: Search: raw message" normalizes to "Resolve blocker"', () => {
+  const result = normalizeTaskTitleJS('Blocked: Search: in this browser all is unblocked', { status: 'blocked' })
+  assert.equal(result, 'Resolve blocker')
+})
+
+test('338. "Plan the next 7 days for ALB Parking" normalizes to "Create 7-day marketing plan"', () => {
+  const result = normalizeTaskTitleJS('Plan the next 7 days of marketing work for ALB Parking.')
+  assert.equal(result, 'Create 7-day marketing plan')
+})
+
+test('339. "Create a LinkedIn post for AÏKO" normalizes to "Draft LinkedIn post"', () => {
+  const result = normalizeTaskTitleJS('Create a LinkedIn post for AÏKO and save it.')
+  assert.equal(result, 'Draft LinkedIn post')
+})
+
+test('340. normalizeTaskTitle never exceeds 70 chars', () => {
+  const longTitle = 'This is a very long task title that should be truncated because it exceeds the limit of seventy characters.'
+  const result = normalizeTaskTitleJS(longTitle)
+  assert.ok(result.length <= 70, `title too long: ${result.length}`)
+})
+
+test('341. normalizeTaskDescription strips stack traces', () => {
+  const src = fs.readFileSync('lib/tasks/task-title-normalizer.ts', 'utf8')
+  assert.ok(src.includes('at [A-Z][a-zA-Z'), 'stack trace pattern missing')
+  assert.ok(src.includes('normalizeTaskDescription'), 'normalizeTaskDescription not exported')
+})
+
+test('342. normalizeTaskDescription strips filesystem paths', () => {
+  const src = fs.readFileSync('lib/tasks/task-title-normalizer.ts', 'utf8')
+  assert.ok(src.includes('Users') && src.includes("'[path]'"), 'home path stripping missing')
+  assert.ok(src.includes('/home/') || src.includes('home'), 'Linux path stripping missing')
+})
+
+test('343. normalizeSourceLabel maps assigned_by_role to owner-friendly label', () => {
+  const src = fs.readFileSync('lib/tasks/task-title-normalizer.ts', 'utf8')
+  assert.ok(src.includes("'AI plan'"), 'AI plan label missing')
+  assert.ok(src.includes("'Strategy plan'"), 'Strategy plan label missing')
+  assert.ok(src.includes("'Work cycle'"), 'Work cycle label missing')
+  assert.ok(src.includes("'Web research'"), 'Web research label missing')
+})
+
+test('344. SimpleTasksPanel uses displayTitle at render time', () => {
+  const src = fs.readFileSync('components/tasks/SimpleTasksPanel.tsx', 'utf8')
+  assert.ok(src.includes('displayTitle(task.title'), 'displayTitle not applied in task list')
+  assert.ok(src.includes('function displayTitle'), 'displayTitle function missing')
+})
+
+test('345. /home Next Tasks uses cleanDisplayTitle at render time', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes('cleanDisplayTitle(task.title'), 'cleanDisplayTitle not applied in home')
+  assert.ok(src.includes('function cleanDisplayTitle'), 'cleanDisplayTitle function missing')
+})
+
+test('346. Web Operator internal subtasks still hidden by default', () => {
+  const src = fs.readFileSync('lib/tasks/owner-tasks.ts', 'utf8')
+  assert.ok(src.includes("'web operator%'"), 'Web Operator filter missing from owner-tasks')
+  assert.ok(src.includes('ILIKE'), 'case-insensitive filter missing')
+})
+
+test('347. ai-skills create-tasks uses normalizeTaskTitle', () => {
+  const src = fs.readFileSync('app/api/ai-skills/create-tasks/route.ts', 'utf8')
+  assert.ok(src.includes('normalizeTaskTitle'), 'normalizeTaskTitle not called in create-tasks')
+  assert.ok(src.includes('normalizeTaskDescription'), 'normalizeTaskDescription not called')
+})

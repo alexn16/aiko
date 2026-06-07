@@ -1728,3 +1728,44 @@ Ollama as CEO brain (usable)
 ### Remaining next items (not bugs, quality)
 - Some task titles from strategy execution plans are still long/technical
 - The two failed intensive work items have `unknown_error` — pre-existing, Chrome lock from earlier session
+
+---
+
+## Task Title Polish — 2026-06-07
+
+### Changes
+
+- `lib/tasks/task-title-normalizer.ts`: New module with `normalizeTaskTitle`, `normalizeTaskDescription`, `normalizeSourceLabel`
+- `app/api/ai-skills/create-tasks/route.ts`: Uses `normalizeTaskTitle` + `normalizeTaskDescription` at task creation time
+- `lib/agents/tasks.ts`: `cleanTaskTitle` delegates to `normalizeTaskTitle` (passes status for blocked handling)
+- `lib/tasks/owner-tasks.ts`: `sourceLabel` delegates to `normalizeSourceLabel`
+- `components/tasks/SimpleTasksPanel.tsx`: `displayTitle()` render-time normalizer for legacy stored tasks
+- `app/(dashboard)/home/page.tsx`: `cleanDisplayTitle()` render-time normalizer for Next Tasks
+
+### Source label improvements
+
+| Before | After |
+|---|---|
+| `ai_skill` | AI plan |
+| `strategy_execution_planner` | Strategy plan |
+| `intensive_work` | Work cycle |
+| `web_operator` / `Web Operator (Kevin)` | Web research |
+| `system` | System |
+| `project_map` task type | Strategy plan |
+
+### Title cleanup examples (render-time)
+
+| Stored title | Displayed |
+|---|---|
+| "Prepare Reddit strategy inputs...internally." | "Prepare Reddit strategy inputs and draft materials" |
+| "Item approved: Web Operator: Kevin, prepare the requested Facebook action..." | "Kevin, prepare the requested Facebook action but do not post" |
+| "Blocked: Search: in this browser all is unblocked..." | "Resolve blocker" |
+| "Plan the next 7 days of marketing work for ALB Parking." | "Create 7-day marketing plan" (new tasks) |
+
+### Validation
+
+- 397/397 tests pass
+- Build clean
+- `/tasks` shows no Web Operator internal tasks by default
+- Source labels are human-readable
+- Titles ≤70 chars, no raw prefixes at render time
