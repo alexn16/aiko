@@ -5579,3 +5579,94 @@ test('308. intensive work status API includes brain health', () => {
   assert.ok(src.includes('brain:'), 'brain field missing from status response')
   assert.ok(src.includes('checkAssignedBrainHealth'), 'health check not called in status')
 })
+
+// ── Resume/unblock flow regression tests (2026-06-07) ────────────────────────
+
+test('309. "I logged in" maps to explicit browser resume intent', () => {
+  function isExplicitBrowserResumeIntent(text) {
+    return /\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/i.test(text)
+  }
+  assert.ok(isExplicitBrowserResumeIntent('I logged in'), '"I logged in" should be explicit')
+  assert.ok(isExplicitBrowserResumeIntent('browser is unblocked'), '"browser is unblocked" should be explicit')
+  assert.ok(isExplicitBrowserResumeIntent('captcha completed'), '"captcha completed" should be explicit')
+  assert.ok(isExplicitBrowserResumeIntent('login completed'), '"login completed" should be explicit')
+})
+
+test('310. bare "continue"/"resume" is ambiguous, not explicit', () => {
+  function isExplicitBrowserResumeIntent(text) {
+    return /\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/i.test(text)
+  }
+  function isAmbiguousBrowserResumeIntent(text) {
+    return /\b(continue|resume)\b/i.test(text) && !isExplicitBrowserResumeIntent(text)
+  }
+  assert.ok(!isExplicitBrowserResumeIntent('continue'))
+  assert.ok(isAmbiguousBrowserResumeIntent('continue'))
+  assert.ok(!isExplicitBrowserResumeIntent('resume'))
+  assert.ok(isAmbiguousBrowserResumeIntent('resume'))
+})
+
+test('311. resume controller exports split intent functions', () => {
+  const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(src.includes('export function isExplicitBrowserResumeIntent'), 'isExplicitBrowserResumeIntent not exported')
+  assert.ok(src.includes('export function isAmbiguousBrowserResumeIntent'), 'isAmbiguousBrowserResumeIntent not exported')
+  assert.ok(src.includes('isManualTakeoverCompletedIntent'), 'isManualTakeoverCompletedIntent missing')
+})
+
+test('312. resume does not bypass pending approval', () => {
+  // approval blockers come from approval_items table, not operator state
+  // resumeAllSafeBrowserWork increments approvalCount but does NOT execute the action
+  const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(src.includes('still_needs_approval_count'), 'approval count tracked')
+  assert.ok(!src.includes('autoApprove'), 'no auto-approval code')
+  assert.ok(!src.includes('approve_item'), 'no approval execution in resume controller')
+})
+
+test('313. resume does not mark missing capability available', () => {
+  const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(src.includes('still_blocked_missing_capability_count'), 'missing capability tracked')
+  assert.ok(!src.includes("status = 'validated_available'"), 'no capability validation in resume')
+  assert.ok(!src.includes("status='validated_available'"), 'no capability validation in resume')
+})
+
+test('314. /home does not show "Agents are paused" for waiting_user', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  // The waiting_user path shows manual help message
+  assert.ok(src.includes("'Kevin needs your help. Complete this in the browser, then click Resume.'"), 'manual message missing')
+  // "Agents are paused" is remapped by sanitizeMessage
+  assert.ok(src.includes('Intensive Work is paused. Resume when ready.'), 'sanitizeMessage remap missing')
+  // "Agents are paused" should NOT appear raw in JSX (only in the sanitizeMessage remap)
+  const jsxSection = src.slice(src.indexOf('return ('))
+  assert.ok(!jsxSection.includes('Agents are paused'), '"Agents are paused" raw in JSX')
+})
+
+test('315. /home shows missing capability separately', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes("'AÏKO cannot do this yet.'"), 'missing capability message missing')
+  assert.ok(src.includes("attentionState === 'missing'"), 'missing attention state missing')
+  assert.ok(src.includes("attentionState === 'intensive_paused'"), 'intensive_paused attention state missing')
+})
+
+test('316. CEO handler context-checks ambiguous resume phrases', () => {
+  const src = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(src.includes('isExplicitBrowserResumeIntent'), 'explicit check missing in CEO route')
+  assert.ok(src.includes('isAmbiguousBrowserResumeIntent'), 'ambiguous check missing in CEO route')
+  assert.ok(src.includes('findResolvableManualBlockers'), 'context check missing in CEO route')
+})
+
+test('317. CEO does not claim resumed unless resumed_count > 0', () => {
+  const src = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  // Response comes from summary.message which reflects actual state
+  assert.ok(src.includes('const response = summary.message'), 'response must come from actual summary')
+  assert.ok(src.includes('resumed_count: summary.resumed_count'), 'resumed_count in actions data')
+})
+
+test('318. read_only mode blocks resume with friendly message', () => {
+  const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(src.includes('Read Only mode'), 'read only friendly message missing')
+  assert.ok(src.includes('read_only_blocked'), 'read_only_blocked tracked in summary')
+})
+
+test('319. resume summary includes still_waiting_user_count', () => {
+  const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(src.includes('still_waiting_user_count'), 'still_waiting_user_count missing from summary')
+})

@@ -940,3 +940,16 @@ AÏKO now distinguishes between a provider that is "connected" in the database a
 `/connect-ai` shows a runtime health badge (Usable / Runtime unavailable / Needs re-auth) on the assigned CEO profile card, plus the owner-friendly fix action text.
 
 `runWorkCycle` in the intensive work engine checks brain health before running any work items. If the brain is unavailable, the cycle returns `stopped_reason: brain_unavailable` with a clean owner message — `spawn codex ENOENT` never reaches the owner.
+
+### Manual Unblock and Resume Flow Fix — 2026-06-07
+
+AÏKO now correctly separates browser blockers, approval blockers, and missing capabilities in the resume flow.
+
+Key changes:
+- `isManualTakeoverCompletedIntent` split into `isExplicitBrowserResumeIntent` (always routes) and `isAmbiguousBrowserResumeIntent` (only routes if browser work is waiting)
+- CEO command handler calls `findResolvableManualBlockers()` before acting on bare "continue"/"resume"
+- `resumeReadyOperatorWork` maps raw `modeCheck.reason` to owner-friendly messages
+- `ResumeSummary` now includes `still_waiting_user_count`
+- `/home` attention card: new `intensive_paused` state shows "Intensive Work is paused." with a Resume Intensive Work button
+- `sanitizeMessage` maps "Agents are paused" to "Intensive Work is paused. Resume when ready."
+- `AIKO_RESUME_BLOCKER_AUDIT.md` updated with current state separation documentation

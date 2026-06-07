@@ -18,6 +18,7 @@ export type ResumeSummary = {
   failed_count: number
   errors: string[]
   ready_to_resume_count: number
+  still_waiting_user_count: number
   still_needs_approval_count: number
   still_blocked_missing_capability_count: number
   read_only_blocked: boolean
@@ -40,8 +41,22 @@ const MANUAL_WAITING_REASONS = new Set([
   'two_factor_required',
 ])
 
+/** Unambiguous browser-specific phrases — always route to manual_takeover_completed. */
+export function isExplicitBrowserResumeIntent(text: string): boolean {
+  return /\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/i.test(text)
+}
+
+/**
+ * Broad phrases that may mean browser resume OR something else.
+ * Only route to manual_takeover_completed when browser work is actually waiting.
+ */
+export function isAmbiguousBrowserResumeIntent(text: string): boolean {
+  return /\b(continue|resume)\b/i.test(text)
+}
+
+/** Combined check — use isExplicitBrowserResumeIntent + waiting-operator check for ambiguous phrases. */
 export function isManualTakeoverCompletedIntent(text: string): boolean {
-  return /\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|continue|resume|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/i.test(text)
+  return isExplicitBrowserResumeIntent(text) || isAmbiguousBrowserResumeIntent(text)
 }
 
 export async function findResolvableManualBlockers(): Promise<WebOperator[]> {
@@ -70,7 +85,11 @@ export async function markManualBlockerResolved(operatorId: string): Promise<{ s
 export async function resumeReadyOperatorWork(operatorId: string): Promise<{ success: boolean; message: string }> {
   const modeCheck = await canPerformAction('browse_web', { agent_role: 'web_operator' })
   if (!modeCheck.allowed) {
-    return { success: false, message: modeCheck.reason }
+    const reason = modeCheck.reason
+    if (/paused/i.test(reason)) return { success: false, message: 'AÏKO is paused. Resume Intensive Work first.' }
+    if (/read.?only/i.test(reason)) return { success: false, message: 'AÏKO is in Read Only mode. Switch to Approval mode to let Kevin use the browser.' }
+    if (/approval/i.test(reason)) return { success: false, message: 'This action needs approval before Kevin can continue.' }
+    return { success: false, message: reason }
   }
   return resumeOperatorWorkflow(operatorId)
 }
@@ -142,6 +161,8 @@ export async function resumeAllSafeBrowserWork(): Promise<ResumeSummary> {
     ? `${baseMessage} (${failedCount} operator${failedCount === 1 ? '' : 's'} could not be resumed.)`
     : baseMessage
 
+  const stillWaitingUserCount = details.filter(op => op.status === 'waiting_user' || op.status === 'user_controlling').length
+
   return {
     ok: true,
     intent: 'manual_takeover_completed',
@@ -151,6 +172,7 @@ export async function resumeAllSafeBrowserWork(): Promise<ResumeSummary> {
     failed_count: failedCount,
     errors,
     ready_to_resume_count: readyCount,
+    still_waiting_user_count: stillWaitingUserCount,
     still_needs_approval_count: approvalCount,
     still_blocked_missing_capability_count: missingCapabilityCount,
     read_only_blocked: readOnlyBlocked,

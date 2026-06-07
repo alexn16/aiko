@@ -1549,3 +1549,26 @@ Fix: Added `ownerFriendlyWorkError()` helper in `engine.ts` that maps known syst
 - No secrets, tokens, or raw stack traces in any health response.
 - Provider is never silently switched.
 - Approval and manual takeover safety unchanged.
+
+---
+
+## Manual Unblock and Resume Flow Fix — 2026-06-07
+
+### Runtime validation
+
+| Test | Result | Notes |
+|---|---|---|
+| "in this browser all is unblocked..." → manual_takeover_completed | ✅ | Explicit browser phrase always routes correctly |
+| Bare "continue" routes when browser work waiting | ✅ | Kevin: waiting_user/login_required, Default: waiting_user/security_checkpoint |
+| No ENOENT in resume response | ✅ | |
+| No "Agents are paused" in resume response | ✅ | |
+| still_waiting_user_count tracked | ✅ | 2 operators still in waiting state after mark-resolved |
+| still_blocked_missing_capability_count tracked separately | ✅ | 4 missing capabilities, not marked available |
+| resumed_count = 0 (read_only/no pending actions) | ✅ | No auto-resume without user completing browser help |
+| resume summary owner-friendly message | ✅ | No raw system errors |
+
+### Safety
+- Missing capabilities remain missing (count=4, not marked available).
+- No approvals auto-executed.
+- Approval gates unchanged.
+- "Agents are paused" never reaches owner UI.

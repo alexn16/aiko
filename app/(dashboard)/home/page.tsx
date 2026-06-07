@@ -182,12 +182,13 @@ function simpleStatus(op?: Operator | null, pendingApprovalCount = 0): { label: 
 
 function sanitizeMessage(message: string | undefined): string {
   if (!message) return ''
-  const withoutPlan = message.replace(/^I’ll do this:\n(?:\d+\.\s.*\n?)+\n*/i, '')
+  const withoutPlan = message.replace(/^I'll do this:\n(?:\d+\.\s.*\n?)+\n*/i, '')
   message = withoutPlan.trim() || message
   if (/captcha|login|security|two.?factor|manual_takeover/i.test(message)) {
     return 'Kevin needs your help. Complete this in the browser, then click Resume.'
   }
   if (/approval/i.test(message)) return 'Kevin needs approval before doing this.'
+  if (/agents are paused/i.test(message)) return 'Intensive Work is paused. Resume when ready.'
   if (/playwright|browserType|net::ERR|TimeoutError|stack|selector/i.test(message)) {
     return 'Kevin hit a browser problem. View details if you want the technical reason.'
   }
@@ -240,6 +241,7 @@ export default function HomePage() {
   const readyOperator = operators.find(op => op.status === 'ready_to_resume') ?? null
   const pendingApproval = approvalItems.find(item => item.status === 'pending') ?? null
   const missingCapability = dailyBrief?.priority_items.find(item => item.type === 'missing_capability') ?? null
+  const intensiveWorkPaused = !!(intensiveWork?.state.paused_reason && !intensiveWork?.state.enabled)
   const attentionState = waitingOperator
     ? 'manual'
     : readyOperator
@@ -248,7 +250,9 @@ export default function HomePage() {
       ? 'approval'
       : missingCapability
         ? 'missing'
-        : 'clear'
+        : intensiveWorkPaused
+          ? 'intensive_paused'
+          : 'clear'
 
   async function updateApproval(id: string, status: 'approved' | 'rejected') {
     await fetch(`/api/approval-items/${id}`, {
@@ -556,7 +560,9 @@ export default function HomePage() {
       ? 'Approval needed'
       : attentionState === 'missing'
         ? 'Blocked'
-        : 'Needs attention'
+        : attentionState === 'intensive_paused'
+          ? 'Paused'
+          : 'Needs attention'
 
   return (
     <PageShell
@@ -631,7 +637,7 @@ export default function HomePage() {
             action={<PrimaryAction href="/today" variant="quiet">Open</PrimaryAction>}
           >
             <p style={{ margin: 0, color: '#111827', fontSize: 15, lineHeight: 1.55 }}>
-              {dailyBrief?.today_summary ?? 'Loading today’s brief...'}
+              {dailyBrief?.today_summary ?? "Loading today's brief..."}
             </p>
             <div style={{ marginTop: 18 }}>
               {dailyBrief?.recommended_next_action ? (
@@ -669,9 +675,11 @@ export default function HomePage() {
                     ? 'Kevin needs approval before doing this.'
                     : attentionState === 'missing'
                       ? 'AÏKO cannot do this yet.'
-                      : activeOperator?.status === 'working'
-                        ? (activeOperator.current_task ?? 'Kevin is working.')
-                        : 'Kevin is idle.'}
+                      : attentionState === 'intensive_paused'
+                        ? 'Intensive Work is paused.'
+                        : activeOperator?.status === 'working'
+                          ? (activeOperator.current_task ?? 'Kevin is working.')
+                          : 'Kevin is idle.'}
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
               {(attentionState === 'manual' || attentionState === 'ready') && (waitingOperator?.id || readyOperator?.id) && (
@@ -688,6 +696,9 @@ export default function HomePage() {
               )}
               {attentionState === 'missing' && missingCapability && (
                 <PrimaryAction href={missingCapability.href || '/system'} variant="secondary">View proposal</PrimaryAction>
+              )}
+              {attentionState === 'intensive_paused' && (
+                <PrimaryAction onClick={startIntensiveWork} disabled={loading}>Resume Intensive Work</PrimaryAction>
               )}
             </div>
             {(resumeMessage || workMessage) && <p style={{ ...mutedText, margin: '14px 0 0' }}>{resumeMessage || workMessage}</p>}

@@ -20,7 +20,12 @@ import {
 import { runMarketingResearchAutopilot } from '@/lib/web-operator/marketing-research-runner'
 import { classifyOwnerCommand, type OwnerCommandClassification, type OwnerCommandContext } from '@/lib/brain/orchestrator'
 import { formatDailyBriefForCEO, getDailyBrief } from '@/lib/daily-brief'
-import { isManualTakeoverCompletedIntent, resumeAllSafeBrowserWork } from '@/lib/web-operator/resume-controller'
+import {
+  isExplicitBrowserResumeIntent,
+  isAmbiguousBrowserResumeIntent,
+  resumeAllSafeBrowserWork,
+  findResolvableManualBlockers,
+} from '@/lib/web-operator/resume-controller'
 import {
   enqueueProjectWork,
   runWorkCycle,
@@ -347,7 +352,19 @@ async function handleManualTakeoverCompletedCommand(
   command: string,
   classification: OwnerCommandClassification,
 ): Promise<NextResponse | null> {
-  if (classification.intent !== 'manual_takeover_completed' && !isManualTakeoverCompletedIntent(command)) return null
+  const isExplicit = isExplicitBrowserResumeIntent(command)
+  const isAmbiguous = isAmbiguousBrowserResumeIntent(command)
+  const classifiedAsResume = classification.intent === 'manual_takeover_completed'
+
+  // Nothing looks like a resume intent — skip.
+  if (!isExplicit && !classifiedAsResume && !isAmbiguous) return null
+
+  // For ambiguous phrases ("continue"/"resume"), only handle if browser work is actually waiting.
+  // This applies even when the orchestrator classified it as manual_takeover_completed.
+  if (!isExplicit && isAmbiguous) {
+    const blockers = await findResolvableManualBlockers().catch(() => [])
+    if (blockers.length === 0) return null
+  }
 
   const summary = await resumeAllSafeBrowserWork()
   const response = summary.message

@@ -303,9 +303,13 @@ export function classifyOwnerCommand(input: string, context: OwnerCommandContext
   let shouldCreatePlan = false
   let shouldCreateFile = false
 
-  if (/\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|continue|resume|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/.test(lower)) {
+  const isExplicitBrowserPhrase = /\b(browser is unblocked|all is unblocked|i logged in|i'?m logged in|logged in|login completed|captcha completed|i solved it|use the browser now|you can use (?:it|the browser) now|it is ready|i completed it)\b/.test(lower)
+  const isAmbiguousBrowserPhrase = /\b(continue|resume)\b/.test(lower) && !isExplicitBrowserPhrase
+  // Note: ambiguous phrases like "continue"/"resume" are only confirmed as manual_takeover_completed
+  // by the CEO command handler after checking whether browser work is actually waiting.
+  if (isExplicitBrowserPhrase || isAmbiguousBrowserPhrase) {
     intent = 'manual_takeover_completed'
-    confidence = 0.94
+    confidence = isExplicitBrowserPhrase ? 0.94 : 0.72
     recommendedFlow = 'resume_browser_work'
     recommendedAgent = 'Kevin'
     safetyLevel = 'browser_safe'
