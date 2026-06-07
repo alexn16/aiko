@@ -1,5 +1,6 @@
 import { callAI } from '@/lib/ai/router'
 import { getProjectContext, getProjectExecutiveSummary } from '@/lib/project-context'
+import { formatProjectBrainForPrompt } from '@/lib/project-brain'
 import { getAISkillById, recommendAISkillForPrompt, saveAISkillOutputAsFile, type AISkillOutput } from '@/lib/ai-skills'
 import { getAISkillOutputTemplate, templatePrompt } from '@/lib/ai-skills/output-templates'
 
@@ -265,6 +266,7 @@ export async function executeResearchSkill(input: ExecuteResearchSkillInput): Pr
 
   const projectContext = input.projectId ? await getProjectContext(input.projectId) : null
   const projectName = projectContext?.name ?? null
+  const projectBrainBlock = input.projectId ? await formatProjectBrainForPrompt(input.projectId).catch(() => '') : ''
   const needsWebResearch = externalFactsRequested(input.prompt)
   const template = getAISkillOutputTemplate(skill.skill_id)
 
@@ -293,6 +295,7 @@ export async function executeResearchSkill(input: ExecuteResearchSkillInput): Pr
           `AI skill: ${skill.name} (${skill.skill_id})`,
           `Requested format: ${formatForSkill(skill.skill_id)}`,
           '',
+          ...(projectBrainBlock ? [projectBrainBlock, ''] : []),
           'Project context:',
           projectContextText(projectContext),
           '',

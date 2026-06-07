@@ -5994,3 +5994,82 @@ test('357. formatDailyBriefForCEO includes project names in items', () => {
   const src = fs.readFileSync('lib/daily-brief.ts', 'utf8')
   assert.ok(src.includes('project_name}]'), 'project name missing from CEO brief format')
 })
+
+// ── Project Brain tests (2026-06-07) ──────────────────────────────────────────
+
+test('358. project brain library exports required functions', () => {
+  const src = fs.readFileSync('lib/project-brain.ts', 'utf8')
+  assert.ok(src.includes('export async function getProjectBrain'), 'getProjectBrain missing')
+  assert.ok(src.includes('export async function createOrUpdateProjectBrain'), 'createOrUpdateProjectBrain missing')
+  assert.ok(src.includes('export async function generateProjectBrainFromExistingContext'), 'generateProjectBrainFromExistingContext missing')
+  assert.ok(src.includes('export async function formatProjectBrainForPrompt'), 'formatProjectBrainForPrompt missing')
+  assert.ok(src.includes('export async function getProjectBrainCompleteness'), 'getProjectBrainCompleteness missing')
+})
+
+test('359. formatProjectBrainForPrompt includes one_liner and positioning', () => {
+  const src = fs.readFileSync('lib/project-brain.ts', 'utf8')
+  assert.ok(src.includes('one_liner'), 'one_liner field missing')
+  assert.ok(src.includes('positioning'), 'positioning field missing')
+  assert.ok(src.includes('forbidden_claims'), 'forbidden_claims field missing')
+  assert.ok(src.includes('Project Brain'), 'prompt header missing')
+})
+
+test('360. content executor injects project brain into prompt', () => {
+  const src = fs.readFileSync('lib/ai-skills/content-executor.ts', 'utf8')
+  assert.ok(src.includes('formatProjectBrainForPrompt'), 'formatProjectBrainForPrompt not imported')
+  assert.ok(src.includes('projectBrainBlock'), 'projectBrainBlock variable missing')
+})
+
+test('361. research executor injects project brain into prompt', () => {
+  const src = fs.readFileSync('lib/ai-skills/research-executor.ts', 'utf8')
+  assert.ok(src.includes('formatProjectBrainForPrompt'), 'formatProjectBrainForPrompt not imported')
+  assert.ok(src.includes('projectBrainBlock'), 'projectBrainBlock variable missing')
+})
+
+test('362. project brain API endpoint exists', () => {
+  const src = fs.readFileSync('app/api/projects/[id]/brain/route.ts', 'utf8')
+  assert.ok(src.includes('export async function GET'), 'GET handler missing')
+  assert.ok(src.includes('export async function PUT'), 'PUT handler missing')
+  assert.ok(src.includes("action === 'generate'"), 'generate action missing')
+})
+
+test('363. project brain editor page exists', () => {
+  const src = fs.readFileSync('app/(dashboard)/projects/[id]/brain/page.tsx', 'utf8')
+  assert.ok(src.includes('Project Brain'), 'page title missing')
+  assert.ok(src.includes('completeness'), 'completeness score missing')
+  assert.ok(src.includes('forbidden_claims'), 'forbidden claims field missing')
+  assert.ok(src.includes('Generate from context'), 'generate button missing')
+})
+
+test('364. /home shows project brain completeness', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes('projectBrainScore'), 'projectBrainScore state missing')
+  assert.ok(src.includes('Project Brain:'), 'brain score display missing')
+  assert.ok(src.includes('Edit Brain'), 'edit brain link missing')
+})
+
+test('365. system_chrome does not include --no-sandbox by default', () => {
+  const src = fs.readFileSync('lib/browser/controller.ts', 'utf8')
+  assert.ok(src.includes('WEB_OPERATOR_CHROME_ALLOW_UNSAFE_FLAGS'), 'unsafe flags env var missing')
+  // --no-sandbox should only appear when the env var is set
+  const sandboxIdx = src.indexOf("'--no-sandbox'")
+  const allowIdx = src.indexOf('WEB_OPERATOR_CHROME_ALLOW_UNSAFE_FLAGS')
+  // The --no-sandbox line must come after the env check
+  assert.ok(sandboxIdx > allowIdx, '--no-sandbox must be gated by env var check')
+})
+
+test('366. forbidden claims are included in brain prompt format', () => {
+  const src = fs.readFileSync('lib/project-brain.ts', 'utf8')
+  const formatFn = src.slice(src.indexOf('export async function formatProjectBrainForPrompt'))
+  assert.ok(formatFn.includes('Do NOT claim'), 'forbidden claims heading missing in prompt')
+  assert.ok(formatFn.includes('forbidden_claims'), 'forbidden_claims field referenced in format')
+})
+
+test('367. project brain migration file exists', () => {
+  const exists = fs.existsSync('lib/db/migrations/048_project_brain.sql')
+  assert.ok(exists, 'migration 048_project_brain.sql missing')
+  const src = fs.readFileSync('lib/db/migrations/048_project_brain.sql', 'utf8')
+  assert.ok(src.includes('project_brain_documents'), 'table name missing')
+  assert.ok(src.includes('one_liner'), 'one_liner column missing')
+  assert.ok(src.includes('forbidden_claims'), 'forbidden_claims column missing')
+})

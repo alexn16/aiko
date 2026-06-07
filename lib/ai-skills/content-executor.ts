@@ -1,5 +1,6 @@
 import { callAI } from '@/lib/ai/router'
 import { getProjectContext } from '@/lib/project-context'
+import { formatProjectBrainForPrompt } from '@/lib/project-brain'
 import { getAISkillById, recommendAISkillForPrompt, saveAISkillOutputAsFile, type AISkillOutput } from '@/lib/ai-skills'
 
 export type ExecuteContentSkillInput = {
@@ -78,6 +79,7 @@ export async function executeContentSkill(input: ExecuteContentSkillInput): Prom
 
   const projectContext = input.projectId ? await getProjectContext(input.projectId) : null
   const projectName = projectContext?.name ?? null
+  const projectBrainBlock = input.projectId ? await formatProjectBrainForPrompt(input.projectId).catch(() => '') : ''
   const warning = asksToPublish(input.prompt)
     ? 'Draft created only. Publishing or sending requires approval.'
     : undefined
@@ -107,6 +109,7 @@ export async function executeContentSkill(input: ExecuteContentSkillInput): Prom
           `AI skill: ${skill.name} (${skill.skill_id})`,
           `Requested format: ${platformFormat(skill.skill_id)}`,
           '',
+          ...(projectBrainBlock ? [projectBrainBlock, ''] : []),
           'Project context:',
           projectContextText(projectContext),
           '',

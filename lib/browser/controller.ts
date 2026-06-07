@@ -209,6 +209,12 @@ export async function launchPersistentBrowserContext(profileKey: string): Promis
     mkdirSync(aikoProfileDir, { recursive: true })
 
     try {
+      // system_chrome: use minimal flags to avoid Chrome warnings.
+      // --no-sandbox is intentionally excluded — it causes Chrome warnings and is
+      // unnecessary for local owner use. Only add unsafe flags when explicitly requested.
+      const extraArgs = process.env.WEB_OPERATOR_CHROME_ALLOW_UNSAFE_FLAGS === 'true'
+        ? ['--no-sandbox', '--disable-setuid-sandbox']
+        : []
       return await chromium.launchPersistentContext(aikoProfileDir, {
         executablePath: exe,
         headless: false,
@@ -216,7 +222,7 @@ export async function launchPersistentBrowserContext(profileKey: string): Promis
         args: [
           '--no-first-run',
           '--no-default-browser-check',
-          '--disable-blink-features=AutomationControlled',
+          ...extraArgs,
         ],
       })
     } catch (err) {

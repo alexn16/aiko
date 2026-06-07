@@ -247,6 +247,7 @@ export default function HomePage() {
   const [brainLabel, setBrainLabel] = useState('Checking')
   const [brainUnusable, setBrainUnusable] = useState(false)
   const [brainWarning, setBrainWarning] = useState('')
+  const [projectBrainScore, setProjectBrainScore] = useState<number | null>(null)
   const [modeLabel, setModeLabel] = useState('Checking')
 
   const selectedProject = useMemo(
@@ -378,6 +379,17 @@ export default function HomePage() {
         setBrainUnusable(!bh.usable)
         setBrainWarning(!bh.usable ? bh.owner_message : '')
       }
+    }
+    // Load project brain score for selected project
+    const currentProjectId = projectId || projects[0]?.id
+    if (currentProjectId) {
+      try {
+        const pbRes = await fetch(`/api/projects/${currentProjectId}/brain`)
+        if (pbRes.ok) {
+          const pb = await pbRes.json()
+          setProjectBrainScore(pb?.completeness?.score ?? null)
+        }
+      } catch { /* non-fatal */ }
     }
     if (modeRes?.ok) {
       const data = await modeRes.json()
@@ -684,6 +696,14 @@ export default function HomePage() {
             title="Today"
             action={<PrimaryAction href="/today" variant="quiet">Open</PrimaryAction>}
           >
+            {selectedProject && projectBrainScore !== null && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: 12, color: projectBrainScore >= 70 ? '#166534' : '#92400e' }}>
+                  Project Brain: {projectBrainScore}% complete
+                </span>
+                <a href={`/projects/${selectedProject.id}/brain`} style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 700, textDecoration: 'none' }}>Edit Brain</a>
+              </div>
+            )}
             <p style={{ margin: 0, color: '#111827', fontSize: 15, lineHeight: 1.55 }}>
               {dailyBrief?.today_summary ?? "Loading today's brief..."}
             </p>

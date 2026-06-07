@@ -1834,3 +1834,40 @@ Run a genuine owner morning session: get a brief, work on ALB Parking, create co
 - `clear_stale_blocker` sets operator to idle, clears workflow, does NOT mark action completed, does NOT execute anything.
 - Fresh waiting operators (< 8 hours) still show "Kevin needs your help in Chrome."
 - Project resolution only reads project names — no silent fallback to wrong project on explicit name mention.
+
+---
+
+## Project Brain Memory — 2026-06-07
+
+### Changes
+
+- `lib/project-brain.ts`: New module — `getProjectBrain`, `createOrUpdateProjectBrain`, `generateProjectBrainFromExistingContext`, `formatProjectBrainForPrompt`, `getProjectBrainCompleteness`, `updateProjectBrainSection`.
+- `lib/db/migrations/048_project_brain.sql`: `project_brain_documents` table with one_liner, positioning, target_audience, problem, solution, key_features, differentiators, tone_of_voice, proof_points, forbidden_claims, current_goal, preferred_channels, owner_notes, source_summary, completeness_score.
+- `lib/ai-skills/content-executor.ts`: Injects `formatProjectBrainForPrompt` block before project context in every content skill prompt.
+- `lib/ai-skills/research-executor.ts`: Same injection for research/strategy skills.
+- `app/api/projects/[id]/brain/route.ts`: GET brain + completeness; PUT to update, generate, or preview prompt.
+- `app/(dashboard)/projects/[id]/brain/page.tsx`: Minimalist brain editor with completeness score, all fields, generate button, prompt preview.
+- `/home`: Shows "Project Brain: X% complete" + "Edit Brain" link for active project.
+- `lib/browser/controller.ts`: `--no-sandbox` removed from default system_chrome args; only added when `WEB_OPERATOR_CHROME_ALLOW_UNSAFE_FLAGS=true`.
+- `scripts/seed-aiko-brain.mjs`: Seeds AÏKO project brain at 100% completeness.
+
+### Before / After content quality
+
+**Before (thin context):**
+"Introducing AIKO: Revolutionizing Content Creation... an AI platform for high-quality content creation!"
+
+**After (Project Brain injected):**
+"Introducing AÏKO: Your Private Marketing Operating System... CEO Chat for daily command and strategy... Web Operator Kevin using Normal Chrome... approval-first safety: no auto-send or post without explicit approval."
+
+### Validation
+
+| Check | Result |
+|---|---|
+| AÏKO brain seeded at 100% | ✅ |
+| `/api/projects/[id]/brain` returns brain + completeness | ✅ |
+| LinkedIn draft mentions "Marketing Operating System" | ✅ |
+| LinkedIn draft mentions "Kevin", "Normal Chrome", "approval-first" | ✅ |
+| Project_id = AÏKO project | ✅ |
+| `--no-sandbox` not in default system_chrome args | ✅ |
+| 417/417 tests pass | ✅ |
+| Build clean | ✅ |
