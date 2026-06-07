@@ -1467,3 +1467,48 @@ npm run build
 - No safety model changes.
 - No new Web Operator actions, approvals, or external side effects introduced.
 - Approval gates and manual takeover behavior unchanged.
+
+---
+
+## Intensive Work Runtime Validation — 2026-06-07
+
+### Command
+
+```bash
+AIKO_AUTH_MODE=optional PORT=3001 WEB_OPERATOR_HEADLESS=false npm run dev
+```
+
+### Runtime validation
+
+| Step | Page/API | Result | Notes |
+|---|---|---|---|
+| CEO intensive work command | `/api/ceo/command` | ✅ Pass | `intent=intensive_work`, `level=safe_internal`, `enabled=true`, `external_action_executed=false` |
+| Work queue created | `/api/intensive-work/enqueue-project` | ✅ Pass | 3 items queued for ALB Parking |
+| Bounded cycle runs | `/api/intensive-work/run-cycle` | ✅ Pass | `actions_run≤3`, `stopped_reason` set, no infinite loop |
+| AI provider error message | work cycle | ✅ Fixed | `spawn codex ENOENT` → "AI provider binary not found. Go to Connect AI to verify your provider is installed." |
+| No Web Operator actions from safe_internal | `/api/web-operator/actions` | ✅ Pass | All prior actions from Jun 06, none created by safe_internal mode |
+| No approvals auto-executed | `/api/approval-items` | ✅ Pass | 0 pending, none changed |
+| No blocked item with null reason | status API | ✅ Pass | 0 violations |
+| Pause intensive work | `/api/intensive-work/pause` | ✅ Pass | `enabled=false`, `level=off`, `paused_reason` set |
+| Manual resume intent | CEO Chat "I logged in, continue." | ✅ Pass | `intent=manual_takeover_completed`, correct response |
+| Resume endpoint returns failed_count | `/api/web-operator/resume-browser-work` | ✅ Pass | `failed_count=0`, `errors=[]` |
+| Max actions/cycle respected | status | ✅ Pass | `cycles_today` increments correctly, no unbounded loop |
+
+### Bug fixed during validation
+
+**`spawn codex ENOENT` surfaced as owner-facing cycle message**
+
+The `chatgpt_codex_local` provider was marked connected but the `codex` binary is not installed. The raw OS error `spawn codex ENOENT` was passed through `runWorkItem`'s catch block and returned as the work cycle message.
+
+Fix: Added `ownerFriendlyWorkError()` helper in `engine.ts` that maps known system errors:
+- `spawn ... ENOENT` → "AI provider binary not found. Go to Connect AI to verify your provider is installed."
+- `No AI provider connected` → "No AI provider connected. Go to Connect AI to add one."
+- `ECONNREFUSED / ENOTFOUND / fetch failed` → "AI provider is not reachable. Check your provider connection in Connect AI."
+
+### Safety
+
+- `safe_internal` mode creates no Web Operator actions. ✅
+- No sends, posts, messages, or external side effects. ✅
+- Approval gates unchanged. ✅
+- Manual takeover state handled correctly. ✅
+- Missing capabilities remain missing. ✅

@@ -912,3 +912,17 @@ Default navigation is simplified to Home, CEO, Today, Tasks, Projects, Operators
 `/connect-ai` now shows the current brain and three clear owner paths first: ChatGPT / Codex Local, Ollama Local, and API Key. OAuth app setup, missing environment variable details, saved profiles, and diagnostics are under Advanced.
 
 `/tasks`, `/operators`, `/approvals`, and `/ceo` now hide more technical metadata by default while keeping details available through Advanced/Details disclosures.
+
+### Intensive Work Runtime Validation — 2026-06-07
+
+Full runtime validation of Intensive Work Mode completed.
+
+One bug found and fixed: raw OS error `spawn codex ENOENT` was surfaced as the owner-facing cycle failure message when the `chatgpt_codex_local` provider is marked connected but the binary is not installed. Fixed with `ownerFriendlyWorkError()` in `lib/intensive-work/engine.ts` that maps common system errors to clear owner instructions.
+
+All safety boundaries confirmed:
+- `safe_internal` mode creates no Web Operator actions.
+- Max cycle action limit respected.
+- Pause/resume flow works correctly.
+- Manual browser unblock (`intent=manual_takeover_completed`) routes correctly.
+- Blocked work items all have `blocked_reason`.
+- No approvals auto-executed.

@@ -314,7 +314,7 @@ export async function runWorkItem(itemId: string, state = DEFAULT_STATE): Promis
     }
     return markWorkItem(item.id, 'blocked', { blocked_reason: 'Unsupported work type for this cycle.', output_summary: `Skipped unsupported work type ${item.work_type}.` })
   } catch (err) {
-    return markWorkItem(item.id, 'failed', { blocked_reason: err instanceof Error ? err.message : 'Work item failed.' })
+    return markWorkItem(item.id, 'failed', { blocked_reason: ownerFriendlyWorkError(err) })
   }
 }
 
@@ -413,6 +413,14 @@ async function countMissingCapabilities(): Promise<number> {
      WHERE status NOT IN ('validated_available','rejected','archived')`,
   ).catch(() => ({ rows: [{ n: 0 }] }))
   return Number(res.rows[0]?.n ?? 0)
+}
+
+function ownerFriendlyWorkError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : 'Work item failed.'
+  if (/spawn .+ ENOENT/i.test(msg)) return 'AI provider binary not found. Go to Connect AI to verify your provider is installed.'
+  if (/No AI provider connected/i.test(msg)) return 'No AI provider connected. Go to Connect AI to add one.'
+  if (/ECONNREFUSED|ENOTFOUND|fetch failed/i.test(msg)) return 'AI provider is not reachable. Check your provider connection in Connect AI.'
+  return msg
 }
 
 function isWorkAllowed(workType: string, level: IntensiveWorkLevel): boolean {
