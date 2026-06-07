@@ -222,6 +222,7 @@ async function createAssignedAgentTask(input: RunAgentTaskNowInput): Promise<Age
       }),
     ],
   )
+  if (!res.rows[0]) throw new Error('Agent task insert did not return a row')
   return res.rows[0] as AgentTaskRow
 }
 

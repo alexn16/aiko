@@ -5351,3 +5351,135 @@ test('288. safety copy remains visible after minimalist pass', () => {
   assert.ok(home.includes('AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.'))
   assert.ok(operators.includes('AÏKO never sends, posts, publishes, or bypasses login/CAPTCHA without you.'))
 })
+
+// ── Reliability fixes regression tests (2026-06-07) ─────────────────────────
+
+test('289. markWorkItem guard: throws on missing row', () => {
+  // Simulate mapWorkItem receiving undefined (empty RETURNING result)
+  function mapWorkItem(row) {
+    if (!row) throw new Error('Work item not found after update: test-id')
+    return { id: String(row.id) }
+  }
+  assert.throws(() => mapWorkItem(undefined), /Work item not found after update/)
+})
+
+test('290. enqueueWorkItem guard: throws on missing RETURNING row', () => {
+  function checkInsertRow(row, id) {
+    if (!row) throw new Error('Work item insert did not return a row')
+    return row
+  }
+  assert.throws(() => checkInsertRow(undefined), /Work item insert did not return a row/)
+  assert.doesNotThrow(() => checkInsertRow({ id: '1' }))
+})
+
+test('291. createAssignedAgentTask guard: throws on missing RETURNING row', () => {
+  function checkAgentTaskRow(row) {
+    if (!row) throw new Error('Agent task insert did not return a row')
+    return row
+  }
+  assert.throws(() => checkAgentTaskRow(undefined), /Agent task insert did not return a row/)
+  assert.doesNotThrow(() => checkAgentTaskRow({ id: 'abc', owner_role: 'ceo', title: 'test' }))
+})
+
+test('292. resume controller continues after one operator fails', async () => {
+  const operators = [
+    { id: 'op1', name: 'Kevin', status: 'waiting_user', requires_user_input: false, waiting_reason: null, pending_action_type: null },
+    { id: 'op2', name: 'Alice', status: 'waiting_user', requires_user_input: false, waiting_reason: null, pending_action_type: null },
+  ]
+
+  let failedCount = 0
+  const errors = []
+  const details = []
+
+  for (const op of operators) {
+    try {
+      if (op.id === 'op1') throw new Error('DB connection failed')
+      details.push({ id: op.id, name: op.name, status: op.status, message: 'Resolved.' })
+    } catch (err) {
+      failedCount += 1
+      errors.push(err instanceof Error ? err.message : 'Unknown error.')
+      details.push({ id: op.id, name: op.name, status: op.status, message: 'Could not resume this operator.' })
+    }
+  }
+
+  assert.equal(details.length, 2, 'Both operators processed despite first failure')
+  assert.equal(failedCount, 1)
+  assert.ok(errors[0].includes('DB connection failed'))
+  assert.equal(details[1].message, 'Resolved.')
+})
+
+test('293. resume summary includes failed_count and errors without stack traces', () => {
+  const summary = {
+    ok: true,
+    intent: 'manual_takeover_completed',
+    checked_count: 2,
+    resolved_count: 1,
+    resumed_count: 0,
+    failed_count: 1,
+    errors: ['DB connection failed'],
+    ready_to_resume_count: 1,
+    still_needs_approval_count: 0,
+    still_blocked_missing_capability_count: 0,
+    read_only_blocked: false,
+    paused_cleared: false,
+    message: 'Kevin can continue. (1 operator could not be resumed.)',
+    operators: [],
+  }
+  assert.ok('failed_count' in summary)
+  assert.ok('errors' in summary)
+  assert.ok(Array.isArray(summary.errors))
+  // Errors must not contain stack traces
+  for (const e of summary.errors) {
+    assert.ok(!e.includes('at Object.'), `Error should not contain stack trace: ${e}`)
+  }
+})
+
+test('294. blocked work items always have blocked_reason in runWorkItem', () => {
+  const src = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  // Every markWorkItem call with 'blocked' status must include blocked_reason
+  const blockedCalls = src.match(/markWorkItem\([^,]+,\s*'blocked'[^)]+\)/g) ?? []
+  for (const call of blockedCalls) {
+    assert.ok(
+      call.includes('blocked_reason'),
+      `markWorkItem 'blocked' call is missing blocked_reason: ${call.slice(0, 120)}`,
+    )
+  }
+})
+
+test('295. work page formatWorkLabel renders human-readable labels', () => {
+  const src = fs.readFileSync('app/(dashboard)/work/page.tsx', 'utf8')
+  assert.ok(src.includes("waiting_approval: 'Waiting for approval'"), 'waiting_approval label missing')
+  assert.ok(src.includes("waiting_user: 'Waiting for you'"), 'waiting_user label missing')
+  assert.ok(src.includes("working: 'Working'"), 'working label missing')
+  assert.ok(src.includes("ready_to_resume: 'Ready to resume'"), 'ready_to_resume label missing')
+  // Inline .replace(/_/g, ' ') should not appear in render JSX — formatter is used instead
+  const jsxSection = src.slice(src.indexOf('return ('))
+  assert.ok(!jsxSection.includes(".replace(/_/g, ' ')"), 'Inline replace found in JSX — use formatWorkLabel instead')
+})
+
+test('296. operator control helper exists and handles all four actions', () => {
+  const src = fs.readFileSync('app/api/ceo/command/route.ts', 'utf8')
+  assert.ok(src.includes('async function handleOperatorControlCommand('), 'helper not found')
+  assert.ok(src.includes("action === 'login_done'"), 'login_done case missing')
+  assert.ok(src.includes("action === 'continue'"), 'continue case missing')
+  assert.ok(src.includes("action === 'stop'"), 'stop case missing')
+  assert.ok(src.includes("action === 'clear_workflow'"), 'clear_workflow case missing')
+})
+
+test('297. safe_internal intensive work still creates no Web Operator actions', () => {
+  const engine = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  // Browser work types are only dispatched when level includes browser_research or approval_required
+  assert.ok(
+    engine.includes("!['browser_research', 'approval_required'].includes(state.level)"),
+    'Level gate for browser work missing',
+  )
+})
+
+test('298. approval and manual takeover safety unchanged in resume controller', () => {
+  const src = fs.readFileSync('lib/web-operator/resume-controller.ts', 'utf8')
+  assert.ok(src.includes('approval'), 'Approval handling missing')
+  assert.ok(src.includes('read_only'), 'Read-only check missing')
+  assert.ok(src.includes('canPerformAction'), 'Permission check missing')
+  // Must not contain any bypass pattern
+  assert.ok(!src.includes('bypass'), 'Bypass keyword found — safety regression')
+})

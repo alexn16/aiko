@@ -1,6 +1,13 @@
 import { db } from '@/lib/db/client'
 import { canPerformAction } from '@/lib/operating-mode'
 
+type AISkillsModule = typeof import('@/lib/ai-skills')
+let _aiSkillsModule: Promise<AISkillsModule> | null = null
+function getAISkillsModule(): Promise<AISkillsModule> {
+  if (!_aiSkillsModule) _aiSkillsModule = import('@/lib/ai-skills')
+  return _aiSkillsModule
+}
+
 export type IntensiveWorkLevel = 'off' | 'planning_only' | 'safe_internal' | 'browser_research' | 'approval_required'
 export type WorkStatus = 'queued' | 'working' | 'waiting_user' | 'waiting_approval' | 'blocked' | 'done' | 'failed' | 'skipped'
 
@@ -137,6 +144,7 @@ export async function enqueueWorkItem(input: {
       JSON.stringify(input.input ?? {}),
     ],
   )
+  if (!res.rows[0]) throw new Error('Work item insert did not return a row')
   return mapWorkItem(res.rows[0])
 }
 
@@ -244,7 +252,7 @@ export async function runWorkItem(itemId: string, state = DEFAULT_STATE): Promis
   await markWorkItem(item.id, 'working')
   try {
     if (['strategy_plan', 'project_next_step', 'ai_skill', 'content_draft'].includes(item.work_type)) {
-      const { executeAISkill } = await import('@/lib/ai-skills')
+      const { executeAISkill } = await getAISkillsModule()
       const skillId = String(item.input.skill_id ?? (item.work_type === 'content_draft' ? 'create_content_ideas' : 'recommend_next_step'))
       const prompt = String(item.input.prompt ?? item.work_type.replace(/_/g, ' '))
       const output = await executeAISkill(skillId, { prompt, project_id: item.project_id, save_as_file: true })
@@ -282,7 +290,7 @@ export async function runWorkItem(itemId: string, state = DEFAULT_STATE): Promis
       const missing = await countMissingCapabilities()
       return markWorkItem(item.id, missing > 0 ? 'blocked' : 'done', {
         output_summary: missing > 0 ? `${missing} missing capability proposal(s) need review.` : 'No active missing capability proposal is blocking work.',
-        blocked_reason: missing > 0 ? 'missing_capability' : null,
+        blocked_reason: missing > 0 ? 'Missing required capability.' : null,
       })
     }
     if (item.work_type === 'web_research' || item.work_type === 'web_operator_action') {
@@ -304,7 +312,7 @@ export async function runWorkItem(itemId: string, state = DEFAULT_STATE): Promis
       }
       return markWorkItem(item.id, result.status === 'completed' ? 'done' : 'blocked', { output_summary: result.message, blocked_reason: result.status === 'completed' ? null : result.message })
     }
-    return markWorkItem(item.id, 'skipped', { output_summary: `Skipped unsupported work type ${item.work_type}.` })
+    return markWorkItem(item.id, 'blocked', { blocked_reason: 'Unsupported work type for this cycle.', output_summary: `Skipped unsupported work type ${item.work_type}.` })
   } catch (err) {
     return markWorkItem(item.id, 'failed', { blocked_reason: err instanceof Error ? err.message : 'Work item failed.' })
   }
@@ -390,6 +398,7 @@ async function markWorkItem(id: string, status: WorkStatus, patch: {
       RETURNING *`,
     [id, status, patch.output_summary ?? null, patch.output_file_id ?? null, patch.blocked_reason ?? null, patch.requires_approval ?? null, patch.requires_user_input ?? null],
   )
+  if (!res.rows[0]) throw new Error(`Work item not found after update: ${id}`)
   return mapWorkItem(res.rows[0])
 }
 

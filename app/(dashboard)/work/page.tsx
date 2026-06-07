@@ -31,6 +31,21 @@ type WorkStatus = {
   counts: Record<string, number>
 }
 
+function formatWorkLabel(value: string): string {
+  const map: Record<string, string> = {
+    waiting_user: 'Waiting for you',
+    waiting_approval: 'Waiting for approval',
+    in_progress: 'Working',
+    working: 'Working',
+    ready_to_resume: 'Ready to resume',
+    safe_internal: 'Safe internal',
+    browser_research: 'Browser research',
+    planning_only: 'Planning only',
+    approval_required: 'Approval required',
+  }
+  return map[value] ?? value.replace(/_/g, ' ')
+}
+
 const card = {
   background: '#ffffff',
   border: '1px solid #e2e8f0',
@@ -111,7 +126,7 @@ export default function WorkPage() {
                 {state?.enabled ? 'Active' : 'Off'}
               </div>
               <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                Level: {(state?.level ?? 'off').replace(/_/g, ' ')} · Max {state?.max_actions_per_cycle ?? 3} actions/cycle
+                Level: {formatWorkLabel(state?.level ?? 'off')} · Max {state?.max_actions_per_cycle ?? 3} actions/cycle
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -142,11 +157,11 @@ function QueueSection({ title, items }: { title: string; items: WorkItem[] }) {
             <div key={item.id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#0f172a' }}>{item.work_type.replace(/_/g, ' ')}</div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{item.assigned_agent_name} · {item.assigned_role.replace(/_/g, ' ')}</div>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#0f172a' }}>{formatWorkLabel(item.work_type)}</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>{item.assigned_agent_name} · {formatWorkLabel(item.assigned_role)}</div>
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 900, color: '#334155', background: '#f1f5f9', borderRadius: 999, padding: '5px 8px', height: 24 }}>
-                  {item.status.replace(/_/g, ' ')}
+                  {formatWorkLabel(item.status)}
                 </span>
               </div>
               {(item.output_summary || item.blocked_reason) && (

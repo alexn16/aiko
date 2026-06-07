@@ -1438,3 +1438,32 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 | `/work` | ✅ Pass | Existing queue page rendered without blank or 500 state. |
 
 No runtime blocker was found. The browser still reflects existing local state: Kevin is waiting on a LinkedIn login page, which correctly remains a manual-help state.
+
+---
+
+## Reliability Fixes — 2026-06-07
+
+### Changes
+
+- `lib/intensive-work/engine.ts`: `markWorkItem` now throws `Work item not found after update: <id>` instead of silently passing `undefined` to `mapWorkItem`. `enqueueWorkItem` now throws `Work item insert did not return a row` on missing RETURNING result. AI skills module uses a lazy singleton instead of repeated dynamic imports in the work loop. Every `blocked` status call now includes a `blocked_reason`.
+- `lib/agents/agent-runner.ts`: `createAssignedAgentTask` now throws `Agent task insert did not return a row` on missing RETURNING result instead of casting `undefined` as `AgentTaskRow`.
+- `lib/web-operator/resume-controller.ts`: Resume loop wraps each operator in try/catch so one failing operator does not stop others. `ResumeSummary` now includes `failed_count` and `errors[]`. CEO-facing message includes partial failure note.
+- `app/api/ceo/command/route.ts`: Extracted `handleOperatorControlCommand()` helper to replace three duplicate fetch-operator / method-dispatch blocks.
+- `app/(dashboard)/work/page.tsx`: Added `formatWorkLabel()` formatter used in all three label render sites.
+- `lib/db/migrations/047_blocked_reason_constraint.sql`: Backfills blocked rows with null reason and adds `CHECK (status != 'blocked' OR blocked_reason IS NOT NULL)`.
+
+### Validation
+
+```bash
+node --test __tests__/brain-routing.test.mjs
+# tests 348 / pass 348 / fail 0
+
+npm run build
+# ✓ Compiled successfully, types valid
+```
+
+### Safety
+
+- No safety model changes.
+- No new Web Operator actions, approvals, or external side effects introduced.
+- Approval gates and manual takeover behavior unchanged.

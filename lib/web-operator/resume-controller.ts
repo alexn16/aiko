@@ -15,6 +15,8 @@ export type ResumeSummary = {
   checked_count: number
   resolved_count: number
   resumed_count: number
+  failed_count: number
+  errors: string[]
   ready_to_resume_count: number
   still_needs_approval_count: number
   still_blocked_missing_capability_count: number
@@ -79,6 +81,8 @@ export async function resumeAllSafeBrowserWork(): Promise<ResumeSummary> {
   let readOnlyBlocked = false
   let resolvedCount = 0
   let resumedCount = 0
+  let failedCount = 0
+  const errors: string[] = []
   let approvalCount = await countPendingApprovals()
   let missingCapabilityCount = await countActiveMissingCapabilities()
   const details: ResumeSummary['operators'] = []
@@ -96,30 +100,36 @@ export async function resumeAllSafeBrowserWork(): Promise<ResumeSummary> {
 
   for (const op of operators) {
     let message = 'Kevin is ready to continue.'
-    if (op.status !== 'ready_to_resume' || op.requires_user_input || op.waiting_reason) {
-      const resolved = await markManualBlockerResolved(op.id)
-      if (resolved.success) resolvedCount += 1
-      message = resolved.message
-    }
-
-    if (!readOnlyBlocked && op.pending_action_type) {
-      const resumed = await resumeReadyOperatorWork(op.id)
-      if (resumed.success) {
-        resumedCount += 1
-        message = resumed.message || 'Kevin resumed browser work.'
-      } else if (/approval/i.test(resumed.message)) {
-        approvalCount += 1
-        message = 'Kevin needs approval before doing this.'
-      } else {
-        message = resumed.message
+    try {
+      if (op.status !== 'ready_to_resume' || op.requires_user_input || op.waiting_reason) {
+        const resolved = await markManualBlockerResolved(op.id)
+        if (resolved.success) resolvedCount += 1
+        message = resolved.message
       }
+
+      if (!readOnlyBlocked && op.pending_action_type) {
+        const resumed = await resumeReadyOperatorWork(op.id)
+        if (resumed.success) {
+          resumedCount += 1
+          message = resumed.message || 'Kevin resumed browser work.'
+        } else if (/approval/i.test(resumed.message)) {
+          approvalCount += 1
+          message = 'Kevin needs approval before doing this.'
+        } else {
+          message = resumed.message
+        }
+      }
+    } catch (err) {
+      failedCount += 1
+      errors.push(err instanceof Error ? err.message : 'Unknown error.')
+      message = 'Could not resume this operator.'
     }
 
     details.push({ id: op.id, name: op.name, status: op.status, message })
   }
 
   const readyCount = Math.max(0, resolvedCount - resumedCount)
-  const message = buildResumeMessage({
+  const baseMessage = buildResumeMessage({
     checkedCount: operators.length,
     resolvedCount,
     resumedCount,
@@ -128,6 +138,9 @@ export async function resumeAllSafeBrowserWork(): Promise<ResumeSummary> {
     missingCapabilityCount,
     readOnlyBlocked,
   })
+  const message = failedCount > 0
+    ? `${baseMessage} (${failedCount} operator${failedCount === 1 ? '' : 's'} could not be resumed.)`
+    : baseMessage
 
   return {
     ok: true,
@@ -135,6 +148,8 @@ export async function resumeAllSafeBrowserWork(): Promise<ResumeSummary> {
     checked_count: operators.length,
     resolved_count: resolvedCount,
     resumed_count: resumedCount,
+    failed_count: failedCount,
+    errors,
     ready_to_resume_count: readyCount,
     still_needs_approval_count: approvalCount,
     still_blocked_missing_capability_count: missingCapabilityCount,

@@ -5,7 +5,7 @@ import { db } from '@/lib/db/client'
 import { runCeoCommandAgent } from '@/lib/agents/ceo-command-agent'
 import { getProviderForRole, getAnyConnectedProvider } from '@/lib/ai/router'
 import { delegateSearch, delegateOpenGmail, delegateGmailDraft, delegateSendGmail, delegateToWebOperator, delegateOpenUrl } from '@/lib/web-operator/delegation'
-import type { DelegationResult } from '@/lib/web-operator/delegation'
+import type { DelegationResult, DelegationStatus } from '@/lib/web-operator/delegation'
 import { extractFirstUrl, getRecommendedSkillForInstruction, inferUnknownWebsiteFromInstruction } from '@/lib/web-operator/skills'
 import { getDirectSiteTargetFromInstruction, siteNameForSkill } from '@/lib/web-operator/site-intents'
 import { createSystemImprovementProposal, updateSystemImprovementLifecycle } from '@/lib/system-improvements'
@@ -588,6 +588,40 @@ async function handleSelfImprovementLifecycleCommand(command: string): Promise<N
   })
 }
 
+type OperatorControlAction = 'login_done' | 'continue' | 'stop' | 'clear_workflow'
+
+async function handleOperatorControlCommand(
+  operatorName: string,
+  action: OperatorControlAction,
+): Promise<{ status: DelegationStatus; message: string } | null> {
+  if (!operatorName || operatorName.length <= 2) return null
+  try {
+    const ops = await import('@/lib/web-operator/operators')
+    const op = await ops.getWebOperatorByName(operatorName)
+    if (!op) return null
+    if (action === 'login_done') {
+      await ops.markLoginCompleted(op.id)
+      if (op.pending_action_type) await ops.resumeOperatorWorkflow(op.id)
+      return { status: 'completed', message: `${op.name} is resuming workflow.` }
+    }
+    if (action === 'continue') {
+      if (op.pending_action_type) await ops.resumeOperatorWorkflow(op.id)
+      return { status: 'completed', message: `${op.name} is resuming workflow.` }
+    }
+    if (action === 'stop') {
+      await ops.pauseOperator(op.id, 'Stopped by CEO')
+      return { status: 'blocked', message: `${op.name} has been paused.` }
+    }
+    if (action === 'clear_workflow') {
+      await ops.clearOperatorWorkflow(op.id)
+      return { status: 'completed', message: `${op.name}'s workflow has been cleared.` }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -707,51 +741,20 @@ export async function POST(request: NextRequest) {
 
       if (isLoginDone || isContinue) {
         const nameMatch = (isLoginDone || isContinue)?.[1]
-        if (nameMatch && nameMatch.length > 2) {
-          try {
-            const { getWebOperatorByName, markLoginCompleted, resumeOperatorWorkflow } = await import('@/lib/web-operator/operators')
-            const op = await getWebOperatorByName(nameMatch)
-            if (op) {
-              if (isLoginDone) {
-                await markLoginCompleted(op.id)
-              }
-              if (op.pending_action_type) {
-                await resumeOperatorWorkflow(op.id)
-              }
-              if (!delegationResult) {
-                delegationResult = { status: 'completed', message: `${op.name} is resuming workflow.` }
-              }
-            }
-          } catch { /* non-fatal */ }
-        }
+        const result = await handleOperatorControlCommand(nameMatch ?? '', isLoginDone ? 'login_done' : 'continue')
+        if (result && !delegationResult) delegationResult = result
       }
 
       if (isStop) {
         const nameMatch = isStop?.[1]
-        if (nameMatch && nameMatch.length > 2) {
-          try {
-            const { getWebOperatorByName, pauseOperator } = await import('@/lib/web-operator/operators')
-            const op = await getWebOperatorByName(nameMatch)
-            if (op) {
-              await pauseOperator(op.id, 'Stopped by CEO')
-              delegationResult = { status: 'blocked', message: `${op.name} has been paused.` }
-            }
-          } catch { /* non-fatal */ }
-        }
+        const result = await handleOperatorControlCommand(nameMatch ?? '', 'stop')
+        if (result) delegationResult = result
       }
 
       if (isClearWorkflow) {
         const nameMatch = isClearWorkflow?.[1]
-        if (nameMatch && nameMatch.length > 2) {
-          try {
-            const { getWebOperatorByName, clearOperatorWorkflow } = await import('@/lib/web-operator/operators')
-            const op = await getWebOperatorByName(nameMatch)
-            if (op) {
-              await clearOperatorWorkflow(op.id)
-              delegationResult = { status: 'completed', message: `${op.name}'s workflow has been cleared.` }
-            }
-          } catch { /* non-fatal */ }
-        }
+        const result = await handleOperatorControlCommand(nameMatch ?? '', 'clear_workflow')
+        if (result) delegationResult = result
       }
 
       // Detect Gmail workflow intents (moved below control command detection)
