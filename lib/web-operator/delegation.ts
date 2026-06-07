@@ -76,13 +76,22 @@ export interface DelegationResult {
 
 async function sendInternalBlockMessage(req: DelegationRequest, reason: string): Promise<void> {
   try {
+    const actionLabel = req.actionType
+      ? req.actionType.replace(/_/g, ' ')
+      : 'browser action'
+    const siteName = req.targetUrl
+      ? (() => { try { return new URL(req.targetUrl).hostname } catch { return req.targetUrl.slice(0, 30) } })()
+      : null
+    const blockSubject = siteName
+      ? `Web Operator blocked: ${actionLabel} on ${siteName}`
+      : `Web Operator blocked: ${actionLabel}`
     await sendAgentMessage({
       project_id: req.projectId,
       from_role: 'Web Operator',
       to_role: req.requestedByRole,
       message_type: 'blocker',
-      subject: `Blocked: ${req.instruction}`,
-      content: `The Web Operator could not execute "${req.instruction}" because: ${reason}`,
+      subject: blockSubject,
+      content: `The Web Operator could not complete the ${actionLabel} because: ${reason}`,
     })
   } catch {
     // non-fatal
@@ -525,11 +534,20 @@ export async function createOperatorTaskFromAgentRequest(
   if (req.taskId) return // already linked to an existing task
 
   try {
+    const taskActionLabel = req.actionType ? req.actionType.replace(/_/g, ' ') : 'browser action'
+    const taskSite = req.targetUrl
+      ? (() => { try { return new URL(req.targetUrl).hostname } catch { return req.targetUrl.slice(0, 40) } })()
+      : null
+    const taskTitle = taskSite
+      ? `Web Operator: ${taskActionLabel} on ${taskSite}`
+      : req.skillId
+        ? `Web Operator: ${taskActionLabel} (${req.skillId.replace(/_/g, ' ')})`
+        : `Web Operator: ${taskActionLabel}`
     await createAgentTask({
       project_id: req.projectId,
       owner_role: 'Web Operator',
       assigned_by_role: req.requestedByRole,
-      title: req.instruction,
+      title: taskTitle.slice(0, 140),
       status:
         delegationResult.status === 'completed' ? 'completed' :
         delegationResult.status === 'approval_required' ? 'review' :

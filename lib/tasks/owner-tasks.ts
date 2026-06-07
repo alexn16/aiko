@@ -100,6 +100,7 @@ export async function listOwnerTasks(filters: {
   status?: string | null
   active?: boolean
   limit?: number
+  include_internal?: boolean
 } = {}): Promise<OwnerTask[]> {
   const conditions: string[] = []
   const values: unknown[] = []
@@ -112,6 +113,11 @@ export async function listOwnerTasks(filters: {
   if (filters.owner_role) {
     conditions.push(`t.owner_role = $${idx++}`)
     values.push(filters.owner_role)
+  } else if (!filters.include_internal) {
+    // By default, exclude auto-generated internal Web Operator sub-tasks from the owner view.
+    // These are created from agent messages and are not meaningful owner actions.
+    // Match any variation: 'Web Operator', 'Web Operator (Kevin)', 'web_operator', etc.
+    conditions.push(`t.owner_role NOT ILIKE 'web operator%' AND t.owner_role != 'web_operator'`)
   }
   if (filters.status) {
     conditions.push(`t.status = $${idx++}`)

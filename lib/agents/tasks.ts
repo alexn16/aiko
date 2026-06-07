@@ -25,6 +25,19 @@ export interface AgentTask {
 
 // ── Internal helpers ───────────────────────────────────────────────────────────
 
+/**
+ * Clean a task title coming from an agent message subject.
+ * Strips raw URL/query artifacts and truncates to a readable length.
+ */
+function cleanTaskTitle(subject: string): string {
+  return subject
+    .replace(/^(Blocked|Completed|Failed):\s*/i, '')  // strip status prefix
+    .replace(/https?:\/\/\S+/g, m => { try { return new URL(m).hostname } catch { return m.slice(0, 40) } })
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140)
+}
+
 function inferTaskType(subject: string, content: string): string {
   const text = `${subject} ${content}`.toLowerCase()
   if (/research/.test(text)) return 'research'
@@ -183,7 +196,7 @@ export async function createTaskFromAgentMessage(message: {
     owner_role,
     assigned_by_role,
     source_message_id: id,
-    title: subject,
+    title: cleanTaskTitle(subject),
     description: content.slice(0, 200),
     status,
     task_type,

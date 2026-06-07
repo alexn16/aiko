@@ -978,3 +978,19 @@ Runtime validation confirmed system_chrome mode works end-to-end. Four bugs were
 4. `recoverSession` could attempt system Chrome — fixed to always use isolated Playwright Chromium.
 
 Validation confirmed: Chrome opens, navigates to target URL, pauses at login with owner-friendly "Kevin needs your help" message. No auto-publish, no stack traces, no ENOENT in any response.
+
+### Normal Chrome Owner Workflow Validation — 2026-06-07
+
+Full owner workflow validated end-to-end with Normal Chrome mode.
+
+**Bug found and fixed:** `/tasks` showed internal Web Operator sub-tasks with raw titles like "Blocked: Search: in this browser all is unblocked..." appearing in the owner task list. Fixed by:
+1. Generating descriptive task titles in `delegation.ts` using action type + site hostname instead of raw instruction text
+2. Adding `cleanTaskTitle()` in `tasks.ts` to strip "Blocked:/Completed:" prefixes and raw URLs from message-derived task titles
+3. Filtering `owner_role ILIKE 'web operator%'` from the default task list (still accessible via `?include_internal=true`)
+
+**Workflow confirmed working:**
+- "Start marketing for AÏKO" → short plan, no auto-post ✅
+- "Create a LinkedIn post and save it" → AI Skill draft, `linkedin-post-draft.md` in `/files`, no browser ✅
+- "Kevin, open Canva" → Chrome opens, pauses at checkpoint with friendly message ✅
+- `/tasks` shows only planning/strategy/agent tasks ✅
+- `/files` shows saved drafts at the top ✅

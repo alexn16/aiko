@@ -1679,3 +1679,52 @@ AIKO_AUTH_MODE=optional PORT=3001 npm run dev
 - `/operators` per-card: "Browser: Normal Chrome" in footer, Chrome-specific notice copy per `waiting_reason`
 - `/home` attention card: new `profile_locked` state, Chrome-specific manual copy, "Open setup" + "Use AÏKO profile" buttons
 - `AIKO_OWNER_OPERATING_MANUAL.md`: "Choosing a Browser for Kevin" section with setup guide and profile lock advice
+
+---
+
+## Normal Chrome Owner Workflow Validation — 2026-06-07
+
+### Setup
+```
+WEB_OPERATOR_BROWSER_MODE=system_chrome
+WEB_OPERATOR_HEADLESS=false
+WEB_OPERATOR_CHROME_PROFILE_DIRECTORY=Default
+Ollama as CEO brain (usable)
+```
+
+### Workflow steps
+
+| Step | Command | Result | Notes |
+|---|---|---|---|
+| Start marketing for AÏKO | CEO Chat | ✅ | `intent=project_autopilot_marketing`, short plan shown, no auto-post |
+| Create LinkedIn post | CEO Chat | ✅ | `intent=content_creation`, AI Skill used, file saved (linkedin-post-draft.md), no browser |
+| Kevin open Canva | CEO Chat | ✅ | Chrome opened, delegation.status=completed or waiting_user |
+| /tasks shows clean tasks | API | ✅ | Web Operator internal tasks filtered out by default |
+| /files shows LinkedIn post | API | ✅ | linkedin-post-draft.md in recent files |
+| /work brain health | API | ✅ | brain.usable=true, provider=Ollama shown |
+
+### Bug fixed during validation
+
+**`/tasks` showed raw Web Operator internal tasks with confusing titles**
+- Titles like `"Blocked: Search: in this browser all is unblocked..."` appeared in owner task list
+- Root causes:
+  1. `createOperatorTaskFromAgentRequest` used `req.instruction` (raw query/command) as title
+  2. `createTaskFromAgentMessage` used raw message `subject` as title, including "Blocked: Search:" prefixes
+  3. No filter excluded Web Operator internal tasks from owner view
+- Fixes:
+  - `delegation.ts`: `createOperatorTaskFromAgentRequest` generates descriptive title from action type + hostname
+  - `delegation.ts`: blocker `sendAgentMessage` uses action+site description, not raw instruction
+  - `tasks.ts`: `cleanTaskTitle()` strips "Blocked:/Completed:/Failed:" prefix and cleans URLs
+  - `owner-tasks.ts`: `listOwnerTasks` default excludes `owner_role ILIKE 'web operator%'` (pass `include_internal=true` to show all)
+
+### Owner workflow feel
+- Minimalist: short plan shown, no technical JSON visible by default
+- LinkedIn post → file saved immediately, no browser needed
+- Canva → Chrome opened, paused at checkpoint with clear message
+- /tasks now shows only meaningful planning/strategy/agent tasks
+- /files shows saved drafts easily
+- /work shows brain health (Ollama usable)
+
+### Remaining next items (not bugs, quality)
+- Some task titles from strategy execution plans are still long/technical
+- The two failed intensive work items have `unknown_error` — pre-existing, Chrome lock from earlier session
