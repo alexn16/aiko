@@ -117,19 +117,22 @@ export default function ConnectAIPage() {
   const [profiles, setProfiles] = useState<AuthProfile[]>([])
   const [roles, setRoles] = useState<RoleInfo>({})
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null)
+  const [brainHealth, setBrainHealth] = useState<{ usable: boolean; runtime_available: boolean; status: string; owner_message: string; fix_action: string } | null>(null)
   const [configuring, setConfiguring] = useState<ProviderCatalogEntry | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const [providersRes, rolesRes, diagRes] = await Promise.all([
+    const [providersRes, rolesRes, diagRes, provDiagRes] = await Promise.all([
       fetch('/api/providers').then(r => r.json()),
       fetch('/api/providers/roles').then(r => r.json()),
       fetch('/api/auth-profiles/diagnostics').then(r => r.json()).catch(() => null),
+      fetch('/api/providers/diagnostics').then(r => r.json()).catch(() => null),
     ])
     setProfiles(providersRes.providers ?? [])
     setRoles(rolesRes.roles ?? {})
     setDiagnostics(diagRes ?? null)
+    if (provDiagRes?.brain_health) setBrainHealth(provDiagRes.brain_health)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -229,7 +232,7 @@ export default function ConnectAIPage() {
       {oauthError && <Notice text={`OAuth failed: ${decodeURIComponent(oauthError)}`} />}
       {message && <Notice ok={['passed', 'assigned', 'deleted', 'imported', 'refreshed'].some(token => message.includes(token))} text={message} />}
 
-      <CurrentBrain profile={ceoProfile} diagnostics={diagnostics} onTest={testProfile} />
+      <CurrentBrain profile={ceoProfile} diagnostics={diagnostics} brainHealth={brainHealth} onTest={testProfile} />
 
       <section style={{ marginTop: 22 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
@@ -356,14 +359,38 @@ function Notice({ text, ok = false }: { text: string; ok?: boolean }) {
   return <div style={{ marginBottom: 16, padding: '10px 13px', borderRadius: 9, border: `1px solid ${ok ? '#bbf7d0' : '#fecaca'}`, background: ok ? '#f0fdf4' : '#fef2f2', color: ok ? '#166534' : '#991b1b', fontSize: 13 }}>{text}</div>
 }
 
-function CurrentBrain({ profile, diagnostics, onTest }: { profile: AuthProfile | null; diagnostics: Diagnostics | null; onTest: (p: AuthProfile) => void }) {
+function CurrentBrain({ profile, diagnostics, brainHealth, onTest }: {
+  profile: AuthProfile | null
+  diagnostics: Diagnostics | null
+  brainHealth: { usable: boolean; runtime_available: boolean; status: string; owner_message: string; fix_action: string } | null
+  onTest: (p: AuthProfile) => void
+}) {
+  const runtimeBadge = brainHealth
+    ? brainHealth.usable
+      ? { label: 'Usable', bg: '#dcfce7', color: '#166534', border: '#86efac' }
+      : brainHealth.status === 'runtime_unavailable'
+        ? { label: 'Runtime unavailable', bg: '#fee2e2', color: '#991b1b', border: '#fecaca' }
+        : brainHealth.status === 'needs_reauth'
+          ? { label: 'Needs re-auth', bg: '#fef3c7', color: '#92400e', border: '#fde68a' }
+          : brainHealth.status === 'not_configured'
+            ? { label: 'Not configured', bg: '#f1f5f9', color: '#475569', border: '#e2e8f0' }
+            : { label: 'Unavailable', bg: '#fee2e2', color: '#991b1b', border: '#fecaca' }
+    : null
+
   return (
     <section>
       <div style={LABEL}>Section 1 · Current CEO brain</div>
       <div style={{ background: '#0f172a', color: '#fff', borderRadius: 18, padding: 22, display: 'grid', gridTemplateColumns: '1fr auto', gap: 18, alignItems: 'center' }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
-            {profile ? profileName(profile) : 'No CEO auth profile assigned'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em' }}>
+              {profile ? profileName(profile) : 'No CEO auth profile assigned'}
+            </span>
+            {runtimeBadge && (
+              <span data-testid="brain-runtime-badge" style={{ fontSize: 11, fontWeight: 800, borderRadius: 999, padding: '3px 9px', background: runtimeBadge.bg, color: runtimeBadge.color, border: `1px solid ${runtimeBadge.border}` }}>
+                {runtimeBadge.label}
+              </span>
+            )}
           </div>
           <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 8, color: '#cbd5e1', fontSize: 12 }}>
             <span>Provider: {profile?.provider_catalog_id ?? profile?.type ?? '—'}</span>
@@ -371,7 +398,12 @@ function CurrentBrain({ profile, diagnostics, onTest }: { profile: AuthProfile |
             <span>Model: {profile?.model ?? '—'}</span>
             <span>Status: {profile?.status ?? (diagnostics?.can_ceo_think ? 'connected' : 'not_connected')}</span>
           </div>
-          {profile?.last_error && <div style={{ marginTop: 10, color: '#fecaca', fontSize: 12 }}>{profile.last_error}</div>}
+          {brainHealth && !brainHealth.usable && (
+            <div data-testid="brain-fix-action" style={{ marginTop: 10, color: '#fca5a5', fontSize: 12 }}>
+              {brainHealth.owner_message}{brainHealth.fix_action ? ` ${brainHealth.fix_action}` : ''}
+            </div>
+          )}
+          {profile?.last_error && !brainHealth && <div style={{ marginTop: 10, color: '#fecaca', fontSize: 12 }}>{profile.last_error}</div>}
         </div>
         {profile && <button onClick={() => onTest(profile)} style={{ padding: '10px 14px', borderRadius: 9, border: '1px solid #334155', background: '#fff', color: '#0f172a', fontWeight: 700 }}>Test CEO profile</button>}
       </div>

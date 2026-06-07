@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
 import { getAuthMode, isAuthOptional } from '@/lib/auth-mode'
 import { getAllProviders, getAllRoleProviders, getProviderForRole } from '@/lib/ai/router'
+import { checkAssignedBrainHealth, formatProviderHealthForOwner } from '@/lib/ai/provider-health'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,10 +22,11 @@ export async function GET() {
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id ?? null
 
-    const [providers, roleProviders, ceoProvider] = await Promise.all([
+    const [providers, roleProviders, ceoProvider, brainHealth] = await Promise.all([
       getAllProviders(userId),
       getAllRoleProviders(userId),
       getProviderForRole('ceo', userId).catch(() => null),
+      checkAssignedBrainHealth('ceo', userId).catch(() => null),
     ])
 
     const connected  = providers.filter(p => p.status === 'connected')
@@ -90,6 +92,7 @@ export async function GET() {
           }
         : null,
       ceo_role_assignment: ceoRole ?? null,
+      brain_health: brainHealth ? formatProviderHealthForOwner(brainHealth) : null,
 
       // Summary
       summary: {

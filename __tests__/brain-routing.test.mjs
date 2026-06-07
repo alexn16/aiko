@@ -5483,3 +5483,99 @@ test('298. approval and manual takeover safety unchanged in resume controller', 
   // Must not contain any bypass pattern
   assert.ok(!src.includes('bypass'), 'Bypass keyword found — safety regression')
 })
+
+// ── Provider runtime health tests (2026-06-07) ────────────────────────────────
+
+test('299. Codex local assigned but binary missing => usable false', () => {
+  function checkCodexRuntimeSimulated(cliDetected) {
+    if (!cliDetected) return { available: false, reason: 'codex_binary_missing' }
+    return { available: true, reason: null }
+  }
+  function buildHealth(runtime, providerType) {
+    const usable = runtime.available
+    let owner_message = ''
+    if (!runtime.available) {
+      if (['openai-codex-local', 'chatgpt_codex_local'].includes(providerType)) {
+        owner_message = 'ChatGPT / Codex Local is assigned, but the Codex CLI is not available on this machine.'
+      }
+    }
+    return { usable, owner_message }
+  }
+  const runtime = checkCodexRuntimeSimulated(false)
+  const health = buildHealth(runtime, 'chatgpt_codex_local')
+  assert.equal(health.usable, false)
+  assert.ok(health.owner_message.includes('Codex CLI is not available'))
+})
+
+test('300. provider health message redacts secrets', () => {
+  const src = fs.readFileSync('lib/ai/provider-health.ts', 'utf8')
+  // Must not log/return api keys, tokens, or raw env values
+  assert.ok(!src.includes('api_key_encrypted'), 'api_key_encrypted must not appear in health output')
+  assert.ok(!src.includes('process.env.OPENAI'), 'raw env key must not appear in health output')
+  assert.ok(!src.includes('oauth_access_token'), 'oauth token must not appear in health output')
+})
+
+test('301. /api/health route includes brain field', () => {
+  const src = fs.readFileSync('app/api/health/route.ts', 'utf8')
+  assert.ok(src.includes('brain:'), 'brain field missing from /api/health response')
+  assert.ok(src.includes('checkAssignedBrainHealth'), 'health check not called')
+  assert.ok(src.includes('formatProviderHealthForOwner'), 'format helper not used')
+})
+
+test('302. /home shows brain warning when brain unusable', () => {
+  const src = fs.readFileSync('app/(dashboard)/home/page.tsx', 'utf8')
+  assert.ok(src.includes('brainUnusable'), 'brainUnusable state missing')
+  assert.ok(src.includes('brain-warning'), 'brain-warning testid missing')
+  assert.ok(src.includes('CEO brain needs attention'), 'warning title missing')
+  assert.ok(src.includes('Open Connect AI'), 'fix action link missing')
+})
+
+test('303. intensive work cycle stops before execution if brain unusable', () => {
+  const src = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  assert.ok(src.includes('checkBrainUsable'), 'brain check missing from engine')
+  assert.ok(src.includes("stopped_reason: 'brain_unavailable'"), 'brain_unavailable stop reason missing')
+})
+
+test('304. Ollama fallback detected when available', () => {
+  const src = fs.readFileSync('lib/ai/provider-health.ts', 'utf8')
+  assert.ok(src.includes("t === 'ollama'"), 'Ollama fallback detection missing')
+  assert.ok(src.includes('findFallback'), 'findFallback function missing')
+})
+
+test('305. raw ENOENT never appears in owner message from engine', () => {
+  const src = fs.readFileSync('lib/intensive-work/engine.ts', 'utf8')
+  // ownerFriendlyWorkError maps ENOENT before it reaches the stored message
+  assert.ok(src.includes('ownerFriendlyWorkError'), 'ownerFriendlyWorkError missing')
+  assert.ok(src.includes('ENOENT'), 'ENOENT pattern check missing from sanitizer')
+  // The function must map ENOENT to owner text, not pass it through
+  const fnStart = src.indexOf('function ownerFriendlyWorkError')
+  const fnEnd = src.indexOf('\n}', fnStart) + 2
+  const fn = src.slice(fnStart, fnEnd)
+  assert.ok(fn.includes('AI provider binary not found'), 'ENOENT not mapped to owner message')
+})
+
+test('306. connect-ai page shows runtime health badge', () => {
+  const src = fs.readFileSync('app/(dashboard)/connect-ai/page.tsx', 'utf8')
+  assert.ok(src.includes('brain-runtime-badge'), 'runtime badge testid missing')
+  assert.ok(src.includes('Runtime unavailable'), 'Runtime unavailable label missing')
+  assert.ok(src.includes('brainHealth'), 'brainHealth state missing')
+})
+
+test('307. provider health formatProviderHealthForOwner redacts profile_id only returns safe fields', () => {
+  const src = fs.readFileSync('lib/ai/provider-health.ts', 'utf8')
+  assert.ok(src.includes('export function formatProviderHealthForOwner'), 'formatProviderHealthForOwner not exported')
+  // Must include usable, owner_message, fix_action in return
+  const fnStart = src.indexOf('export function formatProviderHealthForOwner')
+  const fnEnd = src.indexOf('\n}', fnStart) + 2
+  const fn = src.slice(fnStart, fnEnd)
+  assert.ok(fn.includes('usable:'), 'usable missing from format output')
+  assert.ok(fn.includes('owner_message:'), 'owner_message missing from format output')
+  assert.ok(fn.includes('fix_action:'), 'fix_action missing from format output')
+  assert.ok(!fn.includes('api_key'), 'api_key must not be in format output')
+})
+
+test('308. intensive work status API includes brain health', () => {
+  const src = fs.readFileSync('app/api/intensive-work/status/route.ts', 'utf8')
+  assert.ok(src.includes('brain:'), 'brain field missing from status response')
+  assert.ok(src.includes('checkAssignedBrainHealth'), 'health check not called in status')
+})

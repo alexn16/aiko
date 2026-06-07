@@ -1512,3 +1512,40 @@ Fix: Added `ownerFriendlyWorkError()` helper in `engine.ts` that maps known syst
 - Approval gates unchanged. ✅
 - Manual takeover state handled correctly. ✅
 - Missing capabilities remain missing. ✅
+
+---
+
+## Provider Runtime Health Checks — 2026-06-07
+
+### Changes
+
+- `lib/ai/provider-health.ts`: New module. `checkAssignedBrainHealth(role)` performs a type-specific runtime check:
+  - Codex Local: runs `detectCodexCli()` to verify the binary exists.
+  - Ollama: HTTP check to `{base_url}/api/tags` with 4s timeout.
+  - API-key providers: trusts DB status (key is never sent in the health check).
+  - Returns `{ usable, status, owner_message, fix_action, fallback_available, fallback_provider }`.
+  - `formatProviderHealthForOwner()` strips secrets before any response.
+- `app/api/health/route.ts`: Adds `brain` field from `formatProviderHealthForOwner`.
+- `app/api/intensive-work/status/route.ts`: Adds `brain` field.
+- `app/api/providers/diagnostics/route.ts`: Adds `brain_health` field.
+- `lib/intensive-work/engine.ts`: `runWorkCycle` checks brain usability before execution. If brain is unavailable, cycle returns `stopped_reason: brain_unavailable` with a clean owner message — no raw system error.
+- `app/(dashboard)/home/page.tsx`: Shows amber warning banner when CEO brain is not usable. Link to Connect AI.
+- `app/(dashboard)/connect-ai/page.tsx`: `CurrentBrain` component shows runtime health badge (Usable / Runtime unavailable / Needs re-auth / Not configured) and fix action text.
+
+### Runtime validation
+
+| Step | Result | Notes |
+|---|---|---|
+| `/api/health` with Codex assigned but binary missing | ✅ | `brain.usable=false`, `brain.status=runtime_unavailable`, correct owner_message and fix_action |
+| No secrets in `/api/health` brain response | ✅ | No `api_key`, no `access_token` in response |
+| Codex fallback shown | ✅ | `fallback_available=true`, `fallback_provider=Ollama (local)` |
+| Intensive work cycle blocked | ✅ | `stopped_reason=brain_unavailable`, owner-friendly message, no ENOENT |
+| Switch CEO to Ollama | ✅ | `brain.usable=true`, `brain.status=usable` |
+| Cycle runs with Ollama | ✅ | `status=completed`, 1 work item ran |
+| Restore Codex as CEO | ✅ | State restored after validation |
+
+### Safety
+
+- No secrets, tokens, or raw stack traces in any health response.
+- Provider is never silently switched.
+- Approval and manual takeover safety unchanged.

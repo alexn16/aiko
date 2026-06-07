@@ -4,6 +4,7 @@ import path from 'path'
 import { db } from '@/lib/db/client'
 import { getAuthMode } from '@/lib/auth-mode'
 import { getSetupState } from '@/lib/setup-state'
+import { checkAssignedBrainHealth, formatProviderHealthForOwner } from '@/lib/ai/provider-health'
 import pkg from '@/package.json'
 
 export const dynamic = 'force-dynamic'
@@ -56,12 +57,13 @@ async function checkWritable(relativeDir: string): Promise<boolean> {
 }
 
 export async function GET() {
-  const [database, setup, runtimeAvailable, generatedWritable, screenshotsWritable] = await Promise.all([
+  const [database, setup, runtimeAvailable, generatedWritable, screenshotsWritable, brainHealth] = await Promise.all([
     checkDatabase(),
     getSetupState().catch(() => ({ setup_required: true, can_ceo_think: false })),
     checkPlaywrightRuntime(),
     checkWritable(path.join('storage', 'generated-files')),
     checkWritable(process.env.SCREENSHOT_PATH ?? 'screenshots'),
+    checkAssignedBrainHealth('ceo').catch(() => null),
   ])
 
   const health = {
@@ -82,6 +84,7 @@ export async function GET() {
       generated_files_writable: generatedWritable,
       screenshots_writable: screenshotsWritable,
     },
+    brain: brainHealth ? formatProviderHealthForOwner(brainHealth) : null,
   }
 
   return NextResponse.json(health, { status: health.ok ? 200 : 503 })

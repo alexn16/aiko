@@ -223,6 +223,8 @@ export default function HomePage() {
   const [workMessage, setWorkMessage] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
   const [brainLabel, setBrainLabel] = useState('Checking')
+  const [brainUnusable, setBrainUnusable] = useState(false)
+  const [brainWarning, setBrainWarning] = useState('')
   const [modeLabel, setModeLabel] = useState('Checking')
 
   const selectedProject = useMemo(
@@ -327,6 +329,11 @@ export default function HomePage() {
     if (brainRes?.ok) {
       const data = await brainRes.json()
       setBrainLabel(data?.ceo_provider?.name ?? 'Not connected')
+      const bh = data?.brain_health
+      if (bh) {
+        setBrainUnusable(!bh.usable)
+        setBrainWarning(!bh.usable ? bh.owner_message : '')
+      }
     }
     if (modeRes?.ok) {
       const data = await modeRes.json()
@@ -558,6 +565,15 @@ export default function HomePage() {
       maxWidth={1120}
       style={pageStyle}
     >
+        {brainUnusable && (
+          <section data-testid="brain-warning" style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#92400e' }}>CEO brain needs attention.</div>
+              <div style={{ fontSize: 13, color: '#78350f', marginTop: 2 }}>{brainWarning}</div>
+            </div>
+            <a href="/connect-ai" style={{ fontSize: 13, fontWeight: 800, color: '#1d4ed8', textDecoration: 'none', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 8, padding: '7px 12px', whiteSpace: 'nowrap' }}>Open Connect AI</a>
+          </section>
+        )}
         <section
           data-testid="home-command-box"
           style={{

@@ -8,6 +8,16 @@ function getAISkillsModule(): Promise<AISkillsModule> {
   return _aiSkillsModule
 }
 
+async function checkBrainUsable(): Promise<{ usable: boolean; message: string }> {
+  try {
+    const { checkAssignedBrainHealth } = await import('@/lib/ai/provider-health')
+    const health = await checkAssignedBrainHealth('ceo')
+    return { usable: health.usable, message: health.owner_message }
+  } catch {
+    return { usable: true, message: '' }
+  }
+}
+
 export type IntensiveWorkLevel = 'off' | 'planning_only' | 'safe_internal' | 'browser_research' | 'approval_required'
 export type WorkStatus = 'queued' | 'working' | 'waiting_user' | 'waiting_approval' | 'blocked' | 'done' | 'failed' | 'skipped'
 
@@ -204,6 +214,11 @@ export async function runWorkCycle(): Promise<WorkCycleSummary> {
   const modeCheck = await canPerformAction('read_internal', { agent_role: 'intensive_work' })
   if (!modeCheck.allowed) {
     return { ok: true, status: 'blocked', message: modeCheck.reason, state, actions_run: 0, max_actions_per_cycle: state.max_actions_per_cycle, stopped_reason: 'operating_mode', items: [] }
+  }
+
+  const brainCheck = await checkBrainUsable()
+  if (!brainCheck.usable) {
+    return { ok: true, status: 'blocked', message: brainCheck.message, state, actions_run: 0, max_actions_per_cycle: state.max_actions_per_cycle, stopped_reason: 'brain_unavailable', items: [] }
   }
 
   const queued = await listWorkItems({ statuses: ['queued'], limit: state.max_actions_per_cycle })

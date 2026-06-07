@@ -926,3 +926,17 @@ All safety boundaries confirmed:
 - Manual browser unblock (`intent=manual_takeover_completed`) routes correctly.
 - Blocked work items all have `blocked_reason`.
 - No approvals auto-executed.
+
+### Provider Runtime Health Checks — 2026-06-07
+
+AÏKO now distinguishes between a provider that is "connected" in the database and one that is actually usable at runtime.
+
+`lib/ai/provider-health.ts` provides `checkAssignedBrainHealth()` and `formatProviderHealthForOwner()`. The check is provider-specific: Codex Local verifies the CLI binary exists; Ollama checks the local endpoint is reachable; API-key providers trust the DB status. No secrets are included in any health response.
+
+`/api/health`, `/api/intensive-work/status`, and `/api/providers/diagnostics` all include a `brain` health snapshot.
+
+`/home` shows an amber warning banner if the CEO brain is not usable, with a direct link to Connect AI.
+
+`/connect-ai` shows a runtime health badge (Usable / Runtime unavailable / Needs re-auth) on the assigned CEO profile card, plus the owner-friendly fix action text.
+
+`runWorkCycle` in the intensive work engine checks brain health before running any work items. If the brain is unavailable, the cycle returns `stopped_reason: brain_unavailable` with a clean owner message — `spawn codex ENOENT` never reaches the owner.
