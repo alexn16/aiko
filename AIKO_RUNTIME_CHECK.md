@@ -1609,3 +1609,54 @@ Fix: Added `ownerFriendlyWorkError()` helper in `engine.ts` that maps known syst
 - No filesystem paths in API responses.
 - Login/CAPTCHA/security gates unchanged.
 - No auto-send/post/publish added.
+
+---
+
+## Normal Chrome Web Operator Runtime Validation — 2026-06-07
+
+### Setup
+```
+WEB_OPERATOR_BROWSER_MODE=system_chrome
+WEB_OPERATOR_HEADLESS=false
+WEB_OPERATOR_CHROME_PROFILE_DIRECTORY=Default
+AIKO_AUTH_MODE=optional PORT=3001 npm run dev
+```
+
+### Validation results
+
+| Step | Result | Notes |
+|---|---|---|
+| `/api/browser/setup` returns mode=system_chrome | ✅ | chrome_found=true, no filesystem paths in response |
+| `/api/health` brain field | ✅ | brain.usable=true (Ollama), provider_name shown |
+| CEO command with codex binary missing → 503 | ✅ | Fixed: "AI provider binary not found. Go to Connect AI..." instead of "Internal error" |
+| Home page surfaces 503 error to owner | ✅ | Fixed: data.error promoted to data.response when !res.ok |
+| "Kevin, open Canva" → Chrome opens | ✅ | Chrome opened, navigated to canva.com |
+| Canva login checkpoint → waiting_user | ✅ | Kevin → waiting_user, login_required, current_url=https://www.canva.com/es_es/ |
+| delegation.message is owner-friendly | ✅ | "Kevin needs your help. Complete this in the browser, then click Resume." |
+| No auto-publish/share/send/post | ✅ | |
+| No stack traces in response | ✅ | |
+| No raw ENOENT in response | ✅ | |
+| Chrome profile locked → friendly error | ✅ | Fixed: classifyErrorMessage maps to profile_locked, shows friendly message |
+
+### Bugs fixed during validation
+
+1. **CEO command returns `{"error":"Internal error"}` when codex binary missing**
+   - Root: top-level catch in route.ts returned generic 500
+   - Fix: map `spawn.*ENOENT`, `No AI provider`, `ECONNREFUSED` to 503 with friendly messages
+
+2. **Home page silently drops API error responses**
+   - Root: `setResult(data)` when `!res.ok` and `data.error` set but `data.response` missing
+   - Fix: promote `data.error` to `data.response` when `!res.ok`
+
+3. **Chrome profile lock errors showed `failure_reason: unknown_error`**
+   - Root: `classifyError` in playwright-executor didn't handle lock patterns; `web-operator.ts` catch didn't classify message text
+   - Fix: added `classifyErrorMessage` in web-operator.ts, pattern matches `/lock|already running|profile.*in use/i`
+
+4. **`recoverSession` used `launchBrowser()` which could attempt system Chrome**
+   - Fix: recoverSession uses `chromium.launch({headless:true})` directly (always isolated Playwright Chromium)
+
+### Safety
+- Chrome opened but paused at login/CAPTCHA — did not bypass it.
+- No approval auto-executed.
+- No send/post/publish/message.
+- No raw stack traces in any API response.

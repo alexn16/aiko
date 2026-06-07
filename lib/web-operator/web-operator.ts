@@ -615,18 +615,26 @@ Reason: ${skillDecision?.reason ?? 'Operating mode requires approval.'}`,
       }
     }
 
-    const failure_reason = (err as { failure_reason?: string }).failure_reason ?? 'unknown_error'
+    // Classify the error — first by explicit failure_reason on the error object,
+    // then by inspecting the message text.
+    const explicitReason = (err as { failure_reason?: string }).failure_reason
+    const failure_reason = explicitReason ?? classifyErrorMessage(errMsg)
+    const friendlyErrMsg = failure_reason === 'profile_locked'
+      ? 'Chrome profile is already in use. Close Chrome or configure a dedicated AÏKO Chrome profile.'
+      : failure_reason === 'browser_not_available'
+        ? 'Browser is not available. Check your browser setup in Connect AI.'
+        : errMsg
     await markStepFailed(action.id, {
       stepId: opts.action_type,
-      message: errMsg,
+      message: friendlyErrMsg,
     }).catch(() => {})
     await updateWebOperatorAction(action.id, {
       status: 'failed',
-      output: { error: errMsg },
+      output: { error: friendlyErrMsg },
       failure_reason,
       completed_at: new Date().toISOString(),
     })
-    return { success: false, action, error: errMsg }
+    return { success: false, action, error: friendlyErrMsg }
   }
 }
 
@@ -694,6 +702,13 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
     }
   }
   return null
+}
+
+function classifyErrorMessage(msg: string): string {
+  if (/lock|already running|single instance|profile.*in use|chrome.*in use/i.test(msg)) return 'profile_locked'
+  if (/ENOENT|binary not found|executable.*not found/i.test(msg)) return 'browser_not_available'
+  if (/ECONNREFUSED|ENOTFOUND|fetch failed/i.test(msg)) return 'network_error'
+  return 'unknown_error'
 }
 
 function rowToAction(row: Record<string, unknown>): WebOperatorAction {

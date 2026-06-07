@@ -1170,6 +1170,25 @@ export async function POST(request: NextRequest) {
     )
   } catch (err) {
     console.error('[api/ceo/command]', err)
+    const msg = err instanceof Error ? err.message : ''
+    if (/spawn .+ ENOENT/i.test(msg)) {
+      return NextResponse.json(
+        { error: 'AI provider binary not found. Go to Connect AI to verify your provider is installed and working.' },
+        { status: 503 }
+      )
+    }
+    if (/No AI provider connected/i.test(msg)) {
+      return NextResponse.json(
+        { error: 'No AI provider connected. Go to Connect AI to add one.' },
+        { status: 503 }
+      )
+    }
+    if (/ECONNREFUSED|ENOTFOUND|fetch failed/i.test(msg)) {
+      return NextResponse.json(
+        { error: 'AI provider is not reachable. Check your provider connection in Connect AI.' },
+        { status: 503 }
+      )
+    }
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

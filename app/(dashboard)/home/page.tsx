@@ -379,6 +379,10 @@ export default function HomePage() {
         }),
       })
       const data = await res.json()
+      // Surface API-level errors (503 brain unavailable, etc.) as the response text
+      if (!res.ok && data.error && !data.response) {
+        data.response = data.error
+      }
       setResult(data)
       setLiveLabel(data.autopilot?.status === 'needs_your_help' ? 'Needs your help' : data.autopilot?.opportunities?.length ? 'Found opportunity' : 'Done')
       await refresh()

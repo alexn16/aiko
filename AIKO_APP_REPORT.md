@@ -967,3 +967,14 @@ AÏKO now supports three browser modes via `WEB_OPERATOR_BROWSER_MODE`:
 `/connect-ai` shows a Browser Mode card with the current mode and setup instructions. `/operators` shows the active mode in the subtitle. `/api/browser/setup` returns safe status without exposing filesystem paths.
 
 For local owner use, the recommended setup is `system_chrome` with a dedicated "AÏKO" Chrome profile — log in to sites once, and Kevin reuses those sessions.
+
+### Normal Chrome Web Operator Runtime Validation — 2026-06-07
+
+Runtime validation confirmed system_chrome mode works end-to-end. Four bugs were found and fixed:
+
+1. CEO command route returned generic `{"error":"Internal error"}` on provider binary errors — now returns 503 with owner-friendly message.
+2. Home page silently dropped API error responses when `data.response` was missing — now promotes `data.error` to `data.response` on non-OK responses.
+3. Chrome profile lock errors were classified as `unknown_error` — added `classifyErrorMessage` helper in `web-operator.ts` and pattern matching for lock/profile-in-use errors.
+4. `recoverSession` could attempt system Chrome — fixed to always use isolated Playwright Chromium.
+
+Validation confirmed: Chrome opens, navigates to target URL, pauses at login with owner-friendly "Kevin needs your help" message. No auto-publish, no stack traces, no ENOENT in any response.

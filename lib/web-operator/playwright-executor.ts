@@ -158,8 +158,10 @@ function classifyError(err: unknown): string {
   if (msg.includes('timeout') || msg.includes('Timeout')) return 'navigation_timeout'
   if (msg.includes('net::ERR') || msg.includes('network')) return 'network_error'
   if (msg.includes('not found') || msg.includes('No element')) return 'selector_not_found'
+  if (/lock|already running|single instance|profile.*in use|chrome.*in use/i.test(msg)) return 'profile_locked'
   if (msg.includes('browser') || msg.includes('Target closed')) return 'browser_not_available'
   if (msg.includes('blocked') || msg.includes('403') || msg.includes('401')) return 'access_blocked'
+  if (/ENOENT|binary not found|executable.*not found/i.test(msg)) return 'browser_not_available'
   return 'unknown_error'
 }
 
@@ -167,9 +169,9 @@ function classifyError(err: unknown): string {
 
 export async function recoverSession(): Promise<{ success: boolean; error?: string }> {
   try {
-    const { launchBrowser } = await import('@/lib/browser/controller')
-    // Launch a fresh browser to verify runtime is working
-    const browser = await launchBrowser()
+    const { chromium } = await import('playwright')
+    // Use plain Playwright Chromium for recovery checks — never system Chrome.
+    const browser = await chromium.launch({ headless: true })
     await browser.close()
     return { success: true }
   } catch (err) {
