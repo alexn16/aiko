@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.2.1] - 2026-06-07
+
+### Fixed
+
+- Intensive Work reliability guards: `markWorkItem` and `enqueueWorkItem` throw clear errors on missing DB rows instead of silently producing corrupt state. `createAssignedAgentTask` guards against missing INSERT RETURNING rows.
+- Provider runtime health checks: `checkAssignedBrainHealth` detects whether the configured brain binary/endpoint is actually reachable at runtime (not just marked "connected" in DB). Raw `spawn codex ENOENT` errors no longer reach the owner UI.
+- Manual unblock/resume state: "continue" and "resume" only route to browser-resume flow when browser work is actually waiting. "Agents are paused" no longer surfaces as the owner-facing message for waiting browser state.
+- Normal Chrome Web Operator runtime: `system_chrome` mode opens installed Google Chrome via `launchPersistentContext`. Profile lock errors return owner-friendly copy.
+- CEO command 503 errors: `spawn codex ENOENT` and similar provider errors return owner-friendly 503 with instructions instead of generic 500 "Internal error".
+- Home page error surfacing: API error responses are now shown to the owner when the CEO command returns a non-OK response.
+- Owner-facing task title cleanup: Task titles strip raw prefixes (`Blocked:`, `Search:`, `Item approved:`, `Web Operator:`), map raw prompts to clean action titles (e.g. "Plan the next 7 days..." → "Create 7-day marketing plan"), and cap at 70 characters.
+- Internal Web Operator sub-tasks hidden from default `/tasks` view. Pass `?include_internal=true` to show all.
+- Resume loop per-operator error handling: one failing operator no longer stops the rest of the loop.
+- `recoverSession` always uses isolated Playwright Chromium, never system Chrome.
+
+### Changed
+
+- Web Operator supports Normal Chrome via `WEB_OPERATOR_BROWSER_MODE=system_chrome`. Existing logins in a dedicated Chrome profile are reused by Kevin.
+- `/connect-ai` shows a Browser Mode card: current mode, Chrome found/not found, profile, collapsible 4-step setup guide, profile-lock warning.
+- `/operators` shows browser mode (Normal Chrome / AÏKO profile / Isolated) per card and Chrome-specific waiting-reason copy.
+- `/home` attention states now distinguish: manual help in Chrome, ready-to-resume, approval needed, missing capability, Chrome profile locked, intensive work paused.
+- Task source labels simplified: `ai_skill` → "AI plan", `strategy_execution_planner` → "Strategy plan", `intensive_work` → "Work cycle", Web Operator roles → "Web research".
+- Intensive Work cycle checks brain runtime health before running. Stops cleanly with owner message if brain binary unavailable.
+
+### Safety
+
+- `npm test` and `npm run build` never open a browser (`assertNotTest` guard in controller).
+- No auto-send, auto-post, auto-publish, or auto-message was added.
+- Login, CAPTCHA, QR, and security checkpoints still require human completion.
+- Approval is still separate from execution.
+- Missing capabilities are never silently marked available.
+- No secrets, tokens, API keys, or filesystem paths in health/browser-setup API responses.
+
 ## [0.2.0] - 2026-06-06
 
 ### Added
