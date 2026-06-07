@@ -1,4 +1,4 @@
-# AÏKO v0.2.2 — Local AI Marketing Operating System
+# AÏKO v0.3.0 — Local AI Marketing Operating System
 
 <p>
   <img src="public/brand/aiko-logo.svg" alt="AÏKO — AI Marketing Operating System" width="420" />
@@ -143,6 +143,7 @@ First-run setup is at `/setup`; advanced role/profile management remains at `/co
 ## MVP operating guide
 
 Related MVP docs:
+- `AIKO_V0_3_RELEASE_NOTES.md` — v0.3.0 Project Brain release: project memory injection, before/after content quality, forbidden claims, brain editor.
 - `AIKO_V0_2_2_RELEASE_NOTES.md` — v0.2.2 daily-use fixes: actionable daily brief, embedded project name resolution, stale blocker clearing.
 - `AIKO_V0_2_1_RELEASE_NOTES.md` — v0.2.1 polish release: Normal Chrome runtime, provider health, resume clarity, task title cleanup, reliability fixes.
 - `AIKO_V0_2_RELEASE_NOTES.md` — v0.2.0 checkpoint summary covering Home, Daily Brief, Brain Orchestrator, AI Skills, tasks, and current safety status.
@@ -192,6 +193,16 @@ Open `/setup` or `/connect-ai`. AÏKO is honest about provider state:
 - Ollama is a local fallback profile and may be shown as the active CEO brain in local development.
 
 CEO Chat requires a real connected and tested provider assigned to the CEO role.
+
+### Project Brain
+
+Each project has an owner-editable **Project Brain** document at `/projects/[id]/brain`. It stores: one-liner, positioning, target audience, problem, solution, key features, differentiators, tone of voice, proof points, forbidden claims, current goal, and preferred channels.
+
+The brain is automatically injected into every AI Skill prompt (content, research, strategy, reports) when that project is active. This makes outputs project-specific rather than generic.
+
+A completeness score (0–100%) shows how much of the brain is filled in. `/home` shows the score for the active project with an "Edit Brain" link.
+
+To seed the AÏKO project brain: `DATABASE_URL=<url> node scripts/seed-aiko-brain.mjs`
 
 ### Create a project
 

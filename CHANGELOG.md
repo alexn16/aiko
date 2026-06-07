@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.3.0] - 2026-06-07
+
+### Added
+
+- **Project Brain memory documents.** Each project now has an owner-editable brain document with: one-liner, positioning, target audience, problem, solution, key features, differentiators, tone of voice, proof points, forbidden claims, current goal, and preferred channels. Stored in `project_brain_documents`.
+- **Project Brain editor** at `/projects/[id]/brain` — minimalist form with completeness score (0-100%), all fields editable, "Generate from context" auto-seeding from existing project data, and a prompt preview.
+- **Project Brain completeness on `/home`** — shows "Project Brain: X% complete" with an "Edit Brain" link for the active project.
+- **Project Brain prompt injection for AI Skills** — `formatProjectBrainForPrompt` is prepended to every content and research skill prompt when a project brain exists with content.
+- **AÏKO seeded Project Brain** — the AÏKO project itself has a complete (100%) brain document seeded via `scripts/seed-aiko-brain.mjs`.
+- **Forbidden claims** — each brain includes a `forbidden_claims` list injected into prompts so the AI does not overstate product capabilities.
+- **`/api/projects/[id]/brain`** — GET to retrieve brain and completeness; PUT to update, generate from context, or preview prompt.
+
+### Changed
+
+- AI Content Skills (LinkedIn post, Reddit post, email draft, content creation) now use rich project memory. Outputs are project-specific, not generic.
+- AI Research/Strategy Skills (7-day plan, next step, report) now use rich project memory.
+- AÏKO outputs for its own project describe it correctly as a "local AI Marketing Operating System" with CEO, Kevin, Normal Chrome, and approval-first safety — not as a generic writing tool.
+- Normal Chrome mode (`WEB_OPERATOR_BROWSER_MODE=system_chrome`) no longer passes `--no-sandbox` by default. Unsafe flags require `WEB_OPERATOR_CHROME_ALLOW_UNSAFE_FLAGS=true`.
+
+### Safety
+
+- Project Brain does not auto-populate from web-scraped data. All content is owner-provided or generated from existing project records.
+- Forbidden claims are injected into every AI Skill prompt to prevent false capability statements.
+- No auto-send, post, publish, or message was added.
+- Login, CAPTCHA, QR, and security checkpoints still require human completion.
+- Approval is still separate from execution.
+- Browser safety rules unchanged.
+
 ## [0.2.2] - 2026-06-07
 
 ### Fixed
